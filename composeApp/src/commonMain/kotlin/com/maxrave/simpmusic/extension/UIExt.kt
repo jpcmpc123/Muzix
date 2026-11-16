@@ -80,7 +80,11 @@ import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.theme.LocalAppColors
+import com.maxrave.simpmusic.ui.component.LocalGlassEffectsEnabled
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.blur.HazeColorEffect
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.runBlocking
@@ -732,6 +736,40 @@ fun ultraThinBarStyle(): HazeBlurStyle {
     val surface = MaterialTheme.colorScheme.surface
     return HazeMaterials.ultraThin(surface).then { fallbackColorEffect(HazeColorEffect.tint(surface)) }
 }
+
+/**
+ * The plain top bars' frost, gated on the glass-effects setting: with glass on, the live
+ * [ultraThinBarStyle] blur; with it off, the style's own opaque fallback — the surface colour,
+ * solid. The setting already flattens the bottom bar and the mini player, but the top bars were
+ * never wired to it, so they kept blurring the content under them on every scroll even with
+ * every effect off — the heaviest per-frame work these screens do on a weak GPU.
+ */
+@Composable
+fun Modifier.ultraThinBarBlur(hazeState: HazeState): Modifier {
+    val surface = MaterialTheme.colorScheme.surface
+    return if (LocalGlassEffectsEnabled.current) {
+        hazeBlur(HazeInput.Sources(hazeState), ultraThinBarStyle())
+    } else {
+        background(surface)
+    }
+}
+
+/**
+ * The immersive screens' frosted bar, gated the same way as [ultraThinBarBlur]: with glass on,
+ * the live [barBlurStyle] blur; with it off, [tint] opaque — the fallback [barBlurStyle] itself
+ * declares for where haze does not blur.
+ */
+@Composable
+fun Modifier.tintedBarBlur(
+    hazeState: HazeState,
+    tint: Color,
+    tintAlpha: Float,
+): Modifier =
+    if (LocalGlassEffectsEnabled.current) {
+        hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(tint, tintAlpha))
+    } else {
+        background(tint)
+    }
 
 /**
  * Vertical scrim from [from] to [to] that fades without showing an edge.
