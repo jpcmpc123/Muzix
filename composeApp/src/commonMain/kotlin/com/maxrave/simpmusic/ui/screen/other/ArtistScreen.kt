@@ -105,6 +105,7 @@ import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
 import com.maxrave.simpmusic.extension.artworkScrimBrush
 import com.maxrave.simpmusic.extension.barBlurStyle
+import com.maxrave.simpmusic.extension.tintedBarBlur
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.mouseDragScroll
@@ -764,7 +765,7 @@ fun ArtistScreen(
                                     containerColor = Color.Transparent,
                                 ),
                             modifier =
-                                Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
+                                Modifier.tintedBarBlur(hazeState, mutedPaletteBg, 0.55f),
                         )
                     }
                 }

@@ -36,6 +36,7 @@ import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.expect.ui.DesktopMiniPlayerClearance
 import com.maxrave.simpmusic.expect.ui.VerticalScrollBar
 import com.maxrave.simpmusic.extension.ultraThinBarStyle
+import com.maxrave.simpmusic.extension.ultraThinBarBlur
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.HomeItemContentPlaylist
@@ -138,7 +139,7 @@ fun MoreAlbumsScreen(
                 TopAppBar(
                     modifier =
                         Modifier
-                            .hazeBlur(HazeInput.Sources(hazeState), ultraThinBarStyle()),
+                            .ultraThinBarBlur(hazeState),
                     title = {
                         Text(
                             text = state.title,

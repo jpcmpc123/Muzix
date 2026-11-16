@@ -64,6 +64,7 @@ import com.maxrave.domain.data.entities.NotificationEntity
 import com.maxrave.simpmusic.expect.ui.DesktopMiniPlayerClearance
 import com.maxrave.simpmusic.expect.ui.VerticalScrollBar
 import com.maxrave.simpmusic.extension.barBlurStyle
+import com.maxrave.simpmusic.extension.tintedBarBlur
 import com.maxrave.simpmusic.extension.formatTimeAgo
 import com.maxrave.simpmusic.extension.mouseDragScroll
 import com.maxrave.simpmusic.ui.component.AmbientThemeGlow
@@ -190,7 +191,7 @@ fun NotificationScreen(
                         Modifier
                     } else {
                         // AlbumScreen's bar recipe, thinned to 0.3 — see SettingScreen.
-                        Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(barTint, 0.3f))
+                        Modifier.tintedBarBlur(hazeState, barTint, 0.3f)
                     },
                 ).onGloballyPositioned { coordinates ->
                     topAppBarHeight = with(density) { coordinates.size.height.toDp() }

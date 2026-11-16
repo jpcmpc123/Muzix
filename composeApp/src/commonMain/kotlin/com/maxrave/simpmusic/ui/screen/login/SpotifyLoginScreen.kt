@@ -41,6 +41,7 @@ import com.maxrave.simpmusic.expect.ui.createWebViewCookieManager
 import com.maxrave.simpmusic.expect.ui.rememberWebViewState
 import com.maxrave.simpmusic.extension.getStringBlocking
 import com.maxrave.simpmusic.extension.ultraThinBarStyle
+import com.maxrave.simpmusic.extension.ultraThinBarBlur
 import com.maxrave.simpmusic.ui.component.DevCookieLogInBottomSheet
 import com.maxrave.simpmusic.ui.component.DevLogInBottomSheet
 import com.maxrave.simpmusic.ui.component.DevLogInType
@@ -228,7 +229,7 @@ fun SpotifyLoginScreen(
             modifier =
                 Modifier
                     .align(Alignment.TopCenter)
-                    .hazeBlur(HazeInput.Sources(hazeState), ultraThinBarStyle()),
+                    .ultraThinBarBlur(hazeState),
             title = {
                 Text(
                     text = stringResource(Res.string.log_in_to_spotify),

@@ -52,6 +52,7 @@ import androidx.compose.material3.HorizontalDivider
 import com.maxrave.simpmusic.expect.ui.DesktopMiniPlayerClearance
 import com.maxrave.simpmusic.expect.ui.VerticalScrollBar
 import com.maxrave.simpmusic.extension.barBlurStyle
+import com.maxrave.simpmusic.extension.tintedBarBlur
 import com.maxrave.simpmusic.ui.component.DownloadingIndicator
 import com.maxrave.simpmusic.ui.icon.Search
 import com.maxrave.simpmusic.ui.icon.Close
@@ -1449,7 +1450,7 @@ fun LocalPlaylistScreen(
             },
             onOpenActions = { showSelectionSheet = true },
             modifier =
-                Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
+                Modifier.tintedBarBlur(hazeState, mutedPaletteBg, 0.55f),
         )
     }
     if (showSelectionSheet) {
@@ -1622,7 +1623,7 @@ fun LocalPlaylistScreen(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
+                    .tintedBarBlur(hazeState, mutedPaletteBg, 0.55f),
             ) {
                 Row(
                     modifier =
@@ -1746,7 +1747,7 @@ fun LocalPlaylistScreen(
                     containerColor = Color.Transparent,
                 ),
             modifier =
-                Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
+                Modifier.tintedBarBlur(hazeState, mutedPaletteBg, 0.55f),
         )
     }
 }
