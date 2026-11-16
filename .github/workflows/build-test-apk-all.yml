@@ -1,0 +1,57 @@
+name: Build test APK (debug)
+
+# Test-only workflow for this fork: builds a debug APK with the core submodule swapped for
+# jpcmpc123/core branch fix/playback-three-layers (the three-layer playback fix plus app fixes #2714 and #2711), so the fix
+# can be installed and tried on a real device. Debug builds are signed with the standard
+# Android debug key, so no signing secrets are needed. This file is NOT part of any fix and
+# must never be included in an upstream pull request.
+on:
+  push:
+    branches:
+      - 'test/all-fixes-apk'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: 'recursive'
+
+      - name: Swap core submodule for the three-layers fix fork
+        run: |
+          rm -rf core
+          git clone --depth 1 --branch fix/playback-three-layers https://github.com/jpcmpc123/core.git core
+
+      - name: set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'microsoft'
+          cache: 'gradle'
+
+      - name: Update build product flavor
+        run: |
+          echo "" >> ./gradle.properties
+          echo "isFullBuild=true" >> ./gradle.properties
+
+      - name: Write empty optional secrets
+        run: |
+          echo 'SENTRY_DSN=' > ./local.properties
+          echo 'SENTRY_AUTH_TOKEN=' >> ./local.properties
+          echo 'LASTFM_API_KEY=' >> ./local.properties
+          echo 'LASTFM_SECRET=' >> ./local.properties
+          echo 'DISCORD_CLIENT_ID=' >> ./local.properties
+
+      - name: Generate aboutLibraries.json
+        run: ./gradlew exportLibraryDefinitions
+
+      - name: Build debug APK
+        run: ./gradlew androidApp:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-test-debug
+          path: androidApp/build/outputs/apk/debug/*.apk
