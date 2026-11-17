@@ -255,9 +255,10 @@ fun PodcastScreen(
                                                             ImageRequest
                                                                 .Builder(LocalPlatformContext.current)
                                                                 .data(data.authorThumbnail)
+                                                                .size(256, 256)
                                                                 .diskCachePolicy(CachePolicy.ENABLED)
                                                                 .diskCacheKey(data.authorThumbnail)
-                                                                .crossfade(true)
+                                                                .crossfade(150)
                                                                 .build(),
                                                         placeholder = rememberHolderPainter(),
                                                         error = rememberHolderPainter(),

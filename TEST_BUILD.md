@@ -66,6 +66,14 @@ Contents on top of upstream `dev`:
   variant (540px, up to 1280x720) into 36-160dp slots; row crossfade
   drops from 550ms to 150ms (branch fix/list-image-size). Full-size
   artwork views (player, headers) are untouched.
+- List thumbnails at display size, part 2 (same branch): the same
+  recipe now covers the remaining small/list images — library canvas
+  cards (640x1152), library tiling sleeves, podcast episode rows,
+  the search result thumb, the podcast author avatar, the song
+  bottom-sheet thumb, notification rows/cards and the settings
+  account avatar (256px small slots, 640px cards, crossfade 150ms).
+  Playlist/podcast/analytics headers, the Home hero carousel and
+  the analytics mosaic stay full-size by design.
 - Home loads once on open: the five separate load triggers in
   HomeViewModel (region, language, cookie x2, mood params) were merged
   into a single combined flow, so the feed no longer shows, goes back

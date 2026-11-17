@@ -254,9 +254,10 @@ fun NotificationItem(
                         ImageRequest
                             .Builder(LocalPlatformContext.current)
                             .data(thumb)
+                            .size(256, 256)
                             .diskCachePolicy(CachePolicy.ENABLED)
                             .diskCacheKey(thumb)
-                            .crossfade(true)
+                            .crossfade(150)
                             .build(),
                     placeholder = rememberHolderPainter(),
                     error = rememberHolderPainter(),
@@ -401,9 +402,10 @@ fun ItemAlbumNotification(
                     ImageRequest
                         .Builder(LocalPlatformContext.current)
                         .data(thumbnail)
+                        .size(640, 640)
                         .diskCachePolicy(CachePolicy.ENABLED)
                         .diskCacheKey(thumbnail)
-                        .crossfade(true)
+                        .crossfade(150)
                         .build(),
                 placeholder = rememberHolderPainter(),
                 error = rememberHolderPainter(),

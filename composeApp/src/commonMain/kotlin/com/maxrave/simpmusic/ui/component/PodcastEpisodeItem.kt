@@ -59,9 +59,10 @@ fun PodcastEpisodeFullWidthItem(
                         ImageRequest
                             .Builder(LocalPlatformContext.current)
                             .data(episode.thumbnail.lastOrNull()?.url)
+                            .size(256, 256)
                             .diskCachePolicy(CachePolicy.ENABLED)
                             .diskCacheKey(episode.thumbnail.lastOrNull()?.url)
-                            .crossfade(true)
+                            .crossfade(150)
                             .build(),
                     placeholder = rememberHolderPainter(),
                     error = rememberHolderPainter(),

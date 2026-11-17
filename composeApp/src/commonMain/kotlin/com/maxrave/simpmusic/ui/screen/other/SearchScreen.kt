@@ -1358,9 +1358,10 @@ fun SuggestItemRow(
                     ImageRequest
                         .Builder(LocalPlatformContext.current)
                         .data(url)
+                        .size(256, 256)
                         .diskCachePolicy(CachePolicy.ENABLED)
                         .diskCacheKey(url)
-                        .crossfade(true)
+                        .crossfade(150)
                         .build(),
                 placeholder = rememberHolderPainter(),
                 error = rememberHolderPainter(),
