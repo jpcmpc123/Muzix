@@ -803,6 +803,9 @@ fun LocalPlaylistScreen(
                                             // centered cluster. Suggest (AI) only shows when synced with YouTube.
                                             val isThisPlaying =
                                                 isPlaying && playingPlaylistId == LOCAL_PLAYLIST_ID + uiState.id
+                                            // The queue can belong to this playlist while paused; the tap must
+                                            // resume it then, not restart the playlist from the first song.
+                                            val isThisPlaylist = playingPlaylistId == LOCAL_PLAYLIST_ID + uiState.id
                                             Row(
                                                 modifier =
                                                     Modifier
@@ -841,7 +844,7 @@ fun LocalPlaylistScreen(
                                                             .clip(CircleShape)
                                                             .background(Color.White)
                                                             .clickable {
-                                                                if (isThisPlaying) {
+                                                                if (isThisPlaylist) {
                                                                     sharedViewModel.onUIEvent(UIEvent.PlayPause)
                                                                 } else {
                                                                     viewModel.onUIEvent(LocalPlaylistUIEvent.PlayClick)
@@ -1050,6 +1053,9 @@ fun LocalPlaylistScreen(
                                     // centered cluster. Suggest (AI) only shows when synced with YouTube.
                                     val isThisPlaying =
                                         isPlaying && playingPlaylistId == LOCAL_PLAYLIST_ID + uiState.id
+                                    // The queue can belong to this playlist while paused; the tap must
+                                    // resume it then, not restart the playlist from the first song.
+                                    val isThisPlaylist = playingPlaylistId == LOCAL_PLAYLIST_ID + uiState.id
                                     Row(
                                         modifier =
                                             Modifier
@@ -1088,7 +1094,7 @@ fun LocalPlaylistScreen(
                                                     .clip(CircleShape)
                                                     .background(Color.White)
                                                     .clickable {
-                                                        if (isThisPlaying) {
+                                                        if (isThisPlaylist) {
                                                             sharedViewModel.onUIEvent(UIEvent.PlayPause)
                                                         } else {
                                                             viewModel.onUIEvent(LocalPlaylistUIEvent.PlayClick)
@@ -1336,8 +1342,7 @@ fun LocalPlaylistScreen(
             }
         }
         items(count = trackPagingItems.itemCount, key = { index ->
-            val item = trackPagingItems[index]
-            (item?.first?.videoId ?: "") + "item_$index" + item?.second?.inPlaylist + item?.second?.position
+            trackPagingItems[index]?.second?.id ?: "item_$index"
         }) { index ->
             val item = trackPagingItems[index]?.first
             if (item != null) {
@@ -1348,6 +1353,8 @@ fun LocalPlaylistScreen(
                             isPlaying = true,
                             shouldShowDragHandle = changingOrder,
                             songEntity = item,
+                            localSongOverride = item,
+                            hasLocalSongOverride = true,
                             onMoreClickListener = { onItemMoreClick(it) },
                             onClickListener = {
                                 Logger.w("PlaylistScreen", "index: $index")
@@ -1371,6 +1378,8 @@ fun LocalPlaylistScreen(
                             isPlaying = false,
                             shouldShowDragHandle = changingOrder,
                             songEntity = item,
+                            localSongOverride = item,
+                            hasLocalSongOverride = true,
                             onMoreClickListener = { onItemMoreClick(it) },
                             onClickListener = {
                                 Logger.w("PlaylistScreen", "index: $index")
@@ -1399,7 +1408,7 @@ fun LocalPlaylistScreen(
                         content(Modifier)
                     }
                 } else {
-                    Column(modifier = Modifier.animateItem()) {
+                    Column {
                         content(Modifier)
                         if (index < trackPagingItems.itemCount - 1) {
                             HorizontalDivider(
@@ -1688,6 +1697,8 @@ fun LocalPlaylistScreen(
                         forceDark = true,
                         isPlaying = playingTrack?.videoId == song.videoId && isPlaying,
                         songEntity = song,
+                        localSongOverride = song,
+                        hasLocalSongOverride = true,
                         onMoreClickListener = { onItemMoreClick(it) },
                         onClickListener = { onPlaylistItemClick(it) },
                         onAddToQueue = { sharedViewModel.addListToQueue(arrayListOf(song.toTrack())) },
