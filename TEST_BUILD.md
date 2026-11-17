@@ -47,6 +47,10 @@ Contents on top of upstream `dev`:
   stored stream format, so songs that already played re-resolve and
   play at the newly chosen quality instead of the cached old one
   (core: handler watches the quality setting).
+- Faster start: the Tidal BPM/key lookup (AutoMix metadata) no longer
+  blocks the stream resolve — the format is stored, the URL is emitted
+  and the player starts; a background lookup patches the stored row
+  when the answer arrives (core: StreamRepositoryImpl).
 - Home loads once on open: the five separate load triggers in
   HomeViewModel (region, language, cookie x2, mood params) were merged
   into a single combined flow, so the feed no longer shows, goes back
