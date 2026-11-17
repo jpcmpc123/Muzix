@@ -40,6 +40,10 @@ Contents on top of upstream `dev`:
   same track, for networks announced before they are usable. Also:
   propagatePlayerError no longer triggers a second, synthetic 403
   notification on top of the real error.
+- Home loads once on open: the five separate load triggers in
+  HomeViewModel (region, language, cookie x2, mood params) were merged
+  into a single combined flow, so the feed no longer shows, goes back
+  to loading and shows again on startup (branch fix/home-single-load).
 - MainActivity.kt: the official-build signature check is commented out
   (marked "TEST BUILD ONLY") because release builds verify the signing
   certificate and this test build is signed with a throwaway key.
