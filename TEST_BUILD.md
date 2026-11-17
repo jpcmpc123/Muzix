@@ -1,0 +1,20 @@
+# Test build only — branch test/all-fixes-release-apk
+
+This branch exists only to build installable test APKs of jpcmpc123's fixes
+combined. It is never merged and never part of an upstream pull request.
+
+Contents on top of upstream `dev`:
+
+- #2714 — bottom bar keeps the current tab selected after Back
+  (AppBottomNavigationBar.kt, LiquidGlassAppBottomNavigationBar.android.kt)
+- #2711 — search state survives rotation: MainActivity handles `orientation`
+  in configChanges (AndroidManifest.xml) + SearchScreen safety nets
+- Performance — top bars only blur while "Enable liquid glass" is on
+  (LocalGlassEffectsEnabled, UIExt.kt bar modifiers, 16 screens)
+- Playback (via the core submodule swap in the workflow, jpcmpc123/core
+  branch fix/playback-three-layers): full-track preloader, gap watchdog and
+  automatic stream-error recovery. v2: recovery also covers
+  ERROR_CODE_IO_UNSPECIFIED and retries 6 times over ~1 minute.
+- MainActivity.kt: the official-build signature check is commented out
+  (marked "TEST BUILD ONLY") because release builds verify the signing
+  certificate and this test build is signed with a throwaway key.
