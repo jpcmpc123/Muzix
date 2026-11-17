@@ -117,3 +117,14 @@ leaves (Spotify, M3 Expressive, Apple Music) straight from timelineFlow, each
 keeping its own slider position while dragging; the shell keeps only plain
 holders for the seek value. The crossfade rainbow hue is read only while
 crossfading. Actions are remembered once so their identity stays stable.
+
+## Stall package (2+3+4) — core commit e71a5e3
+
+- Adapter: network errors (IO_UNSPECIFIED / CONNECTION_FAILED / CONNECTION_TIMEOUT)
+  now get the same cure as a 403 — drop the stored format and reload with a fresh
+  resolve from the same position (bounded by the existing maxRetryCount).
+- Handlers (Android + JVM): UpdateProgress ignores the seek while the duration is
+  TIME_UNSET and clamps the target into the track — the percentage math on the
+  sentinel overflowed into a garbage position that could skip to the next track.
+- Resolver: stream resolution is bounded by withTimeoutOrNull(20s); a hung resolve
+  now fails into the retry path instead of loading forever.
