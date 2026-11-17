@@ -156,9 +156,11 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import com.maxrave.domain.repository.SongRepository
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
@@ -190,6 +192,7 @@ fun SearchScreen(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val searchScreenState by searchViewModel.searchScreenState.collectAsStateWithLifecycle()
+    val songRepository: SongRepository = koinInject()
     val uiState by searchViewModel.searchScreenUIState.collectAsStateWithLifecycle()
     val searchHistory by searchViewModel.searchHistory.collectAsStateWithLifecycle()
     val moodAndGenres by searchViewModel.moodAndGenres.collectAsStateWithLifecycle()
@@ -882,6 +885,21 @@ fun SearchScreen(
                                                     SearchType.PODCASTS -> searchScreenState.searchPodcastsResult
                                                 }
 
+                                            // One batch query for the stored rows of every song/video result below.
+                                            val resultSongIds =
+                                                remember(currentResults) {
+                                                    currentResults.mapNotNull { result ->
+                                                        when (result) {
+                                                            is SongsResult -> result.videoId
+                                                            is VideosResult -> result.videoId
+                                                            else -> null
+                                                        }
+                                                    }.distinct()
+                                                }
+                                            val localSongs by remember(resultSongIds) {
+                                                if (resultSongIds.isEmpty()) flowOf(emptyList()) else songRepository.getSongsByListVideoId(resultSongIds)
+                                            }.collectAsStateWithLifecycle(initialValue = emptyList())
+                                            val localSongById = remember(localSongs) { localSongs.associateBy { it.videoId } }
                                             Crossfade(targetState = currentResults.isNotEmpty()) {
                                                 if (it) {
                                                     LazyColumn(
@@ -899,6 +917,8 @@ fun SearchScreen(
                                                                 is SongsResult -> {
                                                                     SongFullWidthItems(
                                                                         track = result.toTrack(),
+                                                                        localSongOverride = localSongById[result.videoId],
+                                                                        hasLocalSongOverride = true,
                                                                         isPlaying = result.videoId == currentVideoId,
                                                                         modifier = Modifier,
                                                                         onMoreClickListener = {
@@ -938,6 +958,8 @@ fun SearchScreen(
                                                                 is VideosResult -> {
                                                                     SongFullWidthItems(
                                                                         track = result.toTrack(),
+                                                                        localSongOverride = localSongById[result.videoId],
+                                                                        hasLocalSongOverride = true,
                                                                         isPlaying = result.videoId == currentVideoId,
                                                                         modifier = Modifier,
                                                                         onMoreClickListener = {

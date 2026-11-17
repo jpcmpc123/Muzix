@@ -121,12 +121,14 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import com.maxrave.domain.repository.SongRepository
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
@@ -159,6 +161,7 @@ fun AlbumScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val songRepository: SongRepository = koinInject()
 
     var showBottomSheet by rememberSaveable { mutableStateOf(false) }
     var albumBottomSheetShow by rememberSaveable { mutableStateOf(false) }
@@ -235,6 +238,14 @@ fun AlbumScreen(
                 if (occurrence == 0) track.videoId else "${track.videoId}#$occurrence"
             }
         }
+
+    // One batch query for the stored rows of every track on this screen; rows used to
+    // run one Room flow each just to learn their download state and live flag.
+    val albumTrackIds = remember(uiState.listTrack) { uiState.listTrack.map { it.videoId }.distinct() }
+    val localSongs by remember(albumTrackIds) {
+        if (albumTrackIds.isEmpty()) flowOf(emptyList()) else songRepository.getSongsByListVideoId(albumTrackIds)
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val localSongById = remember(localSongs) { localSongs.associateBy { it.videoId } }
 
     Crossfade(uiState.loadState) {
         when (it) {
@@ -879,6 +890,8 @@ fun AlbumScreen(
                                     isPlaying = item.videoId == playingVideoId,
                                     index = index,
                                     track = item,
+                                    localSongOverride = localSongById[item.videoId],
+                                    hasLocalSongOverride = true,
                                     onMoreClickListener = {
                                         chosenSong = item
                                         showBottomSheet = true

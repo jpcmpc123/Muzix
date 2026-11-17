@@ -152,6 +152,8 @@ fun LibraryItem(
                                     RecentlyType.Type.SONG -> {
                                         SongFullWidthItems(
                                             songEntity = item as SongEntity,
+                                            localSongOverride = item as SongEntity,
+                                            hasLocalSongOverride = true,
                                             isPlaying = item.videoId == state.type.playingVideoId,
                                             modifier = Modifier,
                                             onMoreClickListener = {

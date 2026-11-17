@@ -91,3 +91,18 @@ Contents on top of upstream `dev`:
 - MainActivity.kt: the official-build signature check is commented out
   (marked "TEST BUILD ONLY") because release builds verify the signing
   certificate and this test build is signed with a throwaway key.
+- Rows no longer query the database one by one, and the player
+  timeline no longer publishes 20x per second (branch
+  fix/row-query-progress): SongFullWidthItems used to run its own
+  Room flow per row just to learn the stored row's download state
+  and live flag. Screens now run ONE batch query
+  (getSongsByListVideoId) for all their tracks and pass the stored
+  row into the row component (playlist, album, artist popular
+  songs, search results, the queue sheet); screens whose rows
+  already carry the database entity pass it straight through
+  (local/dynamic playlists, library recents, analytics). Rows
+  without a provider keep the old per-row fallback (e.g. the
+  Apple Music queue view). Separately, SharedViewModel coalesces
+  position-only timeline updates to ~5x per second (total/loading
+  changes and seeks still publish immediately), so the player and
+  mini-player screens stop recomposing on every 50 ms tick.

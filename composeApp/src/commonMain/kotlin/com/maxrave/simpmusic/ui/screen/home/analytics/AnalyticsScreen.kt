@@ -1389,6 +1389,8 @@ private fun SongRow(
     val song = pair.toTrack()
     SongFullWidthItems(
         track = song,
+        localSongOverride = pair,
+        hasLocalSongOverride = true,
         isPlaying = song.videoId == playingTrack,
         modifier = Modifier.fillMaxWidth(),
         onMoreClickListener = { onItemMoreClick(pair) },

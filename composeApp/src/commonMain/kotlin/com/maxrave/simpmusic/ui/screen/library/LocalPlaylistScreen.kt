@@ -1347,6 +1347,8 @@ fun LocalPlaylistScreen(
                             isPlaying = true,
                             shouldShowDragHandle = changingOrder,
                             songEntity = item,
+                            localSongOverride = item,
+                            hasLocalSongOverride = true,
                             onMoreClickListener = { onItemMoreClick(it) },
                             onClickListener = {
                                 Logger.w("PlaylistScreen", "index: $index")
@@ -1370,6 +1372,8 @@ fun LocalPlaylistScreen(
                             isPlaying = false,
                             shouldShowDragHandle = changingOrder,
                             songEntity = item,
+                            localSongOverride = item,
+                            hasLocalSongOverride = true,
                             onMoreClickListener = { onItemMoreClick(it) },
                             onClickListener = {
                                 Logger.w("PlaylistScreen", "index: $index")
@@ -1687,6 +1691,8 @@ fun LocalPlaylistScreen(
                         forceDark = true,
                         isPlaying = playingTrack?.videoId == song.videoId && isPlaying,
                         songEntity = song,
+                        localSongOverride = song,
+                        hasLocalSongOverride = true,
                         onMoreClickListener = { onItemMoreClick(it) },
                         onClickListener = { onPlaylistItemClick(it) },
                         onAddToQueue = { sharedViewModel.addListToQueue(arrayListOf(song.toTrack())) },

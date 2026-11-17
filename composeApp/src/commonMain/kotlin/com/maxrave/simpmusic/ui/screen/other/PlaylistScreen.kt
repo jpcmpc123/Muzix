@@ -145,6 +145,7 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -152,6 +153,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import com.maxrave.domain.repository.SongRepository
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
@@ -183,6 +185,7 @@ fun PlaylistScreen(
     val tag = "PlaylistScreen"
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val songRepository: SongRepository = koinInject()
     val continuation by viewModel.continuation.collectAsStateWithLifecycle()
     val listColors by viewModel.listColors.collectAsStateWithLifecycle()
     val downloadState by viewModel.downloadState.collectAsStateWithLifecycle()
@@ -231,6 +234,14 @@ fun PlaylistScreen(
                 if (occurrence == 0) track.videoId else "${track.videoId}#$occurrence"
             }
         }
+
+    // One batch query for the stored rows of every track on this screen; rows used to
+    // run one Room flow each just to learn their download state and live flag.
+    val playlistTrackIds = remember(tracks) { tracks.map { it.videoId }.distinct() }
+    val localSongs by remember(playlistTrackIds) {
+        if (playlistTrackIds.isEmpty()) flowOf(emptyList()) else songRepository.getSongsByListVideoId(playlistTrackIds)
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val localSongById = remember(localSongs) { localSongs.associateBy { it.videoId } }
 
     LaunchedEffect(uiState) {
         Logger.d(tag, "uiState hash: ${uiState.hashCode()}")
@@ -1077,6 +1088,8 @@ fun PlaylistScreen(
                                         forceDark = true,
                                         isPlaying = true,
                                         track = item,
+                                        localSongOverride = localSongById[item.videoId],
+                                        hasLocalSongOverride = true,
                                         onMoreClickListener = { onItemMoreClick(it) },
                                         onClickListener = {
                                             Logger.w("PlaylistScreen", "index: $index")
@@ -1098,6 +1111,8 @@ fun PlaylistScreen(
                                         forceDark = true,
                                         isPlaying = false,
                                         track = item,
+                                        localSongOverride = localSongById[item.videoId],
+                                        hasLocalSongOverride = true,
                                         onMoreClickListener = { onItemMoreClick(it) },
                                         onClickListener = {
                                             Logger.w("PlaylistScreen", "index: $index")

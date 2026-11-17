@@ -187,6 +187,7 @@ import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetUIEvent
 import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.map
@@ -198,6 +199,7 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import com.maxrave.domain.repository.SongRepository
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
@@ -966,6 +968,7 @@ fun QueueBottomSheet(
     sharedViewModel: SharedViewModel = koinInject(),
     musicServiceHandler: MediaPlayerHandler = koinInject<MediaPlayerHandler>(),
     dataStoreManager: DataStoreManager = koinInject(),
+    songRepository: SongRepository = koinInject(),
 ) {
     val coroutineScope = rememberCoroutineScope()
     val localDensity = LocalDensity.current
@@ -992,6 +995,14 @@ fun QueueBottomSheet(
             queueData?.data?.listTracks ?: emptyList()
         }
     }
+
+    // One batch query for the stored rows of every track on this screen; rows used to
+    // run one Room flow each just to learn their download state and live flag.
+    val queueTrackIds = remember(queue) { queue.map { it.videoId }.distinct() }
+    val localSongs by remember(queueTrackIds) {
+        if (queueTrackIds.isEmpty()) flowOf(emptyList()) else songRepository.getSongsByListVideoId(queueTrackIds)
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val localSongById = remember(localSongs) { localSongs.associateBy { it.videoId } }
     val loadMoreState by remember {
         derivedStateOf {
             queueData?.queueState ?: QueueData.StateSource.STATE_CREATED
@@ -1137,6 +1148,8 @@ fun QueueBottomSheet(
                 )
                 SongFullWidthItems(
                     songEntity = songEntity,
+                    localSongOverride = songEntity,
+                    hasLocalSongOverride = true,
                     isPlaying = false,
                     onAddToQueue = null,
                     modifier =
@@ -1246,6 +1259,8 @@ fun QueueBottomSheet(
                                 ) { _ ->
                                     SongFullWidthItems(
                                         track = track,
+                                        localSongOverride = localSongById[track.videoId],
+                                        hasLocalSongOverride = true,
                                         isPlaying = track.videoId == songEntity?.videoId,
                                         modifier =
                                             Modifier

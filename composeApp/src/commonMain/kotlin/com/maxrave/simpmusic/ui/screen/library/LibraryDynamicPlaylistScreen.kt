@@ -328,6 +328,8 @@ fun LibraryDynamicPlaylistScreen(
                     ) { song ->
                         SongFullWidthItems(
                             songEntity = song.second,
+                            localSongOverride = song.second,
+                            hasLocalSongOverride = true,
                             isPlaying = song.second.videoId == nowPlayingVideoId,
                             modifier = Modifier.fillMaxWidth(),
                             onMoreClickListener = {
@@ -444,6 +446,8 @@ fun LibraryDynamicPlaylistScreen(
             ) { song ->
                 SongFullWidthItems(
                     songEntity = song,
+                    localSongOverride = song,
+                    hasLocalSongOverride = true,
                     isPlaying = song.videoId == nowPlayingVideoId,
                     modifier = Modifier.fillMaxWidth(),
                     onMoreClickListener = {

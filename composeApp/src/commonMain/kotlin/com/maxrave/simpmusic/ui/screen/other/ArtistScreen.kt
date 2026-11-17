@@ -154,6 +154,7 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import kotlin.math.roundToInt
@@ -161,6 +162,7 @@ import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
+import com.maxrave.domain.repository.SongRepository
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
@@ -190,6 +192,7 @@ fun ArtistScreen(
     navController: NavController,
 ) {
     val artistScreenState by viewModel.artistScreenState.collectAsStateWithLifecycle()
+    val songRepository: SongRepository = koinInject()
     val isFollowed by viewModel.followed.collectAsStateWithLifecycle()
     val artistMotion by viewModel.artistMotion.collectAsStateWithLifecycle()
     // Header plays the artist's animated artwork by default; the top-right toggle swaps it for
@@ -917,9 +920,15 @@ private fun ArtistSections(
                         Text(stringResource(Res.string.more), style = typo().bodySmall)
                     }
                 }
+                // One batch query for the stored rows of the popular songs below.
+                val popularSongIds = remember(state.data.popularSongs) { state.data.popularSongs.map { it.videoId }.distinct() }
+                val localSongs by remember(popularSongIds) {
+                    if (popularSongIds.isEmpty()) flowOf(emptyList()) else songRepository.getSongsByListVideoId(popularSongIds)
+                }.collectAsStateWithLifecycle(initialValue = emptyList())
+                val localSongById = remember(localSongs) { localSongs.associateBy { it.videoId } }
                 state.data.popularSongs.forEach { song ->
                     SongFullWidthItems(
-                        forceDark = true,                        track = song,
+                        forceDark = true,                        track = song, localSongOverride = localSongById[song.videoId], hasLocalSongOverride = true,
                         isPlaying = song.videoId == playingTrack,
                         modifier = Modifier.fillMaxWidth(),
                         onMoreClickListener = {

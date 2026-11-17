@@ -250,6 +250,10 @@ class SharedViewModel(
         )
     val timeline: StateFlow<TimeLine> = _timeline
 
+    // Last progress value actually published to the timeline; the Progress branch below
+    // coalesces position-only updates so the UI does not recompose 20x per second.
+    private var lastPublishedProgressMs = -1L
+
     private var _nowPlayingScreenData =
         MutableStateFlow<NowPlayingScreenData>(
             NowPlayingScreenData.initial(),
@@ -498,20 +502,24 @@ class SharedViewModel(
                                 if (mediaState.progress >= 0L && mediaState.progress != _timeline.value.current) {
                                     // A live stream never reports a length (ExoPlayer: C.TIME_UNSET), so
                                     // a missing one means "loading" for everything except a live stream.
-                                    if (_timeline.value.total > 0L || _timeline.value.isLive) {
+                                    val hasLength = _timeline.value.total > 0L || _timeline.value.isLive
+                                    val newTotal =
+                                        mediaPlayerHandler.getPlayerDuration().takeIf { d -> d > 0L } ?: _timeline.value.total
+                                    // Publish at most ~5x per second while only the position moves:
+                                    // this branch fires on a 50 ms ticker and every publish recomposes
+                                    // the player and mini-player screens. A total/loading change, a
+                                    // seek (backwards jump) and the first publish still go through
+                                    // immediately, so nothing the UI shows lags behind the player.
+                                    val slowStateChanged =
+                                        newTotal != _timeline.value.total || hasLength == _timeline.value.loading
+                                    val progressDelta = mediaState.progress - lastPublishedProgressMs
+                                    if (slowStateChanged || lastPublishedProgressMs < 0L || progressDelta < 0L || progressDelta >= 200L) {
+                                        lastPublishedProgressMs = mediaState.progress
                                         _timeline.update {
                                             it.copy(
-                                                total = mediaPlayerHandler.getPlayerDuration().takeIf { d -> d > 0L } ?: it.total,
+                                                total = newTotal,
                                                 current = mediaState.progress,
-                                                loading = false,
-                                            )
-                                        }
-                                    } else {
-                                        _timeline.update {
-                                            it.copy(
-                                                current = mediaState.progress,
-                                                loading = true,
-                                                total = mediaPlayerHandler.getPlayerDuration().takeIf { d -> d > 0L } ?: it.total,
+                                                loading = !hasLength,
                                             )
                                         }
                                     }
