@@ -58,6 +58,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -69,6 +70,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.layout.ContentScale
@@ -837,6 +839,17 @@ internal fun ColumnScope.ExpressivePlaybackControls(
     sliderModifier: Modifier = Modifier,
     showShuffleAndRepeat: Boolean = false,
 ) = LeftToRight {
+    // Live progress leaf: this controls block follows timelineFlow itself and
+    // keeps its own slider position, so the content above stays frozen across
+    // progress ticks and only this block recomposes (at the published rate).
+    val liveTimeline by state.timelineFlow.collectAsStateWithLifecycle()
+    var sliding by remember { mutableStateOf(false) }
+    var sliderPosition by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(liveTimeline, sliding) {
+        if (!sliding && liveTimeline.total > 0L) {
+            sliderPosition = liveTimeline.current.toFloat() * 100 / liveTimeline.total.toFloat()
+        }
+    }
     val colorScheme = MaterialTheme.colorScheme
     Box(
         Modifier
@@ -846,21 +859,28 @@ internal fun ColumnScope.ExpressivePlaybackControls(
             .then(sliderModifier),
     ) {
         WavySeekBar(
-            progressFraction = state.sliderValue / 100f,
+            progressFraction = sliderPosition / 100f,
             isPlaying = state.controllerState.isPlaying,
             // Classic swaps the slider color to the rainbow while
             // crossfading (state.sliderTrackColor); tonal primary
             // otherwise.
             activeColor =
-                if (state.timelineState.isCrossfading) {
+                if (liveTimeline.isCrossfading) {
                     state.sliderTrackColor
                 } else {
                     colorScheme.primary
                 },
             trackColor = colorScheme.secondaryContainer,
             thumbColor = colorScheme.primary,
-            onSliderChange = actions.onSliderChange,
-            onSliderChangeFinished = actions.onSliderChangeFinished,
+            onSliderChange = { newValue ->
+                sliding = true
+                sliderPosition = newValue
+                actions.onSliderChange(newValue)
+            },
+            onSliderChangeFinished = {
+                sliding = false
+                actions.onSliderChangeFinished()
+            },
         )
     }
     // Time row — same math and negative guard as Classic
@@ -877,7 +897,7 @@ internal fun ColumnScope.ExpressivePlaybackControls(
             .padding(horizontal = 20.dp),
     ) {
         Text(
-            text = state.timelineState.elapsedLabel(state.sliderValue / 100f),
+            text = liveTimeline.elapsedLabel(sliderPosition / 100f),
             style = typo().bodyMedium,
             color = state.secondaryTextColor(),
             modifier = Modifier.weight(1f),
@@ -901,7 +921,7 @@ internal fun ColumnScope.ExpressivePlaybackControls(
         AnimatedVisibility(
             enter = fadeIn(),
             exit = fadeOut(),
-            visible = state.timelineState.isCrossfading,
+            visible = liveTimeline.isCrossfading,
         ) {
             // Same effect as the desktop MiniPlayer label: a
             // highlight sweeping through the glyphs via a text
@@ -929,7 +949,7 @@ internal fun ColumnScope.ExpressivePlaybackControls(
             )
         }
         Text(
-            text = state.timelineState.lengthLabel(),
+            text = liveTimeline.lengthLabel(),
             style = typo().bodyMedium,
             color = state.secondaryTextColor(),
             modifier = Modifier.weight(1f),

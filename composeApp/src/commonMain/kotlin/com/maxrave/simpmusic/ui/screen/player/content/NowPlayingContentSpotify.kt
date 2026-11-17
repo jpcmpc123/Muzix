@@ -75,6 +75,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -91,6 +92,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TileMode
@@ -210,6 +212,11 @@ fun NowPlayingContentSpotify(
     actions: NowPlayingContentActions,
 ) {
     val screenInfo = getScreenSizeInfo()
+
+    // Live timeline for the deferred artwork progress read further down: that
+    // lambda runs at draw time, so this collection never recomposes the content
+    // on a progress tick.
+    val liveTimeline by state.timelineFlow.collectAsStateWithLifecycle()
 
     val localDensity = LocalDensity.current
     val uriHandler = LocalUriHandler.current
@@ -1772,7 +1779,7 @@ fun NowPlayingContentSpotify(
                                 .align(Alignment.BottomCenter),
                     ) {
                         LinearProgressIndicator(
-                            progress = { state.timelineState.current.toFloat() / state.timelineState.total },
+                            progress = { liveTimeline.current.toFloat() / liveTimeline.total },
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
@@ -1971,6 +1978,17 @@ internal fun ColumnScope.SpotifyPlaybackControls(
     actions: NowPlayingContentActions,
     sliderModifier: Modifier = Modifier,
 ) = LeftToRight {
+    // Live progress leaf: this controls block follows timelineFlow itself and
+    // keeps its own slider position, so the content above stays frozen across
+    // progress ticks and only this block recomposes (at the published rate).
+    val liveTimeline by state.timelineFlow.collectAsStateWithLifecycle()
+    var sliding by remember { mutableStateOf(false) }
+    var sliderPosition by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(liveTimeline, sliding) {
+        if (!sliding && liveTimeline.total > 0L) {
+            sliderPosition = liveTimeline.current.toFloat() * 100 / liveTimeline.total.toFloat()
+        }
+    }
     // Real Slider
     Box(
         Modifier
@@ -1986,7 +2004,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
                     .height(24.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Crossfade(state.timelineState.loading) {
+            Crossfade(liveTimeline.loading) {
                 if (it) {
                     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                         LinearProgressIndicator(
@@ -2007,7 +2025,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
                 } else {
                     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                         LinearProgressIndicator(
-                            progress = { state.timelineState.bufferedPercent.toFloat() / 100 },
+                            progress = { liveTimeline.bufferedPercent.toFloat() / 100 },
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
@@ -2040,11 +2058,14 @@ internal fun ColumnScope.SpotifyPlaybackControls(
                 // sliderValue stays on the 0..100 scale that
                 // UIEvent.UpdateProgress and the time labels
                 // are built around.
-                value = state.sliderValue / 100f,
+                value = sliderPosition / 100f,
                 onValueChangeFinished = {
+                    sliding = false
                     actions.onSliderChangeFinished()
                 },
                 onValueChange = {
+                    sliding = true
+                    sliderPosition = it * 100f
                     actions.onSliderChange(it * 100f)
                 },
                 modifier =
@@ -2105,7 +2126,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
             .padding(horizontal = 20.dp),
     ) {
         Text(
-            text = state.timelineState.elapsedLabel(state.sliderValue / 100f),
+            text = liveTimeline.elapsedLabel(sliderPosition / 100f),
             style = typo().bodyMedium,
             color = state.secondaryTextColor(),
             modifier = Modifier.weight(1f),
@@ -2129,7 +2150,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
         AnimatedVisibility(
             enter = fadeIn(),
             exit = fadeOut(),
-            visible = state.timelineState.isCrossfading,
+            visible = liveTimeline.isCrossfading,
         ) {
             // Same effect as the desktop MiniPlayer label: a
             // highlight sweeping through the glyphs via a text
