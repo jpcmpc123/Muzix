@@ -825,7 +825,8 @@ fun HomeScreen(
                                                     ImageRequest
                                                         .Builder(LocalPlatformContext.current)
                                                         .data(headerImage)
-                                                        .crossfade(550)
+                                                        .size(1440, 1440)
+                                                        .crossfade(150)
                                                         .build(),
                                                 contentDescription = null,
                                                 contentScale = ContentScale.Crop,

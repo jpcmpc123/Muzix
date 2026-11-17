@@ -803,6 +803,9 @@ fun LocalPlaylistScreen(
                                             // centered cluster. Suggest (AI) only shows when synced with YouTube.
                                             val isThisPlaying =
                                                 isPlaying && playingPlaylistId == LOCAL_PLAYLIST_ID + uiState.id
+                                            // The queue can belong to this playlist while paused; the tap must
+                                            // resume it then, not restart the playlist from the first song.
+                                            val isThisPlaylist = playingPlaylistId == LOCAL_PLAYLIST_ID + uiState.id
                                             Row(
                                                 modifier =
                                                     Modifier
@@ -841,7 +844,7 @@ fun LocalPlaylistScreen(
                                                             .clip(CircleShape)
                                                             .background(Color.White)
                                                             .clickable {
-                                                                if (isThisPlaying) {
+                                                                if (isThisPlaylist) {
                                                                     sharedViewModel.onUIEvent(UIEvent.PlayPause)
                                                                 } else {
                                                                     viewModel.onUIEvent(LocalPlaylistUIEvent.PlayClick)
@@ -1050,6 +1053,9 @@ fun LocalPlaylistScreen(
                                     // centered cluster. Suggest (AI) only shows when synced with YouTube.
                                     val isThisPlaying =
                                         isPlaying && playingPlaylistId == LOCAL_PLAYLIST_ID + uiState.id
+                                    // The queue can belong to this playlist while paused; the tap must
+                                    // resume it then, not restart the playlist from the first song.
+                                    val isThisPlaylist = playingPlaylistId == LOCAL_PLAYLIST_ID + uiState.id
                                     Row(
                                         modifier =
                                             Modifier
@@ -1088,7 +1094,7 @@ fun LocalPlaylistScreen(
                                                     .clip(CircleShape)
                                                     .background(Color.White)
                                                     .clickable {
-                                                        if (isThisPlaying) {
+                                                        if (isThisPlaylist) {
                                                             sharedViewModel.onUIEvent(UIEvent.PlayPause)
                                                         } else {
                                                             viewModel.onUIEvent(LocalPlaylistUIEvent.PlayClick)

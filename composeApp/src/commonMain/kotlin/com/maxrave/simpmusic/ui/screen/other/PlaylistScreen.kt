@@ -671,6 +671,9 @@ fun PlaylistScreen(
                                                             // Apple Music-style action row:
                                                             // [Shuffle][Play pill][Download/More] (cluster centered, all 48dp matching size)
                                                             val isThisPlaying = isPlaying && playingPlaylistId == data.id
+                                                            // The queue can belong to this playlist while paused; the tap must
+                                                            // resume it then, not restart the playlist from the first song.
+                                                            val isThisPlaylist = playingPlaylistId == data.id
                                                             Row(
                                                                 modifier =
                                                                     Modifier
@@ -707,7 +710,7 @@ fun PlaylistScreen(
                                                                             .clip(CircleShape)
                                                                             .background(Color.White)
                                                                             .clickable {
-                                                                                if (isThisPlaying) {
+                                                                                if (isThisPlaylist) {
                                                                                     sharedViewModel.onUIEvent(UIEvent.PlayPause)
                                                                                 } else {
                                                                                     viewModel.onUIEvent(PlaylistUIEvent.PlayAll)
@@ -886,6 +889,9 @@ fun PlaylistScreen(
                                                     // Apple Music-style action row:
                                                     // [Shuffle][Play pill][Download/More] (cluster centered, all 48dp matching size)
                                                     val isThisPlaying = isPlaying && playingPlaylistId == data.id
+                                                    // The queue can belong to this playlist while paused; the tap must
+                                                    // resume it then, not restart the playlist from the first song.
+                                                    val isThisPlaylist = playingPlaylistId == data.id
                                                     Row(
                                                         modifier =
                                                             Modifier
@@ -922,7 +928,7 @@ fun PlaylistScreen(
                                                                     .clip(CircleShape)
                                                                     .background(Color.White)
                                                                     .clickable {
-                                                                        if (isThisPlaying) {
+                                                                        if (isThisPlaylist) {
                                                                             sharedViewModel.onUIEvent(UIEvent.PlayPause)
                                                                         } else {
                                                                             viewModel.onUIEvent(PlaylistUIEvent.PlayAll)
