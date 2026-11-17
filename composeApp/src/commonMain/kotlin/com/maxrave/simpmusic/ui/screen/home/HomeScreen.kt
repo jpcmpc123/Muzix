@@ -132,6 +132,7 @@ import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.extension.mouseDragScroll
 import com.maxrave.simpmusic.extension.rgbFactor
 import com.maxrave.simpmusic.extension.ultraThinBarStyle
+import com.maxrave.simpmusic.extension.ultraThinBarBlur
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.BlogPromoDialog
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
@@ -785,8 +786,13 @@ fun HomeScreen(
                         state = scrollState,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        itemsIndexed(homeShelves, key = { _, item ->
-                            item.hashCode().toString() + (mainHomeThumbnail ?: "nothumb")
+                        itemsIndexed(homeShelves, key = { index, item ->
+                            val base = item.title + "|" + (item.moreEndpoint?.browseId ?: item.channelId ?: "")
+                            val occurrence =
+                                homeShelves.take(index).count { other ->
+                                    other.title + "|" + (other.moreEndpoint?.browseId ?: other.channelId ?: "") == base
+                                }
+                            if (occurrence == 0) base else "$base#$occurrence"
                         }) { index, item ->
                             Box {
                                 if (index == 0) {
@@ -819,7 +825,8 @@ fun HomeScreen(
                                                     ImageRequest
                                                         .Builder(LocalPlatformContext.current)
                                                         .data(headerImage)
-                                                        .crossfade(550)
+                                                        .size(1440, 1440)
+                                                        .crossfade(150)
                                                         .build(),
                                                 contentDescription = null,
                                                 contentScale = ContentScale.Crop,
@@ -936,7 +943,7 @@ fun HomeScreen(
                             }
                         }
                         if (homeListState == ListState.PAGINATION_EXHAUST) {
-                            items(newRelease, key = { it.hashCode() }) {
+                            items(newRelease, key = { it.title + "|" + (it.moreEndpoint?.browseId ?: "") + "|" + (it.thumbnail?.firstOrNull()?.url ?: "") }) {
                                 AnimatedVisibility(
                                     visible = newRelease.isNotEmpty(),
                                 ) {
@@ -1067,7 +1074,7 @@ fun HomeScreen(
                                 Modifier.background(Color.Transparent)
                             } else {
                                 Modifier
-                                    .hazeBlur(HazeInput.Sources(hazeState), ultraThinBarStyle())
+                                    .ultraThinBarBlur(hazeState)
                             },
                         ).onGloballyPositioned { coordinates ->
                             topAppBarHeightPx = coordinates.size.height
@@ -1435,7 +1442,7 @@ fun QuickPicks(
             state = lazyListState,
             flingBehavior = snapperFlingBehavior,
         ) {
-            items(homeItem.contents, key = { it.hashCode() }) {
+            items(homeItem.contents, key = { it?.videoId ?: it?.browseId ?: it?.playlistId ?: it?.title ?: "null" }) {
                 if (it != null) {
                     QuickPicksItem(
                         onClick = {
@@ -1594,7 +1601,7 @@ fun ChartData(
             ) {
                 items(item.playlists.size, key = { index ->
                     val data = item.playlists[index]
-                    data.id + data.title + index
+                    data.id
                 }) {
                     HomeItemContentPlaylist(
                         onClick = {
@@ -1628,7 +1635,7 @@ fun ChartData(
         ) {
             items(chart.artists.itemArtists.size, key = { index ->
                 val item = chart.artists.itemArtists[index]
-                item.title + item.browseId + index
+                item.browseId
             }) {
                 val data = chart.artists.itemArtists[it]
                 ItemArtistChart(
@@ -1670,7 +1677,7 @@ fun ChartData(
                 state = podcastGridState,
                 flingBehavior = podcastFlingBehavior,
             ) {
-                items(podcasts.shows.size, key = { index -> podcasts.shows[index].browseId + index }) {
+                items(podcasts.shows.size, key = { index -> podcasts.shows[index].browseId }) {
                     val data = podcasts.shows[it]
                     ItemArtistChart(
                         onClick = { navController.navigate(PodcastDestination(podcastId = data.browseId)) },
