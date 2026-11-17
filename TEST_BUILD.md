@@ -128,3 +128,8 @@ crossfading. Actions are remembered once so their identity stays stable.
   sentinel overflowed into a garbage position that could skip to the next track.
 - Resolver: stream resolution is bounded by withTimeoutOrNull(20s); a hung resolve
   now fails into the retry path instead of loading forever.
+
+Correction: the resolver timeout wrap broke compilation (run 44198754169) —
+return@runBlocking is not allowed inside the withTimeoutOrNull lambda. Fixed in
+core commit bc6d70c by returning from the timeout block instead
+(return@withTimeoutOrNull, same skip-the-fallback semantics).
