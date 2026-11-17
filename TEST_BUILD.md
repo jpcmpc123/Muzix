@@ -14,7 +14,12 @@ Contents on top of upstream `dev`:
 - Playback (via the core submodule swap in the workflow, jpcmpc123/core
   branch fix/playback-three-layers): full-track preloader, gap watchdog and
   automatic stream-error recovery. v2: recovery also covers
-  ERROR_CODE_IO_UNSPECIFIED and retries 6 times over ~1 minute.
+  ERROR_CODE_IO_UNSPECIFIED and retries 6 times over ~1 minute. v3: the
+  loader itself now rides out outages — the media source's load error policy
+  retries a dropped connection for ~3 minutes with backoff before the error
+  can reach the player (the Spotify/YouTube Music pattern), with HTTP
+  403/404/410 failing fast so the player-level recovery can re-resolve a
+  fresh URL.
 - MainActivity.kt: the official-build signature check is commented out
   (marked "TEST BUILD ONLY") because release builds verify the signing
   certificate and this test build is signed with a throwaway key.
