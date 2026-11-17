@@ -277,7 +277,8 @@ private fun SleeveFan(
                         ImageRequest
                             .Builder(LocalPlatformContext.current)
                             .data(covers[count - 1 - i])
-                            .crossfade(true)
+                            .size(256, 256)
+                            .crossfade(150)
                             .build(),
                     placeholder = rememberHolderPainter(),
                     error = rememberHolderPainter(),

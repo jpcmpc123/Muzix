@@ -1651,9 +1651,10 @@ fun NowPlayingBottomSheet(
                                 ImageRequest
                                     .Builder(LocalPlatformContext.current)
                                     .data(thumb)
+                                    .size(256, 256)
                                     .diskCachePolicy(CachePolicy.ENABLED)
                                     .diskCacheKey(thumb)
-                                    .crossfade(550)
+                                    .crossfade(150)
                                     .build(),
                             placeholder = rememberHolderPainter(),
                             error = rememberHolderPainter(),

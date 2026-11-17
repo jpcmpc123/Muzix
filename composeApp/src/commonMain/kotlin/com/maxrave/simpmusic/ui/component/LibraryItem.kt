@@ -278,9 +278,10 @@ fun LibraryItem(
                                             ImageRequest
                                                 .Builder(LocalPlatformContext.current)
                                                 .data(item.canvasThumbUrl)
+                                                .size(640, 1152)
                                                 .diskCachePolicy(CachePolicy.ENABLED)
                                                 .diskCacheKey(item.canvasThumbUrl)
-                                                .crossfade(true)
+                                                .crossfade(150)
                                                 .build(),
                                         placeholder = rememberHolderPainter(),
                                         error = rememberHolderPainter(),

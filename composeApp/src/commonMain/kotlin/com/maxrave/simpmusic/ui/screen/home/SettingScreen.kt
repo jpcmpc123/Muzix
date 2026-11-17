@@ -3148,7 +3148,8 @@ fun SettingScreen(
                                             ImageRequest
                                                 .Builder(LocalPlatformContext.current)
                                                 .data(it.thumbnailUrl)
-                                                .crossfade(550)
+                                                .size(256, 256)
+                                                .crossfade(150)
                                                 .build(),
                                         placeholder = rememberVectorPainter(SimpIcons.PeopleAlt),
                                         error = rememberVectorPainter(SimpIcons.PeopleAlt),
