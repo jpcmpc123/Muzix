@@ -106,3 +106,14 @@ Contents on top of upstream `dev`:
   position-only timeline updates to ~5x per second (total/loading
   changes and seeks still publish immediately), so the player and
   mini-player screens stop recomposing on every 50 ms tick.
+
+## Player progress isolation (stacked on the row-query build)
+
+NowPlayingContentState is now a data class and the shell feeds it a slow
+timeline snapshot (total / bufferedPercent / loading / isCrossfading / isLive),
+so the content layers compare equal across progress ticks and skip
+recomposing. The moving position is read by the three playback-controls
+leaves (Spotify, M3 Expressive, Apple Music) straight from timelineFlow, each
+keeping its own slider position while dragging; the shell keeps only plain
+holders for the seek value. The crossfade rainbow hue is read only while
+crossfading. Actions are remembered once so their identity stays stable.

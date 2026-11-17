@@ -491,22 +491,12 @@ fun NowPlayingScreenContent(
         Logger.d(TAG, "spotShadowColor: $spotShadowColor")
     }
 
-    var isSliding by rememberSaveable {
-        mutableStateOf(false)
-    }
-    var sliderValue by rememberSaveable {
-        mutableFloatStateOf(0f)
-    }
-    LaunchedEffect(key1 = timelineState, key2 = isSliding) {
-        if (!isSliding) {
-            sliderValue =
-                if (timelineState.total > 0L) {
-                    timelineState.current.toFloat() * 100 / timelineState.total.toFloat()
-                } else {
-                    0f
-                }
-        }
-    }
+    // Seek bookkeeping for the progress leaves. The leaves keep their own
+    // on-screen position from timelineFlow; these plain holders only carry the
+    // drag value across the onSliderChange -> onSliderChangeFinished pair, so a
+    // drag never recomposes the shell.
+    val latestSliderValue = remember { mutableFloatStateOf(0f) }
+    val isSliding = remember { mutableStateOf(false) }
 
     // Crossfade: RGB rainbow color cycling when transitioning between tracks
     val infiniteTransition = rememberInfiniteTransition(label = "crossfadeRainbow")
@@ -520,7 +510,9 @@ fun NowPlayingScreenContent(
             ),
         label = "rainbowHue",
     )
-    val rainbowColor = hsvToColor(rainbowHue, 1f, 1f)
+    // Read the hue only while crossfading: read unconditionally, the infinite
+    // transition keeps the shell recomposing for a colour nothing displays.
+    val rainbowColor = if (timelineState.isCrossfading) hsvToColor(rainbowHue, 1f, 1f) else Color.White
     val sliderTrackColor by animateColorAsState(
         targetValue = if (timelineState.isCrossfading) rainbowColor else Color.White,
         animationSpec = tween(300),
@@ -633,11 +625,25 @@ fun NowPlayingScreenContent(
     if (screenDataState.lyricsData != null && controllerState.isPlaying) {
         KeepScreenOn()
     }
+    // Slow-moving timeline snapshot for the content state: a fresh TimeLine lands
+    // several times a second while playing, but the content layers only need the
+    // fields that change rarely (total, buffering, loading, crossfade, live). The
+    // moving position is read by the progress leaves straight from timelineFlow,
+    // so this snapshot - and with it the data-class content state - compares equal
+    // across progress ticks and the heavy layers skip recomposing.
+    val slowTimeline =
+        remember(
+            timelineState.total,
+            timelineState.bufferedPercent,
+            timelineState.loading,
+            timelineState.isCrossfading,
+            timelineState.isLive,
+        ) { timelineState }
     val state =
         NowPlayingContentState(
             screenData = screenDataState,
             controllerState = controllerState,
-            timelineState = timelineState,
+            timelineState = slowTimeline,
             timelineFlow = sharedViewModel.timeline,
             likeStatus = likeStatus == YouTubeLikeStatus.LIKE,
             castState = castState,
@@ -651,7 +657,12 @@ fun NowPlayingScreenContent(
             spotShadowColor = spotShadowColor,
             gradientOffset = gradientOffset,
             sliderTrackColor = sliderTrackColor,
-            sliderValue = sliderValue,
+            sliderValue =
+                if (slowTimeline.total > 0L) {
+                    slowTimeline.current.toFloat() * 100 / slowTimeline.total.toFloat()
+                } else {
+                    0f
+                },
             currentLyricLineIndex = currentLyricLineIndex,
             showControlLayout = showHideControlLayout,
             controlLayoutAlpha = controlLayoutAlpha,
@@ -666,21 +677,26 @@ fun NowPlayingScreenContent(
             videoAspectRatio = rememberVideoAspectRatio(MAIN_PLAYER) ?: 16f / 9,
             videoId = commentsVideoId,
         )
+    // Remembered once: a fresh actions object per recomposition would defeat the
+    // frozen content state (the contents compare both parameters). Every callback
+    // writes snapshot state or reads a ViewModel flow at call time, so the single
+    // instance never goes stale.
     val actions =
-        NowPlayingContentActions(
+        remember {
+            NowPlayingContentActions(
             onUIEvent = { sharedViewModel.onUIEvent(it) },
             onSeekToQueueIndex = { index ->
                 mediaPlayerHandler.playMediaItemInMediaSource(index)
             },
             onArtworkBitmap = { sharedViewModel.setBitmap(it) },
             onSliderChange = { newValue ->
-                isSliding = true
-                sliderValue = newValue
+                isSliding.value = true
+                latestSliderValue.value = newValue
             },
             onSliderChangeFinished = {
-                isSliding = false
+                isSliding.value = false
                 sharedViewModel.onUIEvent(
-                    UIEvent.UpdateProgress(sliderValue),
+                    UIEvent.UpdateProgress(latestSliderValue.value),
                 )
             },
             onToggleControls = {
@@ -691,7 +707,7 @@ fun NowPlayingScreenContent(
                 val song = sharedViewModel.nowPlayingState.value?.songEntity
                 (
                     song?.artistId?.firstOrNull()?.takeIf { it.isNotEmpty() }
-                        ?: screenDataState.songInfoData?.authorId
+                        ?: sharedViewModel.nowPlayingScreenData.value.songInfoData?.authorId
                 )?.let { channelId ->
                     onDismiss()
                     navController.navigate(
@@ -736,7 +752,8 @@ fun NowPlayingScreenContent(
                 mediaPlayerHandler.removeMediaItem(index)
             },
             onQueueItemMore = { index, track -> queueMoreFor = index to track },
-        )
+            )
+        }
 
     // Below `state`/`actions`: the landscape lyrics layout renders the current style's own track row
     // and playback controls, so it takes the same contract the style content does.
