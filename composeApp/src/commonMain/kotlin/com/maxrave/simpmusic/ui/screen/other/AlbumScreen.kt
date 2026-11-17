@@ -223,6 +223,18 @@ fun AlbumScreen(
     // Apple Music-style page background from the artwork's dominant tone, held and faded (see UIExt.rememberPaletteColor).
     val mutedPaletteBg = rememberPaletteColor(paletteState.palette)
 
+    // Stable, position-free item keys: a track keeps its key when the list changes around
+    // it; a repeated track gets an occurrence suffix, never its index.
+    val albumTrackKeys =
+        remember(uiState.listTrack) {
+            val seen = mutableMapOf<String, Int>()
+            uiState.listTrack.map { track ->
+                val occurrence = seen.getOrDefault(track.videoId, 0)
+                seen[track.videoId] = occurrence + 1
+                if (occurrence == 0) track.videoId else "${track.videoId}#$occurrence"
+            }
+        }
+
     Crossfade(uiState.loadState) {
         when (it) {
             LocalPlaylistState.PlaylistLoadState.Success -> {
@@ -856,11 +868,11 @@ fun AlbumScreen(
                     }
                     items(count = uiState.trackCount, key = { index ->
                         val item = uiState.listTrack.getOrNull(index)
-                        item?.videoId + "item_$index"
+                        albumTrackKeys.getOrNull(index) ?: "item_$index"
                     }) { index ->
                         val item = uiState.listTrack.getOrNull(index)
                         if (item != null) {
-                            Column(modifier = Modifier.animateItem()) {
+                            Column {
                                 SongFullWidthItems(
                                     forceDark = true,
                                     isPlaying = item.videoId == playingVideoId,

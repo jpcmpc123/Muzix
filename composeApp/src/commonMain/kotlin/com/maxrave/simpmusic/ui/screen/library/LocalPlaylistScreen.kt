@@ -1336,8 +1336,7 @@ fun LocalPlaylistScreen(
             }
         }
         items(count = trackPagingItems.itemCount, key = { index ->
-            val item = trackPagingItems[index]
-            (item?.first?.videoId ?: "") + "item_$index" + item?.second?.inPlaylist + item?.second?.position
+            trackPagingItems[index]?.second?.id ?: "item_$index"
         }) { index ->
             val item = trackPagingItems[index]?.first
             if (item != null) {
@@ -1399,7 +1398,7 @@ fun LocalPlaylistScreen(
                         content(Modifier)
                     }
                 } else {
-                    Column(modifier = Modifier.animateItem()) {
+                    Column {
                         content(Modifier)
                         if (index < trackPagingItems.itemCount - 1) {
                             HorizontalDivider(
