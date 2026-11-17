@@ -22,7 +22,12 @@ Contents on top of upstream `dev`:
   fresh URL. v4: resume-on-reconnect — a network callback in the media
   service handler resumes playback the moment the connection returns
   (seek + prepare at once) when an outage interrupted wanted playback,
-  instead of waiting out the retry timers.
+  instead of waiting out the retry timers. v5: the recovery and the
+  reconnect resume no longer call prepare() after the seek — on the
+  crossfade player adapter, prepare() reloads the current track from 0
+  with shouldPlay=false and cancels the load the seek just started, which
+  is why every earlier recovery ended restarted and paused. The seek
+  alone is the reload, with playWhenReady restored first.
 - MainActivity.kt: the official-build signature check is commented out
   (marked "TEST BUILD ONLY") because release builds verify the signing
   certificate and this test build is signed with a throwaway key.
