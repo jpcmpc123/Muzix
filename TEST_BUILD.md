@@ -27,7 +27,19 @@ Contents on top of upstream `dev`:
   crossfade player adapter, prepare() reloads the current track from 0
   with shouldPlay=false and cancels the load the seek just started, which
   is why every earlier recovery ended restarted and paused. The seek
-  alone is the reload, with playWhenReady restored first.
+  alone is the reload, with playWhenReady restored first. v6: the
+  reconnect resume also missed the common short outage — for anything
+  shorter than the loader's retry window no error ever reaches the
+  handler, and the crossfade adapter keeps reporting the track as
+  playing while it is stalled mid-track, so the resume's guards
+  declined and the reconnect was consumed with nothing left pending.
+  The adapter now exposes a live stall signal (MediaPlayerInterface
+  .isStalled: the cached loading flag OR the raw player in
+  STATE_BUFFERING with playWhenReady set), the resume acts on it too,
+  and onAvailable grants one second chance 2s later, bound to the
+  same track, for networks announced before they are usable. Also:
+  propagatePlayerError no longer triggers a second, synthetic 403
+  notification on top of the real error.
 - MainActivity.kt: the official-build signature check is commented out
   (marked "TEST BUILD ONLY") because release builds verify the signing
   certificate and this test build is signed with a throwaway key.
