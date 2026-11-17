@@ -104,53 +104,43 @@ class HomeViewModel(
             exploreChart(regionCodeChart.value ?: "ZZ")
             language = dataStoreManager.getString(SELECTED_LANGUAGE).first()
                 ?: SUPPORTED_LANGUAGE.codes.first()
-            //  refresh when region change
+            //  One single load trigger for Home. Region, language, the login cookie and
+            //  the mood params each used to be collected by a separate job, and every job
+            //  called getHomeItemList on its first emission — so opening the app fired
+            //  the same load up to five times back to back: the feed showed, the loading
+            //  state came back, and the feed showed again. Combined into one flow, the
+            //  load runs once, and then only when one of the four actually changes.
             val job1 =
                 launch {
-                    dataStoreManager.location.distinctUntilChanged().collect {
-                        regionCode = it
-                        getHomeItemList(params.value)
-                    }
-                }
-            //  refresh when language change
-            val job2 =
-                launch {
-                    dataStoreManager.language.distinctUntilChanged().collect {
-                        language = it
-                        getHomeItemList(params.value)
-                    }
-                }
-            val job3 =
-                launch {
-                    dataStoreManager.cookie.distinctUntilChanged().collect {
-                        getHomeItemList(params.value)
-                        _accountInfo.emit(
-                            Pair(
-                                dataStoreManager.getString("AccountName").first(),
-                                dataStoreManager.getString("AccountThumbUrl").first(),
-                            ),
-                        )
-                    }
-                }
-            val job4 =
-                launch {
-                    params.collectLatest {
-                        getHomeItemList(it)
-                    }
-                }
-            val job5 =
-                launch {
-                    dataStoreManager
-                        .cookie
-                        .distinctUntilChanged()
-                        .collectLatest {
-                            if (it.isNotEmpty()) {
-                                Logger.w(tag, "Cookie changed, refreshing home")
-                                loading.value = true
-                                delay(1000) // To wait for the cookie to be saved properly
-                                getHomeItemList(params.value)
-                            }
+                    var previousCookie: String? = null
+                    combine(
+                        dataStoreManager.location,
+                        dataStoreManager.language,
+                        dataStoreManager.cookie,
+                        params,
+                    ) { location, language, cookie, params ->
+                        HomeLoadTrigger(location, language, cookie, params)
+                    }.distinctUntilChanged().collectLatest { trigger ->
+                        regionCode = trigger.location
+                        language = trigger.language
+                        val isFirstEmission = previousCookie == null
+                        val cookieChanged = !isFirstEmission && previousCookie != trigger.cookie
+                        previousCookie = trigger.cookie
+                        if (isFirstEmission || cookieChanged) {
+                            _accountInfo.emit(
+                                Pair(
+                                    dataStoreManager.getString("AccountName").first(),
+                                    dataStoreManager.getString("AccountThumbUrl").first(),
+                                ),
+                            )
                         }
+                        if (cookieChanged && trigger.cookie.isNotEmpty()) {
+                            Logger.w(tag, "Cookie changed, refreshing home")
+                            loading.value = true
+                            delay(1000) // To wait for the cookie to be saved properly
+                        }
+                        getHomeItemList(trigger.params)
+                    }
                 }
             val job6 =
                 launch {
@@ -166,10 +156,6 @@ class HomeViewModel(
                     }
                 }
             job1.join()
-            job2.join()
-            job3.join()
-            job4.join()
-            job5.join()
             job6.join()
         }
     }
@@ -376,3 +362,11 @@ class HomeViewModel(
         const val HOME_PARAMS_FOCUS = "ggM8SgQIBxABSgQIBRABSgQICRABSgQIChABSgQIDRABSgQICBABSgQIBBABSgQIDhABSgQIAxABSgQIBhAD"
     }
 }
+
+/** One emission of the combined Home load trigger: every input that can change what Home shows. */
+private data class HomeLoadTrigger(
+    val location: String,
+    val language: String,
+    val cookie: String,
+    val params: String?,
+)
