@@ -545,6 +545,7 @@ internal fun AppleMusicTimesRow(
     typography: AppleMusicTypography,
     sliderPosition: Float,
     liveTimeline: TimeLine,
+    audioQualityLabel: String?,
     modifier: Modifier = Modifier,
 ) {
     // `total` stays -1 until the player reports a duration, and SimpleMediaState.Ready carries
@@ -614,13 +615,13 @@ internal fun AppleMusicTimesRow(
                     ),
                 label = "appleMusicSweepHead",
             )
-            val quality = state.audioQualityLabel
+            val quality = audioQualityLabel
             val crossfadeLabelAlpha by animateFloatAsState(
-                targetValue = if (state.timelineState.isCrossfading) 1f else 0f,
+                targetValue = if (liveTimeline.isCrossfading) 1f else 0f,
                 label = "appleMusicCrossfadeLabelAlpha",
             )
             val qualityLabelAlpha by animateFloatAsState(
-                targetValue = if (!state.timelineState.isCrossfading && quality != null) 1f else 0f,
+                targetValue = if (!liveTimeline.isCrossfading && quality != null) 1f else 0f,
                 label = "appleMusicQualityLabelAlpha",
             )
             Box(modifier = Modifier.alpha(crossfadeLabelAlpha)) {
@@ -1031,7 +1032,7 @@ internal fun ColumnScope.AppleMusicPlaybackControls(
             modifier = Modifier.fillMaxWidth(),
         )
     }
-    AppleMusicTimesRow(typography = typography, sliderPosition = sliderPosition, liveTimeline = liveTimeline, modifier = Modifier.padding(top = 8.dp))
+    AppleMusicTimesRow(typography = typography, sliderPosition = sliderPosition, liveTimeline = liveTimeline, audioQualityLabel = state.audioQualityLabel, modifier = Modifier.padding(top = 8.dp))
     Spacer(modifier = Modifier.height(22.dp))
     AppleMusicTransportRow(
         controllerState = state.controllerState,
