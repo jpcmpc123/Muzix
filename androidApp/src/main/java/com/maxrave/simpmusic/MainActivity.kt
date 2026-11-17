@@ -270,7 +270,9 @@ class MainActivity : AppCompatActivity() {
         }
         viewModel.getLocation()
 
-        if (!BuildConfig.DEBUG) viewModel.checkOfficialBuild(packageName, signingCertSha256())
+        // TEST BUILD ONLY (branch test/all-fixes-release-apk, never upstream): the official-build
+        // signature check is skipped so this release test APK, signed with a throwaway key, can run.
+        // if (!BuildConfig.DEBUG) viewModel.checkOfficialBuild(packageName, signingCertSha256())
         setContent {
             App(viewModel)
         }
