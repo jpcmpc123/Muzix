@@ -40,6 +40,9 @@ Contents on top of upstream `dev`:
   same track, for networks announced before they are usable. Also:
   propagatePlayerError no longer triggers a second, synthetic 403
   notification on top of the real error.
+- Asking for a Premium quality without Premium now falls back to the
+  best audio the response actually carries (itag 251) instead of the
+  last format in the list (in practice ~48-70 kbps, below Low).
 - Changing the audio quality now clears the player cache and every
   stored stream format, so songs that already played re-resolve and
   play at the newly chosen quality instead of the cached old one
