@@ -51,6 +51,15 @@ Contents on top of upstream `dev`:
   blocks the stream resolve — the format is stored, the URL is emitted
   and the player starts; a background lookup patches the stored row
   when the answer arrives (core: StreamRepositoryImpl).
+- Faster start, no URL probe: the playback resolver no longer HEADs
+  every stored stream URL before using it. Stored URLs are trusted
+  until 10 minutes before their stored expiry; a URL that turns out
+  dead fails the load with a 403 and the player adapter re-resolves
+  it at the same position (existing machinery), and the media service
+  drops all stored formats when the network returns after a loss —
+  stored URLs are bound to the resolving network's IP — before the
+  resume-on-reconnect reloads anything (core: Media3ServiceModule,
+  MediaServiceHandlerImpl). Downloads and cast keep their probe.
 - Home loads once on open: the five separate load triggers in
   HomeViewModel (region, language, cookie x2, mood params) were merged
   into a single combined flow, so the feed no longer shows, goes back
