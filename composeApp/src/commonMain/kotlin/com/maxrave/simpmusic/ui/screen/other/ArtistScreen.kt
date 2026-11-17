@@ -921,6 +921,7 @@ private fun ArtistSections(
                     }
                 }
                 // One batch query for the stored rows of the popular songs below.
+                val songRepository: SongRepository = koinInject()
                 val popularSongIds = remember(state.data.popularSongs) { state.data.popularSongs.map { it.videoId }.distinct() }
                 val localSongs by remember(popularSongIds) {
                     if (popularSongIds.isEmpty()) flowOf(emptyList()) else songRepository.getSongsByListVideoId(popularSongIds)
