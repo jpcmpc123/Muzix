@@ -40,6 +40,10 @@ Contents on top of upstream `dev`:
   same track, for networks announced before they are usable. Also:
   propagatePlayerError no longer triggers a second, synthetic 403
   notification on top of the real error.
+- Changing the audio quality now clears the player cache and every
+  stored stream format, so songs that already played re-resolve and
+  play at the newly chosen quality instead of the cached old one
+  (core: handler watches the quality setting).
 - Home loads once on open: the five separate load triggers in
   HomeViewModel (region, language, cookie x2, mood params) were merged
   into a single combined flow, so the feed no longer shows, goes back
