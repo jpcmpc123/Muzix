@@ -285,6 +285,7 @@ fun SongFullWidthItems(
                                     ImageRequest
                                         .Builder(LocalPlatformContext.current)
                                         .data(thumb)
+                                        .size(256, 256)
                                         .diskCachePolicy(CachePolicy.ENABLED)
                                         .diskCacheKey(thumb)
                                         .crossfade(true)
@@ -447,6 +448,7 @@ fun SuggestItems(
                                 ImageRequest
                                     .Builder(LocalPlatformContext.current)
                                     .data(thumb)
+                                    .size(256, 256)
                                     .diskCachePolicy(CachePolicy.ENABLED)
                                     .diskCacheKey(thumb)
                                     .crossfade(true)
@@ -605,6 +607,7 @@ fun PlaylistFullWidthItems(
                         ImageRequest
                             .Builder(LocalPlatformContext.current)
                             .data(thumb)
+                            .size(256, 256)
                             .diskCachePolicy(CachePolicy.ENABLED)
                             .diskCacheKey(thumb)
                             .crossfade(true)
@@ -727,6 +730,7 @@ fun ArtistFullWidthItems(
                         ImageRequest
                             .Builder(LocalPlatformContext.current)
                             .data(thumbnails)
+                            .size(256, 256)
                             .diskCachePolicy(CachePolicy.ENABLED)
                             .diskCacheKey(thumbnails)
                             .crossfade(true)

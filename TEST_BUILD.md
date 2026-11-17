@@ -60,6 +60,12 @@ Contents on top of upstream `dev`:
   stored URLs are bound to the resolving network's IP — before the
   resume-on-reconnect reloads anything (core: Media3ServiceModule,
   MediaServiceHandlerImpl). Downloads and cast keep their probe.
+- List thumbnails load at display size: row image requests cap the
+  decode at 256px (small rows) or 640px (cards/grid), at least 1.25x
+  the pixels the screen shows, instead of decoding the largest
+  variant (540px, up to 1280x720) into 36-160dp slots; row crossfade
+  drops from 550ms to 150ms (branch fix/list-image-size). Full-size
+  artwork views (player, headers) are untouched.
 - Home loads once on open: the five separate load triggers in
   HomeViewModel (region, language, cookie x2, mood params) were merged
   into a single combined flow, so the feed no longer shows, goes back

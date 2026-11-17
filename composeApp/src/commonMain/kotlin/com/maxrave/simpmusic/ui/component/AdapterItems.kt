@@ -241,9 +241,10 @@ fun HomeSectionHeader(
                     ImageRequest
                         .Builder(LocalPlatformContext.current)
                         .data(data.thumbnail?.lastOrNull()?.url)
+                        .size(256, 256)
                         .diskCachePolicy(CachePolicy.ENABLED)
                         .diskCacheKey(data.thumbnail?.lastOrNull()?.url)
-                        .crossfade(550)
+                        .crossfade(150)
                         .build(),
                 contentDescription = "",
                 placeholder = rememberHolderPainter(),
@@ -634,9 +635,10 @@ fun HomeItemContentPlaylist(
                         ImageRequest
                             .Builder(LocalPlatformContext.current)
                             .data(thumb)
+                            .size(640, 640)
                             .diskCachePolicy(CachePolicy.ENABLED)
                             .diskCacheKey(thumb)
-                            .crossfade(550)
+                            .crossfade(150)
                             .build(),
                     placeholder =
                         when (data) {
@@ -869,7 +871,8 @@ fun QuickPicksItem(
                     ImageRequest
                         .Builder(LocalPlatformContext.current)
                         .data(data.thumbnails.lastOrNull()?.url)
-                        .crossfade(550)
+                        .size(256, 256)
+                        .crossfade(150)
                         .diskCacheKey(data.thumbnails.lastOrNull()?.url)
                         .diskCachePolicy(CachePolicy.ENABLED)
                         .build(),
@@ -1002,9 +1005,10 @@ fun HomeItemSong(
                         ImageRequest
                             .Builder(LocalPlatformContext.current)
                             .data(thumb)
+                            .size(640, 640)
                             .diskCachePolicy(CachePolicy.ENABLED)
                             .diskCacheKey(thumb)
-                            .crossfade(550)
+                            .crossfade(150)
                             .build(),
                     placeholder = rememberHolderPainter(),
                     error = rememberHolderPainter(),
@@ -1106,9 +1110,10 @@ fun HomeItemVideo(
                         ImageRequest
                             .Builder(LocalPlatformContext.current)
                             .data(thumb)
+                            .size(640, 640)
                             .diskCachePolicy(CachePolicy.ENABLED)
                             .diskCacheKey(thumb)
-                            .crossfade(550)
+                            .crossfade(150)
                             .build(),
                     placeholder = rememberHolderPainter(),
                     error = rememberHolderPainter(),
@@ -1223,9 +1228,10 @@ fun HomeItemArtist(
                     ImageRequest
                         .Builder(LocalPlatformContext.current)
                         .data(thumb)
+                        .size(640, 640)
                         .diskCachePolicy(CachePolicy.ENABLED)
                         .diskCacheKey(thumb)
-                        .crossfade(550)
+                        .crossfade(150)
                         .build(),
                 placeholder = rememberHolderPainter(),
                 error = rememberHolderPainter(),
@@ -1341,9 +1347,10 @@ fun ItemVideoChart(
                     ImageRequest
                         .Builder(LocalPlatformContext.current)
                         .data(thumb)
+                        .size(640, 640)
                         .diskCachePolicy(CachePolicy.ENABLED)
                         .diskCacheKey(thumb)
-                        .crossfade(550)
+                        .crossfade(150)
                         .build(),
                 placeholder = rememberHolderPainter(),
                 error = rememberHolderPainter(),
@@ -1454,9 +1461,10 @@ fun ItemArtistChart(
                     ImageRequest
                         .Builder(LocalPlatformContext.current)
                         .data(thumb)
+                        .size(256, 256)
                         .diskCachePolicy(CachePolicy.ENABLED)
                         .diskCacheKey(thumb)
-                        .crossfade(550)
+                        .crossfade(150)
                         .build(),
                 placeholder = rememberHolderPainter(),
                 error = rememberHolderPainter(),
@@ -1562,9 +1570,10 @@ fun ItemTrackChart(
                     ImageRequest
                         .Builder(LocalPlatformContext.current)
                         .data(thumb)
+                        .size(256, 256)
                         .diskCachePolicy(CachePolicy.ENABLED)
                         .diskCacheKey(thumb)
-                        .crossfade(550)
+                        .crossfade(150)
                         .build(),
                 placeholder = rememberHolderPainter(),
                 error = rememberHolderPainter(),
