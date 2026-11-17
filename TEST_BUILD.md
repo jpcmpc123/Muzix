@@ -74,6 +74,16 @@ Contents on top of upstream `dev`:
   account avatar (256px small slots, 640px cards, crossfade 150ms).
   Playlist/podcast/analytics headers, the Home hero carousel and
   the analytics mosaic stay full-size by design.
+- Lists no longer animate every item in, and item keys are stable
+  (branch fix/list-stable-keys): animateItem() removed from the
+  playlist, album, local playlist and library lists (its default
+  fade-in/placement springs ran on every item entering during a fast
+  scroll); keys are now the item's own id (track videoId with an
+  occurrence suffix for repeats, the local playlist row's database
+  id, shelf title + browse id on Home, browse/id per type in the
+  library row) instead of hashCode() or id + list index, so items
+  keep their identity when the list is filtered, reordered or
+  refreshed. The drag-reorder branch keeps its animateItem.
 - Home loads once on open: the five separate load triggers in
   HomeViewModel (region, language, cookie x2, mood params) were merged
   into a single combined flow, so the feed no longer shows, goes back

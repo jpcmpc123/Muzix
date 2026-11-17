@@ -220,6 +220,18 @@ fun PlaylistScreen(
         }
     }
 
+    // Stable, position-free item keys: a track keeps its key when the list is filtered or
+    // reordered around it; a repeated track gets an occurrence suffix, never its index.
+    val filteredTrackKeys =
+        remember(filteredTrack) {
+            val seen = mutableMapOf<String, Int>()
+            filteredTrack.map { track ->
+                val occurrence = seen.getOrDefault(track.videoId, 0)
+                seen[track.videoId] = occurrence + 1
+                if (occurrence == 0) track.videoId else "${track.videoId}#$occurrence"
+            }
+        }
+
     LaunchedEffect(uiState) {
         Logger.d(tag, "uiState hash: ${uiState.hashCode()}")
         Logger.d(tag, "uiState data: ${uiState.data}")
@@ -382,8 +394,7 @@ fun PlaylistScreen(
                                     Modifier
                                         .fillMaxWidth()
                                         .wrapContentHeight()
-                                        .background(Color.Transparent)
-                                        .animateItem(),
+                                        .background(Color.Transparent),
                             ) {
                                 Column(
                                     Modifier
@@ -1056,11 +1067,11 @@ fun PlaylistScreen(
                     }
                     items(count = filteredTrack.size, key = { index ->
                         val item = filteredTrack.getOrNull(index)
-                        (item?.videoId ?: "") + "item_$index"
+                        filteredTrackKeys.getOrNull(index) ?: "item_$index"
                     }) { index ->
                         val item = filteredTrack.getOrNull(index)
                         if (item != null) {
-                            Column(modifier = Modifier.animateItem()) {
+                            Column {
                                 if (playingTrack?.videoId == item.videoId && isPlaying) {
                                     SongFullWidthItems(
                                         forceDark = true,
