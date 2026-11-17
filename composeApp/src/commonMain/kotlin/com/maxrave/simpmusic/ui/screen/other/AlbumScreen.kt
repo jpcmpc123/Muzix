@@ -71,6 +71,7 @@ import com.kyant.backdrop.highlight.Highlight
 import com.maxrave.simpmusic.expect.ui.DesktopMiniPlayerClearance
 import com.maxrave.simpmusic.expect.ui.VerticalScrollBar
 import com.maxrave.simpmusic.extension.barBlurStyle
+import com.maxrave.simpmusic.extension.tintedBarBlur
 import com.maxrave.simpmusic.ui.component.DownloadingIndicator
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.model.browse.album.Track
@@ -120,12 +121,14 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import com.maxrave.domain.repository.SongRepository
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
@@ -158,6 +161,7 @@ fun AlbumScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val songRepository: SongRepository = koinInject()
 
     var showBottomSheet by rememberSaveable { mutableStateOf(false) }
     var albumBottomSheetShow by rememberSaveable { mutableStateOf(false) }
@@ -222,6 +226,26 @@ fun AlbumScreen(
     val dominantColor = uiState.colors.firstOrNull() ?: Color.Black
     // Apple Music-style page background from the artwork's dominant tone, held and faded (see UIExt.rememberPaletteColor).
     val mutedPaletteBg = rememberPaletteColor(paletteState.palette)
+
+    // Stable, position-free item keys: a track keeps its key when the list changes around
+    // it; a repeated track gets an occurrence suffix, never its index.
+    val albumTrackKeys =
+        remember(uiState.listTrack) {
+            val seen = mutableMapOf<String, Int>()
+            uiState.listTrack.map { track ->
+                val occurrence = seen.getOrDefault(track.videoId, 0)
+                seen[track.videoId] = occurrence + 1
+                if (occurrence == 0) track.videoId else "${track.videoId}#$occurrence"
+            }
+        }
+
+    // One batch query for the stored rows of every track on this screen; rows used to
+    // run one Room flow each just to learn their download state and live flag.
+    val albumTrackIds = remember(uiState.listTrack) { uiState.listTrack.map { it.videoId }.distinct() }
+    val localSongs by remember(albumTrackIds) {
+        if (albumTrackIds.isEmpty()) flowOf(emptyList()) else songRepository.getSongsByListVideoId(albumTrackIds)
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val localSongById = remember(localSongs) { localSongs.associateBy { it.videoId } }
 
     Crossfade(uiState.loadState) {
         when (it) {
@@ -856,16 +880,18 @@ fun AlbumScreen(
                     }
                     items(count = uiState.trackCount, key = { index ->
                         val item = uiState.listTrack.getOrNull(index)
-                        item?.videoId + "item_$index"
+                        albumTrackKeys.getOrNull(index) ?: "item_$index"
                     }) { index ->
                         val item = uiState.listTrack.getOrNull(index)
                         if (item != null) {
-                            Column(modifier = Modifier.animateItem()) {
+                            Column {
                                 SongFullWidthItems(
                                     forceDark = true,
                                     isPlaying = item.videoId == playingVideoId,
                                     index = index,
                                     track = item,
+                                    localSongOverride = localSongById[item.videoId],
+                                    hasLocalSongOverride = true,
                                     onMoreClickListener = {
                                         chosenSong = item
                                         showBottomSheet = true
@@ -978,7 +1004,7 @@ fun AlbumScreen(
                                 containerColor = Color.Transparent,
                             ),
                         modifier =
-                            Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
+                            Modifier.tintedBarBlur(hazeState, mutedPaletteBg, 0.55f),
                     )
                 }
                 AnimatedVisibility(
@@ -993,7 +1019,7 @@ fun AlbumScreen(
                         },
                         onOpenActions = { showSelectionSheet = true },
                         modifier =
-                            Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
+                            Modifier.tintedBarBlur(hazeState, mutedPaletteBg, 0.55f),
                     )
                 }
                 if (showSelectionSheet) {

@@ -54,6 +54,7 @@ import com.maxrave.simpmusic.expect.ui.DesktopMiniPlayerClearance
 import com.maxrave.simpmusic.expect.ui.VerticalScrollBar
 import com.maxrave.simpmusic.extension.getStringBlocking
 import com.maxrave.simpmusic.extension.ultraThinBarStyle
+import com.maxrave.simpmusic.extension.ultraThinBarBlur
 import com.maxrave.simpmusic.ui.component.SearchBarExit
 import com.maxrave.simpmusic.ui.component.SearchBarEnter
 import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
@@ -327,6 +328,8 @@ fun LibraryDynamicPlaylistScreen(
                     ) { song ->
                         SongFullWidthItems(
                             songEntity = song.second,
+                            localSongOverride = song.second,
+                            hasLocalSongOverride = true,
                             isPlaying = song.second.videoId == nowPlayingVideoId,
                             modifier = Modifier.fillMaxWidth(),
                             onMoreClickListener = {
@@ -443,6 +446,8 @@ fun LibraryDynamicPlaylistScreen(
             ) { song ->
                 SongFullWidthItems(
                     songEntity = song,
+                    localSongOverride = song,
+                    hasLocalSongOverride = true,
                     isPlaying = song.videoId == nowPlayingVideoId,
                     modifier = Modifier.fillMaxWidth(),
                     onMoreClickListener = {
@@ -697,7 +702,7 @@ fun LibraryDynamicPlaylistScreen(
                 },
                 modifier =
                     Modifier
-                        .hazeBlur(HazeInput.Sources(hazeState), ultraThinBarStyle()),
+                        .ultraThinBarBlur(hazeState),
                 colors =
                     TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,

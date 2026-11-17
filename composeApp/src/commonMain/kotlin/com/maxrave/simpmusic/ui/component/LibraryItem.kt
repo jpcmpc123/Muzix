@@ -152,6 +152,8 @@ fun LibraryItem(
                                     RecentlyType.Type.SONG -> {
                                         SongFullWidthItems(
                                             songEntity = item as SongEntity,
+                                            localSongOverride = item as SongEntity,
+                                            hasLocalSongOverride = true,
                                             isPlaying = item.videoId == state.type.playingVideoId,
                                             modifier = Modifier,
                                             onMoreClickListener = {
@@ -347,8 +349,20 @@ fun LibraryItem(
                     } else {
                         if (state.data.isNotEmpty()) {
                             LazyRow {
-                                items(items = state.data) { item ->
-                                    Box(modifier = Modifier.animateItem()) {
+                                items(
+                                    items = state.data,
+                                    key = { item ->
+                                        when (item) {
+                                            is LocalPlaylistEntity -> "local_${item.id}"
+                                            is PlaylistsResult -> "ytpl_${item.browseId}"
+                                            is AlbumEntity -> "album_${item.browseId}"
+                                            is PlaylistEntity -> "pl_${item.id}"
+                                            is PodcastsEntity -> "pod_${item.podcastId}"
+                                            else -> "x_${item.hashCode()}"
+                                        }
+                                    },
+                                ) { item ->
+                                    Box {
                                         HomeItemContentPlaylist(
                                             onClick = {
                                                 when (item) {

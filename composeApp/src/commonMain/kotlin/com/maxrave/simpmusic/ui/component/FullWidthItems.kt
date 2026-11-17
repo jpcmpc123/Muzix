@@ -90,6 +90,7 @@ import com.maxrave.simpmusic.ui.theme.ArtworkShape
 import com.maxrave.simpmusic.ui.theme.LocalForceDarkText
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -118,6 +119,8 @@ fun SongFullWidthItems(
     track: Track? = null,
     index: Int? = null,
     songEntity: SongEntity? = null,
+    localSongOverride: SongEntity? = null,
+    hasLocalSongOverride: Boolean = false,
     isPlaying: Boolean,
     shouldShowDragHandle: Boolean = false,
     onMoreClickListener: ((videoId: String) -> Unit)? = null,
@@ -137,9 +140,17 @@ fun SongFullWidthItems(
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
     val songRepository: SongRepository = koinInject<SongRepository>()
-    val storedSong by songRepository
-        .getSongAsFlow(songEntity?.videoId ?: track?.videoId ?: "")
-        .collectAsState(initial = null)
+    // Screens that render many rows pass the stored row in (one batch query per screen);
+    // only a row without a provider falls back to its own per-row query.
+    val lookupVideoId = songEntity?.videoId ?: track?.videoId ?: ""
+    val queriedSong by remember(lookupVideoId, hasLocalSongOverride) {
+        if (hasLocalSongOverride) {
+            flowOf(null)
+        } else {
+            songRepository.getSongAsFlow(lookupVideoId)
+        }
+    }.collectAsState(initial = null)
+    val storedSong = if (hasLocalSongOverride) localSongOverride else queriedSong
     val downloadState = storedSong?.downloadState ?: DownloadState.STATE_NOT_DOWNLOADED
     // The list's own model says what its source said; the stored row adds what playback learned
     // since, which is the only way a queue row is marked — the queue response shows no LIVE chip.
@@ -285,6 +296,7 @@ fun SongFullWidthItems(
                                     ImageRequest
                                         .Builder(LocalPlatformContext.current)
                                         .data(thumb)
+                                        .size(256, 256)
                                         .diskCachePolicy(CachePolicy.ENABLED)
                                         .diskCacheKey(thumb)
                                         .crossfade(true)
@@ -447,6 +459,7 @@ fun SuggestItems(
                                 ImageRequest
                                     .Builder(LocalPlatformContext.current)
                                     .data(thumb)
+                                    .size(256, 256)
                                     .diskCachePolicy(CachePolicy.ENABLED)
                                     .diskCacheKey(thumb)
                                     .crossfade(true)
@@ -605,6 +618,7 @@ fun PlaylistFullWidthItems(
                         ImageRequest
                             .Builder(LocalPlatformContext.current)
                             .data(thumb)
+                            .size(256, 256)
                             .diskCachePolicy(CachePolicy.ENABLED)
                             .diskCacheKey(thumb)
                             .crossfade(true)
@@ -727,6 +741,7 @@ fun ArtistFullWidthItems(
                         ImageRequest
                             .Builder(LocalPlatformContext.current)
                             .data(thumbnails)
+                            .size(256, 256)
                             .diskCachePolicy(CachePolicy.ENABLED)
                             .diskCacheKey(thumbnails)
                             .crossfade(true)
