@@ -47,6 +47,7 @@ import com.maxrave.simpmusic.expect.openUrl
 import com.maxrave.simpmusic.expect.ui.DesktopMiniPlayerClearance
 import com.maxrave.simpmusic.expect.ui.VerticalScrollBar
 import com.maxrave.simpmusic.extension.ultraThinBarStyle
+import com.maxrave.simpmusic.extension.ultraThinBarBlur
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.SimpIcons
@@ -259,7 +260,7 @@ fun CreditScreen(
     TopAppBar(
         modifier =
             Modifier
-                .hazeBlur(HazeInput.Sources(hazeState), ultraThinBarStyle()),
+                .ultraThinBarBlur(hazeState),
         title = {
             Text(
                 text = stringResource(Res.string.app_name),

@@ -34,6 +34,13 @@ val LocalAppDialogOpen = compositionLocalOf { false }
 val LocalNowPlayingOpen = compositionLocalOf { false }
 
 /**
+ * True while the liquid-glass effects are on. App.kt provides it from the setting, and the bars
+ * across the app read it: with glass off a bar must not keep blurring the content under it —
+ * it draws its style's opaque fallback colour instead (see UIExt's bar modifiers).
+ */
+val LocalGlassEffectsEnabled = compositionLocalOf { false }
+
+/**
  * True once the user has touched or scrolled anything in the app this launch, or opened Now Playing.
  * A launch banner that has not had its turn yet then waits for a later launch.
  */

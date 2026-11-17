@@ -63,6 +63,7 @@ import com.maxrave.simpmusic.expect.ui.VerticalScrollBar
 import com.maxrave.simpmusic.extension.angledGradientBackground
 import com.maxrave.simpmusic.extension.artworkScrimBrush
 import com.maxrave.simpmusic.extension.barBlurStyle
+import com.maxrave.simpmusic.extension.tintedBarBlur
 import com.maxrave.simpmusic.extension.rgbFactor
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.AmbientGlowHeight
@@ -306,7 +307,7 @@ fun BrowseScreen(
                     if (atTop) {
                         Modifier.background(Color.Transparent)
                     } else {
-                        Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(pageBackground, 0.3f))
+                        Modifier.tintedBarBlur(hazeState, pageBackground, 0.3f)
                     },
                 ),
             ) {
