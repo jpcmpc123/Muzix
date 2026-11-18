@@ -469,23 +469,27 @@ private var cachedFloorValue: Dp = 66.dp
 @Composable
 private fun cardTextBlockFloor(): Dp {
     val density = LocalDensity.current
-    if (cachedFloorDensity == density.density && cachedFloorFontScale == density.fontScale) {
-        return cachedFloorValue
-    }
+    // The remember calls have to run on every call: the cache check used to return before them,
+    // so a call that hit the cache ran zero remembers and the next one ran two, changing the
+    // slot order between compositions of the same card.
     val measurer = rememberTextMeasurer()
     val title = typo().titleSmall
     val subtitle = typo().bodySmall
-    return remember(measurer, density, title, subtitle) {
-        with(density) {
-            val titleLines = measurer.measure("A\nA", title).size.height.toDp()
-            val subtitleRow = maxOf(measurer.measure("A", subtitle).size.height.toDp() + 6.dp, 20.dp)
-            (8.dp + titleLines + subtitleRow).also {
-                cachedFloorDensity = density.density
-                cachedFloorFontScale = density.fontScale
-                cachedFloorValue = it
+    val measured =
+        remember(measurer, density, title, subtitle) {
+            with(density) {
+                val titleLines = measurer.measure("A\nA", title).size.height.toDp()
+                val subtitleRow = maxOf(measurer.measure("A", subtitle).size.height.toDp() + 6.dp, 20.dp)
+                8.dp + titleLines + subtitleRow
             }
         }
+    if (cachedFloorDensity == density.density && cachedFloorFontScale == density.fontScale) {
+        return cachedFloorValue
     }
+    cachedFloorDensity = density.density
+    cachedFloorFontScale = density.fontScale
+    cachedFloorValue = measured
+    return measured
 }
 
 /**

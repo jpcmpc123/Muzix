@@ -1008,14 +1008,15 @@ fun HomeScreen(
                         topAppBarHeightPx = coordinates.size.height
                     },
         ) {
-            if (barBgAlpha > 0f) {
-                Box(
-                    Modifier
-                        .matchParentSize()
-                        .graphicsLayer { alpha = barBgAlpha }
-                        .ultraThinBarBlur(hazeState),
-                )
-            }
+            // Always composed: the alpha is read inside the graphicsLayer block, so the fade
+            // animates in the layer phase instead of recomposing this whole header every frame.
+            // At the top the layer's alpha is 0, which draws exactly what the old `> 0f` gate did.
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .graphicsLayer { alpha = barBgAlpha }
+                    .ultraThinBarBlur(hazeState),
+            )
             Column {
                 Spacer(
                     modifier =
@@ -1036,13 +1037,19 @@ fun HomeScreen(
                 val chipTailFade by animateFloatAsState(if (chipRowState.canScrollForward) 1f else 0f)
                 val moodLabels = homeMoods.map { stringResource(it.first) }
                 // Notifications moved into the avatar menu, Listen Together into the Create sheet.
-                val createActions: @Composable () -> Unit = {
-                    CreateActions(
-                        backdrop = chipBackdrop,
-                        navController = navController,
-                        onSettings = { navController.navigate(SettingsDestination) },
-                    )
-                }
+                // Remembered so the lambda (and the onSettings lambda inside it) is only rebuilt
+                // when the backdrop or the nav controller actually changes, not on every
+                // recomposition of this header.
+                val createActions: @Composable () -> Unit =
+                    remember(chipBackdrop, navController) {
+                        @Composable {
+                            CreateActions(
+                                backdrop = chipBackdrop,
+                                navController = navController,
+                                onSettings = { navController.navigate(SettingsDestination) },
+                            )
+                        }
+                    }
                 Row(
                     modifier =
                         Modifier
@@ -1236,6 +1243,17 @@ internal fun Modifier.chipStripEdgeFades(
             }
         }
 
+// The stop positions and the smoothstep ramp are the same for every fade; only the alphas move
+// with the live [fade] value, so the positions and ramps are computed once here instead of on
+// every draw of the chip strip.
+private val chipFadePositions = FloatArray(CHIP_FADE_STEPS + 1) { i -> i / CHIP_FADE_STEPS.toFloat() }
+
+private val chipFadeRamps =
+    FloatArray(CHIP_FADE_STEPS + 1) { i ->
+        val t = i / CHIP_FADE_STEPS.toFloat()
+        t * t * (3f - 2f * t)
+    }
+
 // Opaque → transparent left to right when [fadingOut], the other way round otherwise; [fade] scales
 // how far towards transparent the far end goes.
 private fun chipFadeStops(
@@ -1243,9 +1261,8 @@ private fun chipFadeStops(
     fadingOut: Boolean,
 ): Array<Pair<Float, Color>> =
     Array(CHIP_FADE_STEPS + 1) { i ->
-        val t = i / CHIP_FADE_STEPS.toFloat()
-        val ramp = t * t * (3f - 2f * t)
-        t to Color.Black.copy(alpha = 1f - fade * (if (fadingOut) ramp else 1f - ramp))
+        val ramp = chipFadeRamps[i]
+        chipFadePositions[i] to Color.Black.copy(alpha = 1f - fade * (if (fadingOut) ramp else 1f - ramp))
     }
 
 private const val CHIP_FADE_STEPS = 24

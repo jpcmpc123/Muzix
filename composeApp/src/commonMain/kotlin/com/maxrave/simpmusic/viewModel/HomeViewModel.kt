@@ -99,7 +99,11 @@ class HomeViewModel(
                 _showLogInAlert.update { true }
             }
             regionCodeChart.value = dataStoreManager.chartKey.first()
-            exploreChart(regionCodeChart.value ?: "ZZ")
+            // No exploreChart call here: the load trigger below runs getHomeItemList on its
+            // first emission, and that load already fetches the chart for this same stored key
+            // as part of its combine — calling exploreChart as well loaded the chart twice on
+            // every cold start, both writes racing into _chart. exploreChart itself stays: the
+            // chart section's country picker calls it directly.
             language = dataStoreManager.getString(SELECTED_LANGUAGE).first()
                 ?: SUPPORTED_LANGUAGE.codes.first()
             //  One single load trigger for Home. Region, language, the login cookie and

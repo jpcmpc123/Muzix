@@ -184,16 +184,33 @@ fun Modifier.greyScale() = this.then(DefaultGreyScaleModifier)
  * to the renderer as two stops, each ramp is a straight line with a corner where it leaves one colour
  * and another where it reaches the next, and those corners read as creases across the glow.
  */
+private const val EASED_GRADIENT_STEPS = 24
+
+// The smoothstep factor of each step inside a gradient segment never changes, so it is computed
+// once here instead of for every stop of every gradient.
+private val easedGradientStepFactors =
+    FloatArray(EASED_GRADIENT_STEPS + 1) { i ->
+        val t = i / EASED_GRADIENT_STEPS.toFloat()
+        t * t * (3f - 2f * t)
+    }
+
 private fun easedColorStops(
     colors: List<Color>,
-    stepsPerSegment: Int = 24,
+    stepsPerSegment: Int = EASED_GRADIENT_STEPS,
 ): Array<Pair<Float, Color>> {
     val segments = colors.size - 1
     val total = segments * stepsPerSegment
     return Array(total + 1) { i ->
         val segment = minOf(i / stepsPerSegment, segments - 1)
-        val t = (i - segment * stepsPerSegment) / stepsPerSegment.toFloat()
-        i / total.toFloat() to androidx.compose.ui.graphics.lerp(colors[segment], colors[segment + 1], t * t * (3f - 2f * t))
+        val stepInSegment = i - segment * stepsPerSegment
+        val eased =
+            if (stepsPerSegment == EASED_GRADIENT_STEPS) {
+                easedGradientStepFactors[stepInSegment]
+            } else {
+                val t = stepInSegment / stepsPerSegment.toFloat()
+                t * t * (3f - 2f * t)
+            }
+        i / total.toFloat() to androidx.compose.ui.graphics.lerp(colors[segment], colors[segment + 1], eased)
     }
 }
 
@@ -607,6 +624,7 @@ private class ScrollPositionTracker(
 @Composable
 fun LazyListState.isScrollingUp(): State<Boolean> {
     val tracker = remember(this) { ScrollPositionTracker(firstVisibleItemIndex, firstVisibleItemScrollOffset) }
+    val isScrollingUp = remember(this) { mutableStateOf(true) }
 
     LaunchedEffect(this) {
         snapshotFlow { layoutInfo.totalItemsCount }.collect {
@@ -615,32 +633,35 @@ fun LazyListState.isScrollingUp(): State<Boolean> {
         }
     }
 
-    return remember(this) {
-        derivedStateOf {
-            val currentIndex = firstVisibleItemIndex
-            val currentOffset = firstVisibleItemScrollOffset
-            if (currentIndex > 0) {
-                val up =
+    // The direction is worked out here, in the collector, instead of inside a derivedStateOf
+    // that mutated the tracker while it calculated: derived calculations have to be pure, and
+    // writing the baseline mid-calculation made the reads unstable during fast scrolls. The
+    // comparison is the same one the derived block ran — index first, then offset, and "up"
+    // whenever the first item is on screen.
+    LaunchedEffect(this) {
+        snapshotFlow { firstVisibleItemIndex to firstVisibleItemScrollOffset }.collect { (currentIndex, currentOffset) ->
+            isScrollingUp.value =
+                if (currentIndex > 0) {
                     if (tracker.index != currentIndex) {
                         tracker.index > currentIndex
                     } else {
                         tracker.offset >= currentOffset
                     }
-                tracker.index = currentIndex
-                tracker.offset = currentOffset
-                up
-            } else {
-                tracker.index = currentIndex
-                tracker.offset = currentOffset
-                true
-            }
+                } else {
+                    true
+                }
+            tracker.index = currentIndex
+            tracker.offset = currentOffset
         }
     }
+
+    return isScrollingUp
 }
 
 @Composable
 fun LazyGridState.isScrollingUp(): State<Boolean> {
     val tracker = remember(this) { ScrollPositionTracker(firstVisibleItemIndex, firstVisibleItemScrollOffset) }
+    val isScrollingUp = remember(this) { mutableStateOf(true) }
 
     LaunchedEffect(this) {
         snapshotFlow { layoutInfo.totalItemsCount }.collect {
@@ -649,27 +670,25 @@ fun LazyGridState.isScrollingUp(): State<Boolean> {
         }
     }
 
-    return remember(this) {
-        derivedStateOf {
-            val currentIndex = firstVisibleItemIndex
-            val currentOffset = firstVisibleItemScrollOffset
-            if (currentIndex > 0) {
-                val up =
+    // Same restructure as the LazyListState variant above: no mutation inside derivedStateOf.
+    LaunchedEffect(this) {
+        snapshotFlow { firstVisibleItemIndex to firstVisibleItemScrollOffset }.collect { (currentIndex, currentOffset) ->
+            isScrollingUp.value =
+                if (currentIndex > 0) {
                     if (tracker.index != currentIndex) {
                         tracker.index > currentIndex
                     } else {
                         tracker.offset >= currentOffset
                     }
-                tracker.index = currentIndex
-                tracker.offset = currentOffset
-                up
-            } else {
-                tracker.index = currentIndex
-                tracker.offset = currentOffset
-                true
-            }
+                } else {
+                    true
+                }
+            tracker.index = currentIndex
+            tracker.offset = currentOffset
         }
     }
+
+    return isScrollingUp
 }
 
 fun Palette?.getColorFromPalette(): Color {
