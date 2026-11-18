@@ -50,7 +50,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import coil3.ImageLoader
+import coil3.imageLoader
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
@@ -496,5 +496,5 @@ internal suspend fun Context.loadBitmap(
             // "Can't show content" placeholder instead — with the real cause only in logcat.
             .apply { if (sizePx != null) size(sizePx, sizePx) }
             .build()
-    return (ImageLoader(this).execute(request) as? SuccessResult)?.image?.toBitmap()
+    return (imageLoader.execute(request) as? SuccessResult)?.image?.toBitmap()
 }

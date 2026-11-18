@@ -681,6 +681,7 @@ internal fun ExpressiveBelowTheFold(
                             LyricsView(
                                 lyricsData = it,
                                 timeLine = state.timelineFlow,
+                                isPlaying = state.controllerState.isPlaying,
                                 onLineClick = { f ->
                                     actions.onUIEvent(UIEvent.UpdateProgress(f))
                                 },

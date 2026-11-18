@@ -189,6 +189,7 @@ internal fun AppleMusicLyricsView(
                 LyricsView(
                     lyricsData = lyricsData,
                     timeLine = state.timelineFlow,
+                    isPlaying = state.controllerState.isPlaying,
                     onLineClick = { f ->
                         actions.onUIEvent(UIEvent.UpdateProgress(f))
                     },

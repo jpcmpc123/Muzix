@@ -425,6 +425,10 @@ private fun buildSyncedTranslatedWordsByLineIndex(
 fun LyricsView(
     lyricsData: NowPlayingScreenData.LyricsData,
     timeLine: StateFlow<TimeLine>,
+    // Whether the player is actually playing. The rich-sync playhead's frame loop gates on it:
+    // paused, the loop stops instead of spinning at display rate over a frozen position.
+    // Default true keeps any caller that does not thread it behaving exactly as before.
+    isPlaying: Boolean = true,
     onLineClick: (Float) -> Unit,
     modifier: Modifier = Modifier,
     showScrollShadows: Boolean = false,
@@ -588,7 +592,15 @@ fun LyricsView(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = tailPadding),
         ) {
-            items(displayLines.lines.size) { index ->
+            items(
+                count = displayLines.lines.size,
+                // A Line has no id, and its startTimeMs alone is not unique — an unsynced sheet
+                // carries "0" on every row and the inserted interlude lines share their
+                // neighbours' times — so the key pairs the line's own start time with its index.
+                // The display list is built once per sheet and never reordered, so the pair is
+                // stable for the list's whole life.
+                key = { index -> "${displayLines.lines[index].startTimeMs}_$index" },
+            ) { index ->
                 val line = displayLines.lines.getOrNull(index)
                 // A dots line stands for silence, so it has nothing to translate or romanize. Worth
                 // saying out loud for the translation: that map matches by TIME, and the silence
@@ -654,6 +666,7 @@ fun LyricsView(
                                         romanizedWords = romanizedWords,
                                         currentTimeMs = current.current - lyricsOffsetMs,
                                         isCurrent = index == currentLineIndex,
+                                        isPlaying = isPlaying,
                                         customFontSize = if (appleStyle) AppleMusicLyricFontSize else null,
                                         glow = if (appleStyle && index == currentLineIndex) AppleMusicActiveLineGlow else null,
                                         pendingColorOverride = if (appleStyle) AppleMusicPendingWordColor else null,
@@ -914,11 +927,21 @@ fun LyricsLineItem(
 private fun rememberSmoothPlayhead(
     rawMs: Long,
     enabled: Boolean,
+    running: Boolean = true,
 ): State<Long> {
     val playhead = remember { mutableLongStateOf(rawMs) }
-    LaunchedEffect(rawMs, enabled) {
+    LaunchedEffect(rawMs, enabled, running) {
         if (!enabled) {
             playhead.longValue = rawMs
+            return@LaunchedEffect
+        }
+        if (!running) {
+            // Paused: stop the frame loop and freeze the playhead where the interpolation
+            // stopped — it sits within one tick of rawMs, so the sung word does not move. A
+            // seek while paused moves rawMs outside that window, and the playhead follows it.
+            if (playhead.longValue < rawMs || playhead.longValue > rawMs + PLAYHEAD_TICK_MS) {
+                playhead.longValue = rawMs
+            }
             return@LaunchedEffect
         }
         // Keyed on rawMs, so the next real tick cancels this loop and restarts it from the truth —
@@ -945,6 +968,9 @@ fun RichSyncLyricsLineItem(
     romanizedWords: String? = null,
     currentTimeMs: Long,
     isCurrent: Boolean,
+    // False while paused: the smooth playhead freezes instead of looping frames. Default true
+    // keeps callers that do not thread it (the desktop mini player) exactly as they were.
+    isPlaying: Boolean = true,
     customFontSize: TextUnit? = null,
     customPadding: Dp = 12.dp,
     // Null for the Classic renderer, so nothing about it changes. The Apple Music style passes a
@@ -966,7 +992,7 @@ fun RichSyncLyricsLineItem(
     wrappedLineSpacing: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
-    val playhead = rememberSmoothPlayhead(currentTimeMs, enabled = isCurrent)
+    val playhead = rememberSmoothPlayhead(currentTimeMs, enabled = isCurrent, running = isPlaying)
     val originalWords = remember(parsedLine.words) { parsedLine.words.joinToString(" ") { it.text } }
     val lineDirection = rememberLyricLayoutDirection(originalWords)
 

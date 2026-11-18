@@ -213,7 +213,14 @@ fun NowPlayingContentAppleMusic(
     val panelBackdrop = rememberBackdrop(Color.Black)
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        Box(modifier = Modifier.matchParentSize().layerBackdrop(panelBackdrop)) {
+        // Only Desktop ever samples this backdrop (the glass dismiss button below). On Android
+        // nothing reads it, so recording the layer there is pure per-frame cost — gate it.
+        Box(
+            modifier =
+                Modifier
+                    .matchParentSize()
+                    .then(if (getPlatform() == Platform.Desktop) Modifier.layerBackdrop(panelBackdrop) else Modifier),
+        ) {
             AppleMusicArtworkBackdrop(state = state, actions = actions, seedColor = seedColor)
             // Flat black only for a CANVAS (it fills the screen). A video letterboxes, so a black page
             // turns the bars above and below it into dead black slabs — keep the artwork-tinted

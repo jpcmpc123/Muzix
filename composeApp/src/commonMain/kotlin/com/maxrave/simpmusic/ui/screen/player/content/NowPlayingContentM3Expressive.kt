@@ -123,6 +123,7 @@ import com.maxrave.simpmusic.ui.theme.ArtworkShape
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.UIEvent
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -198,9 +199,24 @@ internal fun NowPlayingExpressiveTheme(
         animationSpec = tween(durationMillis = 800),
         label = "m3eSeedColor",
     )
+    // The scheme is remembered on its seed, so feeding it the raw animated colour rebuilds the
+    // whole tonal palette on every frame of the 800ms glide. Quantizing the seed to 1/16 steps
+    // rebuilds it only when the colour has moved perceptibly; at rest the exact seed is used, so
+    // the settled scheme is the one the un-quantized colour would have produced.
+    val schemeSeedColor =
+        if (animatedSeedColor == seedColor) {
+            seedColor
+        } else {
+            Color(
+                red = (animatedSeedColor.red * 16).roundToInt() / 16f,
+                green = (animatedSeedColor.green * 16).roundToInt() / 16f,
+                blue = (animatedSeedColor.blue * 16).roundToInt() / 16f,
+                alpha = animatedSeedColor.alpha,
+            )
+        }
     val derivedScheme =
         rememberDynamicColorScheme(
-            seedColor = animatedSeedColor,
+            seedColor = schemeSeedColor,
             isDark = true,
             isAmoled = false,
             style = PaletteStyle.Vibrant,

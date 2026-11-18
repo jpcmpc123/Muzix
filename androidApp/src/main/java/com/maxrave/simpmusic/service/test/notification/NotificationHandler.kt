@@ -13,7 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.core.net.toUri
-import coil3.ImageLoader
+import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
@@ -44,7 +44,7 @@ object NotificationHandler {
 
         val bitmap =
             runBlocking {
-                val loader = ImageLoader(context)
+                val loader = context.imageLoader
                 val request =
                     ImageRequest
                         .Builder(context)

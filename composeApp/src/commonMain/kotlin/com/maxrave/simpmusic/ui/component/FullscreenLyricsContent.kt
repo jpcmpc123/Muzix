@@ -64,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -303,7 +304,11 @@ fun FullscreenLyricsContent(
                     ),
                 label = "rainbowHue",
             )
-            val rainbowColor = hsvToColor(rainbowHue, 1f, 1f)
+            // Read the hue only while crossfading: read unconditionally, the infinite
+            // transition recomposed this whole page at display rate even when the rainbow
+            // colour was not in use. Not crossfading, the colour is White — the same value
+            // the slider's colour animation settles to.
+            val rainbowColor = if (timelineState.isCrossfading) hsvToColor(rainbowHue, 1f, 1f) else Color.White
             val sliderTrackColor by animateColorAsState(
                 targetValue = if (timelineState.isCrossfading) rainbowColor else Color.White,
                 animationSpec = tween(300),
@@ -1122,6 +1127,7 @@ private fun FullscreenLyricsList(
     backdrop: PlatformBackdrop,
 ) {
     val lyricsOffsetMs by sharedViewModel.getLyricsOffsetMs().collectAsStateWithLifecycle(0)
+    val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
     Box(modifier = Modifier.fillMaxSize()) {
         Crossfade(
             targetState = lyricsData != null,
@@ -1132,6 +1138,7 @@ private fun FullscreenLyricsList(
                     LyricsView(
                         lyricsData = lyrics,
                         timeLine = sharedViewModel.timeline,
+                        isPlaying = controllerState.isPlaying,
                         onLineClick = { f ->
                             sharedViewModel.onUIEvent(UIEvent.UpdateProgress(f))
                         },
@@ -1240,9 +1247,6 @@ internal fun AnimatedLyricsGradientBackground(
             ),
         label = "lyricsGradientOffsetY",
     )
-    val gradientAngle = animatedAngle
-    val gradientOffsetX = animatedOffsetX
-    val gradientOffsetY = animatedOffsetY
 
     // Smooth color animation based on lyrics color
     LaunchedEffect(color) {
@@ -1276,27 +1280,33 @@ internal fun AnimatedLyricsGradientBackground(
         modifier =
             modifier
                 .fillMaxSize()
-                .background(
-                    Brush.linearGradient(
-                        colors =
-                            listOf(
-                                startColor.value,
-                                midColor1.value,
-                                midColor2.value,
-                                endColor.value.copy(alpha = 0.9f),
-                                endColor.value,
-                            ),
-                        start =
-                            Offset(
-                                x = gradientOffsetX + (cos(gradientAngle * PI.toFloat() / 180f) * 800f),
-                                y = gradientOffsetY + (sin(gradientAngle * PI.toFloat() / 180f) * 800f),
-                            ),
-                        end =
-                            Offset(
-                                x = gradientOffsetX + 2500f + (cos((gradientAngle + 180f) * PI.toFloat() / 180f) * 800f),
-                                y = gradientOffsetY + 2500f + (sin((gradientAngle + 180f) * PI.toFloat() / 180f) * 800f),
-                            ),
-                    ),
-                ),
+                // The brush is built in the draw phase, reading the animated values there:
+                // built in composition, the forever-running angle/offset animations recomposed
+                // this background (and rebuilt the brush and its colour list) every frame.
+                // Drawn here it is the identical gradient — only the invalidation changes.
+                .drawBehind {
+                    drawRect(
+                        Brush.linearGradient(
+                            colors =
+                                listOf(
+                                    startColor.value,
+                                    midColor1.value,
+                                    midColor2.value,
+                                    endColor.value.copy(alpha = 0.9f),
+                                    endColor.value,
+                                ),
+                            start =
+                                Offset(
+                                    x = animatedOffsetX + (cos(animatedAngle * PI.toFloat() / 180f) * 800f),
+                                    y = animatedOffsetY + (sin(animatedAngle * PI.toFloat() / 180f) * 800f),
+                                ),
+                            end =
+                                Offset(
+                                    x = animatedOffsetX + 2500f + (cos((animatedAngle + 180f) * PI.toFloat() / 180f) * 800f),
+                                    y = animatedOffsetY + 2500f + (sin((animatedAngle + 180f) * PI.toFloat() / 180f) * 800f),
+                                ),
+                        ),
+                    )
+                },
     )
 }
