@@ -931,13 +931,14 @@ fun HomeScreen(
                                                     )
                                                         ?: CHART_SUPPORTED_COUNTRY.itemsData[1],
                                             ) {
-                                                viewModel.exploreChart(
-                                                    CHART_SUPPORTED_COUNTRY.items[
+                                                CHART_SUPPORTED_COUNTRY.items
+                                                    .getOrNull(
                                                         CHART_SUPPORTED_COUNTRY.itemsData.indexOf(
                                                             it,
                                                         ),
-                                                    ],
-                                                )
+                                                    )?.let { countryCode ->
+                                                        viewModel.exploreChart(countryCode)
+                                                    }
                                             }
                                         }
                                     }

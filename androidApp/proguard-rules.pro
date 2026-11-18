@@ -58,7 +58,7 @@
 
 -dontwarn org.slf4j.impl.StaticLoggerBinder
 -dontwarn kotlinx.serialization.internal.ClassValueReferences
--keep class com.maxrave.simpmusic.data.model.** { *; }
+-keep class com.maxrave.domain.data.** { *; }
 -keep class com.maxrave.simpmusic.extension.AllExtKt { *; }
 -keep class com.maxrave.simpmusic.extension.AllExtKt$* { *; }
 -keep class com.maxrave.kotlinytmusicscraper.extension.MapExtKt$* { *; }
@@ -222,3 +222,8 @@
 -dontwarn io.sentry.instrumentation.file.SentryFileOutputStream$Factory
 -dontwarn io.sentry.okhttp.SentryOkHttpEventListener
 -dontwarn io.sentry.okhttp.SentryOkHttpInterceptor
+
+# DelegatingForwardingPlayer accesses ForwardingPlayer's private "player" field via reflection
+-keepclassmembers class androidx.media3.common.ForwardingPlayer {
+    private *** player;
+}

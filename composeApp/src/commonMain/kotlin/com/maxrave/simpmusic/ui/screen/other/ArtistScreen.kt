@@ -969,10 +969,9 @@ private fun ArtistSections(
 
         // Singles
         AnimatedVisibility(
-            state.data.singles != null &&
-                state.data.singles!!
-                    .results
-                    .isNotEmpty(),
+            !state.data.singles
+                ?.results
+                .isNullOrEmpty(),
         ) {
             Column {
                 Row(
@@ -1040,10 +1039,9 @@ private fun ArtistSections(
 
         // Albums
         AnimatedVisibility(
-            state.data.albums != null &&
-                state.data.albums!!
-                    .results
-                    .isNotEmpty(),
+            !state.data.albums
+                ?.results
+                .isNullOrEmpty(),
         ) {
             Column {
                 Row(
@@ -1111,10 +1109,9 @@ private fun ArtistSections(
 
         // Videos
         AnimatedVisibility(
-            state.data.video != null &&
-                state.data.video!!
-                    .video
-                    .isNotEmpty(),
+            !state.data.video
+                ?.video
+                .isNullOrEmpty(),
         ) {
             Column {
                 Row(
@@ -1251,10 +1248,9 @@ private fun ArtistSections(
 
         // Related
         AnimatedVisibility(
-            state.data.related != null &&
-                state.data.related!!
-                    .results
-                    .isNotEmpty(),
+            !state.data.related
+                ?.results
+                .isNullOrEmpty(),
         ) {
             Column {
                 Row(

@@ -400,7 +400,7 @@ private fun Title(
             modifier
                 .graphicsLayer {
                     val collapseRange: Float = (headerHeight.toPx() - toolbarHeight.toPx())
-                    val collapseFraction: Float = (scroll.value / collapseRange).coerceIn(0f, 1f)
+                    val collapseFraction: Float = (scroll.value / collapseRange).let { if (it.isNaN()) 0f else it }.coerceIn(0f, 1f)
 
                     val scaleXY =
                         lerp(

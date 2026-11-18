@@ -176,12 +176,11 @@ fun Long?.bytesToMB(): Long {
 
 fun getSizeOfFile(dir: File): Long {
     var dirSize: Long = 0
-    if (!dir.listFiles().isNullOrEmpty()) {
-        for (f in dir.listFiles()!!) {
-            dirSize += f.length()
-            if (f.isDirectory) {
-                dirSize += getSizeOfFile(f)
-            }
+    val files = dir.listFiles() ?: return 0
+    for (f in files) {
+        dirSize += f.length()
+        if (f.isDirectory) {
+            dirSize += getSizeOfFile(f)
         }
     }
     return dirSize

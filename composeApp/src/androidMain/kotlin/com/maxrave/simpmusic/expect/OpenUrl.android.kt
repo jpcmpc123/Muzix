@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.expect
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
 import androidx.appcompat.app.AppCompatActivity
@@ -14,7 +15,11 @@ actual fun openUrl(url: String) {
             url.toUri(),
         )
     browserIntent.setFlags(FLAG_ACTIVITY_NEW_TASK)
-    context.startActivity(browserIntent)
+    try {
+        context.startActivity(browserIntent)
+    } catch (e: ActivityNotFoundException) {
+        // No browser available to handle the URL; nothing else to do.
+    }
 }
 
 actual fun shareUrl(

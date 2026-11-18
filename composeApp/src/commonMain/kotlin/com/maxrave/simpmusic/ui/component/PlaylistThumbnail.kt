@@ -208,8 +208,8 @@ fun painterPlaylistThumbnail(
                 layoutDirection = LayoutDirection.Ltr,
                 constraints =
                     Constraints(
-                        maxWidth = with(density) { (sizeDp.first - 32.dp).toPx().toInt() },
-                        maxHeight = with(density) { (sizeDp.second - 32.dp).toPx().toInt() },
+                        maxWidth = with(density) { (sizeDp.first - 32.dp).coerceAtLeast(1.dp).toPx().toInt() },
+                        maxHeight = with(density) { (sizeDp.second - 32.dp).coerceAtLeast(1.dp).toPx().toInt() },
                     ),
             )
         }

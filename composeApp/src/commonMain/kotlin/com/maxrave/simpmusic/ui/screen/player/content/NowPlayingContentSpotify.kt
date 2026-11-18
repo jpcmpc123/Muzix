@@ -1666,9 +1666,9 @@ fun NowPlayingContentSpotify(
                         containerColor =
                             state.startColor.value
                                 .copy(
-                                    red = state.startColor.value.red - 0.05f,
-                                    green = state.startColor.value.green - 0.05f,
-                                    blue = state.startColor.value.blue - 0.05f,
+                                    red = (state.startColor.value.red - 0.05f).coerceIn(0f, 1f),
+                                    green = (state.startColor.value.green - 0.05f).coerceIn(0f, 1f),
+                                    blue = (state.startColor.value.blue - 0.05f).coerceIn(0f, 1f),
                                 ),
                     ),
                 modifier =
@@ -1779,7 +1779,7 @@ fun NowPlayingContentSpotify(
                                 .align(Alignment.BottomCenter),
                     ) {
                         LinearProgressIndicator(
-                            progress = { liveTimeline.current.toFloat() / liveTimeline.total },
+                            progress = { if (liveTimeline.total > 0) liveTimeline.current.toFloat() / liveTimeline.total else 0f },
                             modifier =
                                 Modifier
                                     .fillMaxWidth()

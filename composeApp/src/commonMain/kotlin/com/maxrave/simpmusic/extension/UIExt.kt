@@ -885,9 +885,9 @@ fun Modifier.isElementVisible(onVisibilityChanged: (Boolean) -> Unit) =
     }
 
 fun Color.rgbFactor(factor: Float): Color {
-    val r = min(red * factor, 255f)
-    val g = min(green * factor, 255f)
-    val b = min(blue * factor, 255f)
+    val r = min(red * factor, 1f)
+    val g = min(green * factor, 1f)
+    val b = min(blue * factor, 1f)
     return Color(r, g, b, alpha)
 }
 

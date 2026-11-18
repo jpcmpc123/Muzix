@@ -112,11 +112,15 @@ class SimpMusicApplication :
             .restartActivity(MainActivity::class.java) // default: null (your app's launch activity)
             .apply()
 
-        @SuppressLint("DiscouragedPrivateApi")
-        val field: Field = CursorWindow::class.java.getDeclaredField("sCursorWindowSize")
-        field.isAccessible = true
-        val expectSize = 100 * 1024 * 1024
-        field.set(null, expectSize)
+        try {
+            @SuppressLint("DiscouragedPrivateApi")
+            val field: Field = CursorWindow::class.java.getDeclaredField("sCursorWindowSize")
+            field.isAccessible = true
+            val expectSize = 100 * 1024 * 1024
+            field.set(null, expectSize)
+        } catch (e: Exception) {
+            // Hidden API blocked on this Android version; keep the default cursor window size.
+        }
 
         AppContext.apply {
             set(applicationContext)

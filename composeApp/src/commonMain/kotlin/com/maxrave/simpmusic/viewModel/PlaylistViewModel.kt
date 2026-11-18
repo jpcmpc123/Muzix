@@ -437,7 +437,7 @@ class PlaylistViewModel(
             is PlaylistUIEvent.ItemClick -> {
                 val videoId = event.videoId
                 val loadedList = tracks.value
-                val clickedSong = loadedList.first { it.videoId == videoId }
+                val clickedSong = loadedList.firstOrNull { it.videoId == videoId } ?: return
                 val index = loadedList.indexOf(clickedSong)
                 setQueueData(
                     QueueData.Data(

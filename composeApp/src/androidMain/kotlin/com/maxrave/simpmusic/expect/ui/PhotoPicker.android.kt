@@ -27,12 +27,16 @@ actual fun photoPickerResult(onResultUri: (String?) -> Unit): PhotoPickerLaunche
                         Intent.FLAG_GRANT_READ_URI_PERMISSION or
                             Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                     // Check for the freshest data.
-                    context.grantUriPermission(
-                        context.packageName,
-                        data,
-                        takeFlags,
-                    )
-                    contentResolver?.takePersistableUriPermission(data, takeFlags)
+                    try {
+                        context.grantUriPermission(
+                            context.packageName,
+                            data,
+                            takeFlags,
+                        )
+                        contentResolver?.takePersistableUriPermission(data, takeFlags)
+                    } catch (e: SecurityException) {
+                        Logger.e("ID", "Failed to take URI permission: ${e.message}")
+                    }
                     val uri = data.toString()
                     onResultUri(uri)
                 }

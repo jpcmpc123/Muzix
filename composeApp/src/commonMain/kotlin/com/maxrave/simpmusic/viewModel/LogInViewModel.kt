@@ -34,10 +34,15 @@ class LogInViewModel(
             cookie
                 .split("; ")
                 .filter { it.isNotEmpty() }
-                .associate {
-                    val (key, value) = it.split("=")
-                    key to value
-                }.let {
+                .mapNotNull {
+                    val separatorIndex = it.indexOf('=')
+                    if (separatorIndex < 0) {
+                        null
+                    } else {
+                        it.substring(0, separatorIndex) to it.substring(separatorIndex + 1)
+                    }
+                }.toMap()
+                .let {
                     if (it["sp_dc"].isNullOrEmpty()) Logger.w("Auth", "Spotify: sign-in finished without an sp_dc cookie")
                     dataStoreManager.setSpdc(it["sp_dc"] ?: "")
                     _spotifyStatus.value = true
