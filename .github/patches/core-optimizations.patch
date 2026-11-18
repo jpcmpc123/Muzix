@@ -197,10 +197,9 @@ index 5abb112..7e8b780 100644
              0,
              // bufferForPlaybackAfterRebufferMs=
 diff --git a/media/media3/src/main/java/com/maxrave/media3/exoplayer/CrossfadeExoPlayerAdapter.kt b/media/media3/src/main/java/com/maxrave/media3/exoplayer/CrossfadeExoPlayerAdapter.kt
-index fc4c729..23ebb19 100644
 --- a/media/media3/src/main/java/com/maxrave/media3/exoplayer/CrossfadeExoPlayerAdapter.kt
 +++ b/media/media3/src/main/java/com/maxrave/media3/exoplayer/CrossfadeExoPlayerAdapter.kt
-@@ -361,7 +361,7 @@ internal class CrossfadeExoPlayerAdapter(
+@@ -374,7 +374,7 @@
          }
      }
      private var precacheEnabled = true
@@ -209,7 +208,7 @@ index fc4c729..23ebb19 100644
      private var precacheJob: Job? = null
  
      // ========== Crossfade System ==========
-@@ -657,8 +657,8 @@ internal class CrossfadeExoPlayerAdapter(
+@@ -677,8 +677,8 @@
                      DefaultLoadControl
                          .Builder()
                          .setBufferDurationsMs(
@@ -220,9 +219,9 @@ index fc4c729..23ebb19 100644
                              0,
                              0,
                          ).build(),
-@@ -3266,7 +3266,8 @@ internal class CrossfadeExoPlayerAdapter(
-                         // Ignore query errors - don't log to avoid spam
-                     }
+@@ -3477,7 +3477,8 @@
+ 
+                     if (watchdogFired) break
  
 -                    delay(50) // Update every 50ms
 +                    val activePlayback = currentPlayer?.isPlaying == true || isCrossfading

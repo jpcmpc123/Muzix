@@ -318,15 +318,20 @@ fun HomeScreen(
                         withoutDupAvatar
                     }
                 }
-            val seen = HashMap<String, Int>(shelves.size)
+            // Quick picks first: joao wants it as the first shelf on Home, wherever YouTube placed it in the feed.
+            val ordered =
+                shelves.indexOfFirst { it.title == quickPicksTitle }.let { idx ->
+                    if (idx > 0) listOf(shelves[idx]) + shelves.filterIndexed { i, _ -> i != idx } else shelves
+                }
+            val seen = HashMap<String, Int>(ordered.size)
             val keys =
-                shelves.map { item ->
+                ordered.map { item ->
                     val base = item.title + "|" + (item.moreEndpoint?.browseId ?: item.channelId ?: "")
                     val occurrence = seen[base] ?: 0
                     seen[base] = occurrence + 1
                     if (occurrence == 0) base else "$base#$occurrence"
                 }
-            shelves to keys
+            ordered to keys
         }
     val newRelease by viewModel.newRelease.collectAsStateWithLifecycle()
     val chart by viewModel.chart.collectAsStateWithLifecycle()
