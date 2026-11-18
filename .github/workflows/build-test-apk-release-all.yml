@@ -50,8 +50,11 @@ jobs:
           echo 'LASTFM_SECRET=' >> ./local.properties
           echo 'DISCORD_CLIENT_ID=' >> ./local.properties
 
-      - name: Generate aboutLibraries.json and build release APK (unsigned)
-        run: ./gradlew exportLibraryDefinitions androidApp:assembleRelease --build-cache -x lintVitalAnalyzeRelease
+      - name: Generate aboutLibraries.json
+        run: ./gradlew exportLibraryDefinitions
+
+      - name: Build release APK (unsigned)
+        run: ./gradlew androidApp:assembleRelease --build-cache -x lintVitalAnalyzeRelease
 
       - name: Sign APKs with test key
         run: |
