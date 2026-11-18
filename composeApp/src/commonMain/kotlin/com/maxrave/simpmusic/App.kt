@@ -225,9 +225,6 @@ fun App(
         if (isShowNowPlaylistScreen) userStarted = true
     }
 
-    val hazeState =
-        rememberHazeState()
-
     LaunchedEffect(intent) {
         val intent = intent ?: return@LaunchedEffect
         val data = intent.data
@@ -756,7 +753,7 @@ fun App(
                                                 } else {
                                                     Modifier
                                                 },
-                                            ).hazeSource(hazeState),
+                                            ),
                                     ) {
                                         CompositionLocalProvider(
                                             LocalAppDialogOpen provides appDialogOpen,
@@ -980,16 +977,14 @@ fun App(
                                 } ?: stringResource(Res.string.unknown)
 
                             val updateMessage =
-                                runBlocking {
-                                    getString(
-                                        Res.string.update_message,
-                                        response.tagName,
-                                        formatted,
-                                        // values-iw/values-in still carry an old %3$s; Compose Resources indexes
-                                        // args without a bounds check, so omitting it crashes the dialog
-                                        "",
-                                    )
-                                }
+                                stringResource(
+                                    Res.string.update_message,
+                                    response.tagName,
+                                    formatted,
+                                    // values-iw/values-in still carry an old %3$s; Compose Resources indexes
+                                    // args without a bounds check, so omitting it crashes the dialog
+                                    "",
+                                )
                             Column(
                                 Modifier
                                     .heightIn(

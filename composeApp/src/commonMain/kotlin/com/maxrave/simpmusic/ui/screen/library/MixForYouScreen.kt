@@ -43,6 +43,7 @@ import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.extension.angledGradientBackground
 import com.maxrave.simpmusic.extension.artworkScrimBrush
 import com.maxrave.simpmusic.extension.barBlurStyle
+import com.maxrave.simpmusic.extension.glassHazeSource
 import com.maxrave.simpmusic.extension.tintedBarBlur
 import com.maxrave.simpmusic.extension.copy
 import com.maxrave.simpmusic.extension.rgbFactor
@@ -110,7 +111,7 @@ fun MixForYouScreen(
         }
     var topHeaderColor by remember { mutableStateOf(backgroundColor) }
     val animatedColor by animateColorAsState(topHeaderColor, tween(500))
-    val networkLoader = rememberNetworkLoader(HttpClient(CIO))
+    val networkLoader = com.maxrave.simpmusic.utils.rememberSharedPaletteNetworkLoader()
     val dominantColorState =
         rememberDominantColorState(
             defaultColor = backgroundColor,
@@ -138,7 +139,8 @@ fun MixForYouScreen(
         }
     }
 
-    Box(Modifier.hazeSource(hazeState)) {
+    val bottomScrimBrush = remember(pageBackground) { artworkScrimBrush(pageBackground) }
+    Box(Modifier.glassHazeSource(hazeState)) {
         // Drawn before the grid, and it SCROLLS AWAY with it like Home's — the draw-phase
         // translation tracks the first row exactly and parks once it has passed; whatever remains
         // at the hand-off sits deep in the scrim tail, so the switch does not pop. Inside the haze
@@ -161,7 +163,7 @@ fun MixForYouScreen(
                     .fillMaxWidth()
                     .height(180.dp)
                     .align(Alignment.BottomCenter)
-                    .background(artworkScrimBrush(pageBackground)),
+                    .background(bottomScrimBrush),
             )
         }
         GridLibraryPlaylist(
@@ -175,40 +177,38 @@ fun MixForYouScreen(
             viewModel.getYouTubeMixedForYou()
         }
     }
-    // Transparent while the grid sits at pixel zero, frosted the moment it scrolls — the
-    // same AnimatedContent crossfade Home and Search run on their bars.
-    AnimatedContent(
-        targetState = isAtTop,
-        transitionSpec = {
-            fadeIn(tween(300)).togetherWith(fadeOut(tween(300)))
+    // Transparent while the grid sits at pixel zero, frosted the moment it scrolls — faded via
+    // draw-phase alpha without remounting TopAppBar.
+    val barBgAlpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isAtTop) 0f else 1f,
+        animationSpec = tween(300),
+        label = "mixForYouBarAlpha",
+    )
+    Box(
+        Modifier.onGloballyPositioned { coordinates ->
+            topAppBarHeight = with(density) { coordinates.size.height.toDp() }
         },
-    ) { atTop ->
-        Column(
-            Modifier
-                .then(
-                    if (atTop) {
-                        Modifier.background(Color.Transparent)
-                    } else {
-                        // AlbumScreen's bar recipe, thinned to 0.3 — see SettingScreen.
-                        Modifier.tintedBarBlur(hazeState, pageBackground, 0.3f)
-                    },
-                ).onGloballyPositioned { coordinates ->
-                    topAppBarHeight = with(density) { coordinates.size.height.toDp() }
-                },
-        ) {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(Res.string.mix_for_you),
-                        style = typo().titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                },
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                    ),
+    ) {
+        if (barBgAlpha > 0f) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .graphicsLayer { alpha = barBgAlpha }
+                    .tintedBarBlur(hazeState, pageBackground, 0.3f),
             )
         }
+        TopAppBar(
+            title = {
+                Text(
+                    text = stringResource(Res.string.mix_for_you),
+                    style = typo().titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+            },
+            colors =
+                TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                ),
+        )
     }
 }

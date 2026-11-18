@@ -140,8 +140,11 @@ import com.maxrave.simpmusic.ui.theme.LocalIsDarkTheme
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.UIEvent
+import com.maxrave.domain.data.model.streams.TimeLine
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -170,7 +173,6 @@ fun MiniPlayer(
 ) {
     val isLiquidGlassEnabled by sharedViewModel.getEnableLiquidGlass().collectAsStateWithLifecycle(DataStoreManager.FALSE)
     val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
-    val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
     // The Desktop capsule's quality line between its timestamps — see toAudioQualityLabel.
     val formatState by sharedViewModel.format.collectAsStateWithLifecycle(initialValue = null)
 
@@ -208,22 +210,12 @@ fun MiniPlayer(
         remember {
             mutableStateOf(false)
         }
-    val (progress, setProgress) =
-        remember {
-            mutableFloatStateOf(0f)
-        }
     val (isCrossfading, setIsCrossfading) =
         remember {
             mutableStateOf(false)
         }
 
     val coroutineScope = rememberCoroutineScope()
-
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = ProgressIndicatorDefaults.ProgressAnimationSpec,
-        label = "",
-    )
 
     val offsetX = remember { Animatable(initialValue = 0f) }
     val offsetY = remember { Animatable(0f) }
@@ -252,14 +244,9 @@ fun MiniPlayer(
         val job4 =
             launch {
                 sharedViewModel.timeline.collect { timeline ->
-                    loading = timeline.loading
-                    val prog =
-                        if (timeline.total > 0L && timeline.current >= 0L) {
-                            timeline.current.toFloat() / timeline.total
-                        } else {
-                            0f
-                        }
-                    setProgress(prog)
+                    if (loading != timeline.loading) {
+                        loading = timeline.loading
+                    }
                 }
             }
         job1.join()
@@ -308,11 +295,11 @@ fun MiniPlayer(
                                     onDragStart = {
                                     },
                                     onVerticalDrag = { change: PointerInputChange, dragAmount: Float ->
-                                        if (offsetY.value + dragAmount > 0) {
+                                        val nextOffsetY = offsetY.value + 2 * dragAmount
+                                        if (offsetY.value + dragAmount > 0 || offsetY.value > 0f) {
+                                            change.consume()
                                             coroutineScope.launch {
-                                                change.consume()
-                                                offsetY.animateTo(offsetY.value + 2 * dragAmount)
-                                                Logger.w("MiniPlayer", "Dragged ${offsetY.value}")
+                                                offsetY.snapTo(nextOffsetY.coerceAtLeast(0f))
                                             }
                                         }
                                     },
@@ -355,10 +342,9 @@ fun MiniPlayer(
                                                 change: PointerInputChange,
                                                 dragAmount: Float,
                                                 ->
+                                                change.consume()
                                                 coroutineScope.launch {
-                                                    change.consume()
-                                                    offsetX.animateTo(offsetX.value + dragAmount * 2)
-                                                    Logger.w("MiniPlayer", "Dragged ${offsetX.value}")
+                                                    offsetX.snapTo(offsetX.value + dragAmount * 2)
                                                 }
                                             },
                                             onDragCancel = {
@@ -394,18 +380,9 @@ fun MiniPlayer(
                                 contentAlignment = Alignment.Center,
                             ) {
                                 if (isFlat) {
-                                    // Progress rides a ring around the artwork: wavy while playing, flat when paused.
-                                    val ringStroke = Stroke(width = with(LocalDensity.current) { 3.dp.toPx() }, cap = StrokeCap.Round)
-                                    CircularWavyProgressIndicator(
-                                        progress = { animatedProgress },
-                                        modifier = Modifier.fillMaxSize(),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        stroke = ringStroke,
-                                        trackStroke = ringStroke,
-                                        // A raw 0/1, never a tweened value: the node animates amplitude
-                                        // itself and drops new targets mid-animation (see WavySeekBar).
-                                        amplitude = { p -> if (p > 0f && isPlaying) 1f else 0f },
+                                    MiniPlayerCircularProgress(
+                                        timelineFlow = sharedViewModel.timeline,
+                                        isPlaying = isPlaying,
                                     )
                                 }
                                 AsyncImage(
@@ -413,6 +390,7 @@ fun MiniPlayer(
                                         ImageRequest
                                             .Builder(LocalPlatformContext.current)
                                             .data(songEntity?.thumbnails)
+                                            .size(128)
                                             .crossfade(550)
                                             .build(),
                                     placeholder = rememberHolderPainter(),
@@ -569,28 +547,16 @@ fun MiniPlayer(
                                     horizontal = 10.dp,
                                 ).align(Alignment.BottomCenter),
                     ) {
-                        LeftToRight {
-                            LinearProgressIndicator(
-                                progress = { animatedProgress },
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height(1.dp)
-                                        .background(
-                                            color = Color.Transparent,
-                                            shape = RoundedCornerShape(4.dp),
-                                        ),
-                                color = textColor,
-                                trackColor = Color.Transparent,
-                                strokeCap = StrokeCap.Round,
-                                drawStopIndicator = {},
-                            )
-                        }
+                        MiniPlayerLinearProgress(
+                            timelineFlow = sharedViewModel.timeline,
+                            color = textColor,
+                        )
                     }
                 }
             }
         }
     } else {
+        val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
         // Desktop bottom bar surface follows the theme (haze over content), so text and controls
         // use the theme foreground token instead of the artwork-luminance colour.
         val textColor = MaterialTheme.colorScheme.onBackground
@@ -767,6 +733,7 @@ fun MiniPlayer(
                                     ImageRequest
                                         .Builder(LocalPlatformContext.current)
                                         .data(songEntity?.thumbnails)
+                                        .size(128)
                                         .crossfade(550)
                                         .build(),
                                 placeholder = rememberHolderPainter(),
@@ -1299,3 +1266,79 @@ private fun CapsuleProgress(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MiniPlayerCircularProgress(
+    timelineFlow: StateFlow<TimeLine>,
+    isPlaying: Boolean,
+) {
+    val rawProgress by remember(timelineFlow) {
+        timelineFlow.map { tl ->
+            if (tl.total > 0L && tl.current >= 0L) {
+                (tl.current.toFloat() / tl.total).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+        }
+    }.collectAsStateWithLifecycle(0f)
+    val animatedProgress =
+        animateFloatAsState(
+            targetValue = rawProgress,
+            animationSpec = ProgressIndicatorDefaults.ProgressAnimationSpec,
+            label = "MiniPlayerRingProgress",
+        )
+    // Progress rides a ring around the artwork: wavy while playing, flat when paused.
+    val ringStroke = Stroke(width = with(LocalDensity.current) { 3.dp.toPx() }, cap = StrokeCap.Round)
+    CircularWavyProgressIndicator(
+        progress = { animatedProgress.value },
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        stroke = ringStroke,
+        trackStroke = ringStroke,
+        // A raw 0/1, never a tweened value: the node animates amplitude
+        // itself and drops new targets mid-animation (see WavySeekBar).
+        amplitude = { p -> if (p > 0f && isPlaying) 1f else 0f },
+    )
+}
+
+@Composable
+private fun MiniPlayerLinearProgress(
+    timelineFlow: StateFlow<TimeLine>,
+    color: Color,
+) {
+    val rawProgress by remember(timelineFlow) {
+        timelineFlow.map { tl ->
+            if (tl.total > 0L && tl.current >= 0L) {
+                (tl.current.toFloat() / tl.total).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+        }
+    }.collectAsStateWithLifecycle(0f)
+    val animatedProgress =
+        animateFloatAsState(
+            targetValue = rawProgress,
+            animationSpec = ProgressIndicatorDefaults.ProgressAnimationSpec,
+            label = "MiniPlayerLinearProgress",
+        )
+    LeftToRight {
+        LinearProgressIndicator(
+            progress = { animatedProgress.value },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(
+                        color = Color.Transparent,
+                        shape = RoundedCornerShape(4.dp),
+                    ),
+            color = color,
+            trackColor = Color.Transparent,
+            strokeCap = StrokeCap.Round,
+            drawStopIndicator = {},
+        )
+    }
+}
+

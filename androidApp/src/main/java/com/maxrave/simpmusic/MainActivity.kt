@@ -129,9 +129,11 @@ class MainActivity : AppCompatActivity() {
                 single<AppCompatActivity> { this@MainActivity }
             },
         )
-        // Recreate view model to fix the issue of view model not getting data from the service
-        unloadKoinModules(viewModelModule)
-        loadKoinModules(viewModelModule)
+        // Recreate view model on fresh launches (not config changes) to fix view model not getting data from the service
+        if (savedInstanceState == null) {
+            unloadKoinModules(viewModelModule)
+            loadKoinModules(viewModelModule)
+        }
         VersionManager.initialize()
         checkForUpdate()
         if (viewModel.recreateActivity.value || viewModel.isServiceRunning) {
@@ -286,7 +288,9 @@ class MainActivity : AppCompatActivity() {
         if (shouldStopMusicService && shouldUnbind && isFinishing) {
             viewModel.isServiceRunning = false
         }
-        unloadKoinModules(viewModelModule)
+        if (isFinishing) {
+            unloadKoinModules(viewModelModule)
+        }
         super.onDestroy()
         Logger.d("MainActivity", "onDestroy: ")
     }

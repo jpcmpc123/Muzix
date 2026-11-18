@@ -164,9 +164,7 @@ private fun ShareTasteCard(
  */
 @Composable
 private fun rememberTasteSeedColor(imageUrl: String?): Color {
-    val httpClient = remember { HttpClient(CIO) }
-    DisposableEffect(httpClient) { onDispose { httpClient.close() } }
-    val networkLoader = rememberNetworkLoader(httpClient)
+    val networkLoader = com.maxrave.simpmusic.utils.rememberSharedPaletteNetworkLoader()
     val dominantColorState =
         rememberDominantColorState(
             defaultColor = FALLBACK_SEED,

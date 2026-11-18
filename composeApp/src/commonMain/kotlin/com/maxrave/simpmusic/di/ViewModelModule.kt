@@ -36,6 +36,7 @@ import com.maxrave.simpmusic.viewModel.TasteViewModel
 import com.maxrave.simpmusic.viewModel.WrappedViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
+import org.koin.dsl.onClose
 
 val viewModelModule =
     module {
@@ -52,6 +53,8 @@ val viewModelModule =
                 get(),
                 get(),
             )
+        } onClose {
+            it?.clearViewModelScope()
         }
         single {
             SearchViewModel(
@@ -59,6 +62,8 @@ val viewModelModule =
                 get(),
                 get(),
             )
+        } onClose {
+            it?.clearViewModelScope()
         }
         viewModel {
             SongSelectionViewModel(

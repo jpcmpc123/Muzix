@@ -156,34 +156,37 @@ fun SongFullWidthItems(
     // since, which is the only way a queue row is marked — the queue response shows no LIVE chip.
     val isLive = track?.isLive == true || songEntity?.isLive == true || storedSong?.isLive == true
     val offsetX = remember { Animatable(initialValue = 0f) }
-    var heightDp by remember { mutableStateOf(0.dp) }
+    val platformContext = LocalPlatformContext.current
 
     Box(
         modifier =
         modifier,
     ) {
-        Crossfade(
-            offsetX.value >= maxOffset / 2,
-        ) { shouldShowAddToQueue ->
-            if (shouldShowAddToQueue) {
-                // Where Add to queue is blocked the swipe plays the song next instead
-                // (SharedViewModel.addListToQueue), so the icon shows what will happen.
-                val playsNext = rememberAddToQueueBlock() != null
-                Box(
-                    modifier =
-                        Modifier
-                            .height(heightDp)
-                            .aspectRatio(1f)
-                            .padding(start = 15.dp)
-                            .align(Alignment.CenterStart),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        tint = contentColor,
-                        imageVector = if (playsNext) SimpIcons.SkipNext else SimpIcons.QueueMusic,
-                        contentDescription =
-                            stringResource(if (playsNext) Res.string.play_next else Res.string.add_to_queue),
-                    )
+        if (offsetX.value > 0f) {
+            Box(Modifier.matchParentSize()) {
+                Crossfade(
+                    offsetX.value >= maxOffset / 2,
+                    modifier = Modifier.matchParentSize(),
+                ) { shouldShowAddToQueue ->
+                    if (shouldShowAddToQueue) {
+                        // Where Add to queue is blocked the swipe plays the song next instead
+                        // (SharedViewModel.addListToQueue), so the icon shows what will happen.
+                        val playsNext = rememberAddToQueueBlock() != null
+                        Box(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(start = 15.dp),
+                            contentAlignment = Alignment.CenterStart,
+                        ) {
+                            Icon(
+                                tint = contentColor,
+                                imageVector = if (playsNext) SimpIcons.SkipNext else SimpIcons.QueueMusic,
+                                contentDescription =
+                                    stringResource(if (playsNext) Res.string.play_next else Res.string.add_to_queue),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -208,7 +211,7 @@ fun SongFullWidthItems(
                             } else {
                                 null
                             },
-                    ).animateContentSize()
+                    )
                     // Keyed on selectionMode so the swipe detector is torn down when selection
                     // starts — keyed on Unit it would keep running with the stale flag captured.
                     .pointerInput(selectionMode) {
@@ -235,10 +238,6 @@ fun SongFullWidthItems(
                                     }
                                 },
                             )
-                        }
-                    }.onGloballyPositioned { coordinates ->
-                        with(density) {
-                            heightDp = coordinates.size.height.toDp()
                         }
                     },
         ) {
@@ -291,16 +290,19 @@ fun SongFullWidthItems(
                             )
                         } else if (index == null) {
                             val thumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
-                            AsyncImage(
-                                model =
+                            val imageRequest =
+                                remember(platformContext, thumb) {
                                     ImageRequest
-                                        .Builder(LocalPlatformContext.current)
+                                        .Builder(platformContext)
                                         .data(thumb)
                                         .size(256, 256)
                                         .diskCachePolicy(CachePolicy.ENABLED)
                                         .diskCacheKey(thumb)
-                                        .crossfade(true)
-                                        .build(),
+                                        .crossfade(150)
+                                        .build()
+                                }
+                            AsyncImage(
+                                model = imageRequest,
                                 placeholder = rememberHolderPainter(),
                                 error = rememberHolderPainter(),
                                 contentDescription = null,
@@ -338,8 +340,8 @@ fun SongFullWidthItems(
                                 .wrapContentHeight(align = Alignment.CenterVertically)
                                 .basicMarquee(
                                     iterations = Int.MAX_VALUE,
-                                    animationMode = MarqueeAnimationMode.Immediately,
-                                ).focusable(),
+                                    initialDelayMillis = 2000,
+                                ),
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         AnimatedVisibility(
@@ -389,8 +391,8 @@ fun SongFullWidthItems(
                                     .wrapContentHeight(align = Alignment.CenterVertically)
                                     .basicMarquee(
                                         iterations = Int.MAX_VALUE,
-                                        animationMode = MarqueeAnimationMode.Immediately,
-                                    ).focusable(),
+                                        initialDelayMillis = 2000,
+                                    ),
                         )
                     }
                 }
@@ -431,6 +433,7 @@ fun SuggestItems(
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
+    val platformContext = LocalPlatformContext.current
     Box(
         modifier =
             Modifier
@@ -438,7 +441,7 @@ fun SuggestItems(
                     if (onClickListener != null) {
                         onClickListener()
                     }
-                }.animateContentSize(),
+                },
     ) {
         Row(
             Modifier
@@ -454,16 +457,19 @@ fun SuggestItems(
                         )
                     } else {
                         val thumb = track.thumbnails?.lastOrNull()?.url
-                        AsyncImage(
-                            model =
+                        val imageRequest =
+                            remember(platformContext, thumb) {
                                 ImageRequest
-                                    .Builder(LocalPlatformContext.current)
+                                    .Builder(platformContext)
                                     .data(thumb)
                                     .size(256, 256)
                                     .diskCachePolicy(CachePolicy.ENABLED)
                                     .diskCacheKey(thumb)
-                                    .crossfade(true)
-                                    .build(),
+                                    .crossfade(150)
+                                    .build()
+                            }
+                        AsyncImage(
+                            model = imageRequest,
                             placeholder = rememberHolderPainter(),
                             error = rememberHolderPainter(),
                             contentDescription = null,
@@ -494,8 +500,8 @@ fun SuggestItems(
                             .wrapContentHeight(align = Alignment.CenterVertically)
                             .basicMarquee(
                                 iterations = Int.MAX_VALUE,
-                                animationMode = MarqueeAnimationMode.Immediately,
-                            ).focusable(),
+                                initialDelayMillis = 2000,
+                            ),
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (track.isLive) LiveBadge(modifier = Modifier.padding(end = 6.dp))
@@ -513,8 +519,8 @@ fun SuggestItems(
                                 .wrapContentHeight(align = Alignment.CenterVertically)
                                 .basicMarquee(
                                     iterations = Int.MAX_VALUE,
-                                    animationMode = MarqueeAnimationMode.Immediately,
-                                ).focusable(),
+                                    initialDelayMillis = 2000,
+                                ),
                     )
                 }
             }
@@ -539,12 +545,13 @@ fun PlaylistFullWidthItems(
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
+    val platformContext = LocalPlatformContext.current
     Box(
         modifier =
             modifier
                 .clickable {
                     onClickListener?.invoke()
-                }.animateContentSize(),
+                },
     ) {
         var title = ""
         var thumb = ""
@@ -605,6 +612,17 @@ fun PlaylistFullWidthItems(
                 thirdRowSubtitle = data.description
             }
         }
+        val imageRequest =
+            remember(platformContext, thumb) {
+                ImageRequest
+                    .Builder(platformContext)
+                    .data(thumb)
+                    .size(256, 256)
+                    .diskCachePolicy(CachePolicy.ENABLED)
+                    .diskCacheKey(thumb)
+                    .crossfade(150)
+                    .build()
+            }
         Row(
             Modifier
                 .padding(vertical = 10.dp, horizontal = 15.dp)
@@ -614,15 +632,7 @@ fun PlaylistFullWidthItems(
             Spacer(modifier = Modifier.width(8.dp))
             Box(modifier = Modifier.size(48.dp)) {
                 AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(LocalPlatformContext.current)
-                            .data(thumb)
-                            .size(256, 256)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(thumb)
-                            .crossfade(true)
-                            .build(),
+                    model = imageRequest,
                     placeholder = rememberHolderPainter(),
                     error = rememberHolderPainter(),
                     contentDescription = null,
@@ -650,8 +660,8 @@ fun PlaylistFullWidthItems(
                             .wrapContentHeight(align = Alignment.CenterVertically)
                             .basicMarquee(
                                 iterations = Int.MAX_VALUE,
-                                animationMode = MarqueeAnimationMode.Immediately,
-                            ).focusable(),
+                                initialDelayMillis = 2000,
+                            ),
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -677,8 +687,8 @@ fun PlaylistFullWidthItems(
                                 .wrapContentHeight(align = Alignment.CenterVertically)
                                 .basicMarquee(
                                     iterations = Int.MAX_VALUE,
-                                    animationMode = MarqueeAnimationMode.Immediately,
-                                ).focusable(),
+                                    initialDelayMillis = 2000,
+                                ),
                     )
                 }
 
@@ -694,8 +704,8 @@ fun PlaylistFullWidthItems(
                                 .wrapContentHeight(align = Alignment.CenterVertically)
                                 .basicMarquee(
                                     iterations = Int.MAX_VALUE,
-                                    animationMode = MarqueeAnimationMode.Immediately,
-                                ).focusable(),
+                                    initialDelayMillis = 2000,
+                                ),
                     )
                 }
             }
@@ -716,11 +726,23 @@ fun ArtistFullWidthItems(
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
+    val platformContext = LocalPlatformContext.current
     val (name: String, thumbnails: String?) =
         when (data) {
             is ArtistEntity -> Pair(data.name, data.thumbnails)
             is ArtistsResult -> Pair(data.artist, data.thumbnails.lastOrNull()?.url)
             else -> Pair("", null)
+        }
+    val imageRequest =
+        remember(platformContext, thumbnails) {
+            ImageRequest
+                .Builder(platformContext)
+                .data(thumbnails)
+                .size(256, 256)
+                .diskCachePolicy(CachePolicy.ENABLED)
+                .diskCacheKey(thumbnails)
+                .crossfade(150)
+                .build()
         }
     Box(
         modifier
@@ -737,15 +759,7 @@ fun ArtistFullWidthItems(
             Spacer(modifier = Modifier.width(8.dp))
             Box(modifier = Modifier.size(48.dp)) {
                 AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(LocalPlatformContext.current)
-                            .data(thumbnails)
-                            .size(256, 256)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(thumbnails)
-                            .crossfade(true)
-                            .build(),
+                    model = imageRequest,
                     placeholder = rememberHolderPainter(),
                     error = rememberHolderPainter(),
                     contentDescription = null,
@@ -773,8 +787,8 @@ fun ArtistFullWidthItems(
                             .wrapContentHeight(align = Alignment.CenterVertically)
                             .basicMarquee(
                                 iterations = Int.MAX_VALUE,
-                                animationMode = MarqueeAnimationMode.Immediately,
-                            ).focusable(),
+                                initialDelayMillis = 2000,
+                            ),
                 )
 
                 Text(
@@ -788,8 +802,8 @@ fun ArtistFullWidthItems(
                             .wrapContentHeight(align = Alignment.CenterVertically)
                             .basicMarquee(
                                 iterations = Int.MAX_VALUE,
-                                animationMode = MarqueeAnimationMode.Immediately,
-                            ).focusable(),
+                                initialDelayMillis = 2000,
+                            ),
                 )
             }
             if (rightView != null) {

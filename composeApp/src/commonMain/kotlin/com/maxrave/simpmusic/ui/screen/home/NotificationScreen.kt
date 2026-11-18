@@ -82,6 +82,8 @@ import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.NotificationViewModel
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
+import androidx.compose.animation.core.animateFloatAsState
+import com.maxrave.simpmusic.extension.glassHazeSource
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import org.jetbrains.compose.resources.stringResource
@@ -123,7 +125,7 @@ fun NotificationScreen(
                     }
             },
     )
-    Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+    Box(Modifier.fillMaxSize().glassHazeSource(hazeState)) {
         Crossfade(targetState = listNotification) {
             if (it == null) {
                 Box(
@@ -178,48 +180,46 @@ fun NotificationScreen(
     // exactly what "not transparent at all" looks like. Floating gives the list something to slide
     // under and the frost something to frost.
     val barTint = MaterialTheme.colorScheme.background
-    AnimatedContent(
-        targetState = isAtTop,
-        transitionSpec = {
-            fadeIn(tween(300)).togetherWith(fadeOut(tween(300)))
+    val barBgAlpha by animateFloatAsState(
+        targetValue = if (isAtTop) 0f else 1f,
+        animationSpec = tween(300),
+        label = "notificationBarAlpha",
+    )
+    Box(
+        Modifier.onGloballyPositioned { coordinates ->
+            topAppBarHeight = with(density) { coordinates.size.height.toDp() }
         },
-    ) { atTop ->
-        Column(
-            Modifier
-                .then(
-                    if (atTop) {
-                        Modifier
-                    } else {
-                        // AlbumScreen's bar recipe, thinned to 0.3 — see SettingScreen.
-                        Modifier.tintedBarBlur(hazeState, barTint, 0.3f)
-                    },
-                ).onGloballyPositioned { coordinates ->
-                    topAppBarHeight = with(density) { coordinates.size.height.toDp() }
-                },
-        ) {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(Res.string.notification),
-                        style = typo().titleMedium,
-                    )
-                },
-                navigationIcon = {
-                    RippleIconButton(
-                        imageVector = SimpIcons.ArrowBackIosNew,
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    ) {
-                        navController.navigateUp()
-                    }
-                },
-                // Transparent, or the default surface container paints an opaque strip over the
-                // very top of AmbientThemeGlow — the one part of it that actually carries colour.
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                    ),
+    ) {
+        if (barBgAlpha > 0f) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .graphicsLayer { alpha = barBgAlpha }
+                    .tintedBarBlur(hazeState, barTint, 0.3f),
             )
         }
+        TopAppBar(
+            title = {
+                Text(
+                    text = stringResource(Res.string.notification),
+                    style = typo().titleMedium,
+                )
+            },
+            navigationIcon = {
+                RippleIconButton(
+                    imageVector = SimpIcons.ArrowBackIosNew,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                ) {
+                    navController.navigateUp()
+                }
+            },
+            // Transparent, or the default surface container paints an opaque strip over the
+            // very top of AmbientThemeGlow — the one part of it that actually carries colour.
+            colors =
+                TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                ),
+        )
     }
 }
 

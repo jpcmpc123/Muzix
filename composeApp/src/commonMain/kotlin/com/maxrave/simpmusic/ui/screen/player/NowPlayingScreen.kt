@@ -191,7 +191,15 @@ fun NowPlayingScreenContent(
     // ViewModel State
     val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
     val screenDataState by sharedViewModel.nowPlayingScreenData.collectAsStateWithLifecycle()
-    val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
+    val slowTimeline by remember(sharedViewModel) {
+        sharedViewModel.timeline.distinctUntilChanged { old, new ->
+            old.total == new.total &&
+                old.bufferedPercent == new.bufferedPercent &&
+                old.loading == new.loading &&
+                old.isCrossfading == new.isCrossfading &&
+                old.isLive == new.isLive
+        }
+    }.collectAsStateWithLifecycle(initialValue = sharedViewModel.timeline.value)
     // Audio-delay correction, read here and applied ONLY to the lyric line below. The seek bar and
     // the elapsed-time readout keep the raw position: they report where the player is, while a
     // lyric reports what the ear is hearing, and those two are what the offset separates.
@@ -498,23 +506,28 @@ fun NowPlayingScreenContent(
     val latestSliderValue = remember { mutableFloatStateOf(0f) }
     val isSliding = remember { mutableStateOf(false) }
 
-    // Crossfade: RGB rainbow color cycling when transitioning between tracks
-    val infiniteTransition = rememberInfiniteTransition(label = "crossfadeRainbow")
-    val rainbowHue by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(1000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
-        label = "rainbowHue",
-    )
-    // Read the hue only while crossfading: read unconditionally, the infinite
-    // transition keeps the shell recomposing for a colour nothing displays.
-    val rainbowColor = if (timelineState.isCrossfading) hsvToColor(rainbowHue, 1f, 1f) else Color.White
+    // Crossfade: RGB rainbow color cycling when transitioning between tracks.
+    // Only compose the InfiniteTransition while crossfading so idle playback
+    // does not keep the Choreographer awake at 60-120fps.
+    val rainbowColor =
+        if (slowTimeline.isCrossfading) {
+            val infiniteTransition = rememberInfiniteTransition(label = "crossfadeRainbow")
+            val rainbowHue by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 360f,
+                animationSpec =
+                    infiniteRepeatable(
+                        animation = tween(1000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart,
+                    ),
+                label = "rainbowHue",
+            )
+            hsvToColor(rainbowHue, 1f, 1f)
+        } else {
+            Color.White
+        }
     val sliderTrackColor by animateColorAsState(
-        targetValue = if (timelineState.isCrossfading) rainbowColor else Color.White,
+        targetValue = rainbowColor,
         animationSpec = tween(300),
         label = "sliderCrossfadeColor",
     )
@@ -583,62 +596,63 @@ fun NowPlayingScreenContent(
         mutableIntStateOf(-1)
     }
 
-    // Canvas subtitle sync
-    LaunchedEffect(timelineState, screenDataState.lyricsData?.lyrics, lyricsOffsetMs) {
+    // Canvas subtitle sync: pre-parse start timestamps once per track and collect
+    // timeline inside the coroutine so NowPlayingScreenContent skips 5Hz recompositions.
+    LaunchedEffect(screenDataState.lyricsData?.lyrics, lyricsOffsetMs) {
         val lyrics = screenDataState.lyricsData?.lyrics
         if (lyrics == null || lyrics.syncType == "UNSYNCED" || lyrics.syncType == null) {
             currentLyricLineIndex = -1
             return@LaunchedEffect
         }
-        val lines = lyrics.lines ?: return@LaunchedEffect
-        val translatedLines =
-            screenDataState.lyricsData
-                ?.translatedLyrics
-                ?.first
-                ?.lines
-        // What the ear is hearing right now, which is what a lyric answers to. Keyed on the offset
-        // as well so dragging the setting while paused still moves the line.
-        val nowMs = timelineState.current - lyricsOffsetMs
-        if (nowMs > 0L) {
-            lines.indices.forEach { i ->
-                val startTimeMs = lines[i].startTimeMs.toLongOrNull() ?: 0L
-                val endTimeMs =
-                    if (i < lines.size - 1) {
-                        lines[i + 1].startTimeMs.toLongOrNull() ?: 0L
-                    } else {
-                        startTimeMs + 60000
+        val lines = lyrics.lines
+        if (lines.isNullOrEmpty()) {
+            currentLyricLineIndex = -1
+            return@LaunchedEffect
+        }
+        val startTimes = LongArray(lines.size) { idx -> lines[idx].startTimeMs.toLongOrNull() ?: 0L }
+        sharedViewModel.timeline.collect { timeline ->
+            // What the ear is hearing right now, which is what a lyric answers to. Keyed on the offset
+            // as well so dragging the setting while paused still moves the line.
+            val nowMs = timeline.current - lyricsOffsetMs
+            if (nowMs > 0L) {
+                if (nowMs < startTimes[0]) {
+                    if (currentLyricLineIndex != -1) {
+                        currentLyricLineIndex = -1
                     }
-                if (nowMs in startTimeMs..endTimeMs) {
-                    currentLyricLineIndex = i
+                } else {
+                    var low = 0
+                    var high = startTimes.size - 1
+                    var found = -1
+                    while (low <= high) {
+                        val mid = (low + high) ushr 1
+                        if (startTimes[mid] <= nowMs) {
+                            found = mid
+                            low = mid + 1
+                        } else {
+                            high = mid - 1
+                        }
+                    }
+                    if (found >= 0) {
+                        val endTimeMs =
+                            if (found < startTimes.size - 1) {
+                                startTimes[found + 1]
+                            } else {
+                                startTimes[found] + 60_000L
+                            }
+                        if (nowMs <= endTimeMs && currentLyricLineIndex != found) {
+                            currentLyricLineIndex = found
+                        }
+                    }
                 }
-            }
-            if (lines.isNotEmpty() &&
-                nowMs in 0..(lines.getOrNull(0)?.startTimeMs?.toLongOrNull() ?: 0L)
-            ) {
+            } else if (currentLyricLineIndex != -1) {
                 currentLyricLineIndex = -1
             }
-        } else {
-            currentLyricLineIndex = -1
         }
     }
 
     if (screenDataState.lyricsData != null && controllerState.isPlaying) {
         KeepScreenOn()
     }
-    // Slow-moving timeline snapshot for the content state: a fresh TimeLine lands
-    // several times a second while playing, but the content layers only need the
-    // fields that change rarely (total, buffering, loading, crossfade, live). The
-    // moving position is read by the progress leaves straight from timelineFlow,
-    // so this snapshot - and with it the data-class content state - compares equal
-    // across progress ticks and the heavy layers skip recomposing.
-    val slowTimeline =
-        remember(
-            timelineState.total,
-            timelineState.bufferedPercent,
-            timelineState.loading,
-            timelineState.isCrossfading,
-            timelineState.isLive,
-        ) { timelineState }
     val state =
         NowPlayingContentState(
             screenData = screenDataState,
@@ -919,7 +933,7 @@ fun NowPlayingScreenContent(
                 onTimestamp = { raw ->
                     // The rule the Info card's description follows: only a time inside the track seeks.
                     val timestamp = parseTimestampToMilliseconds(raw)
-                    val total = timelineState.total
+                    val total = slowTimeline.total
                     if (timestamp != 0.0 && timestamp < total) {
                         sharedViewModel.onUIEvent(UIEvent.UpdateProgress(((timestamp * 100) / total).toFloat()))
                     }

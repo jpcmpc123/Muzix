@@ -66,6 +66,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDynamicPla
 import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
+import kotlinx.coroutines.flow.distinctUntilChanged
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
@@ -120,17 +121,12 @@ internal inline fun <reified T> GridLibraryPlaylist(
     noinline onReload: () -> Unit,
 ) {
     Logger.w("GridLibraryPlaylist", "Generic Type: ${T::class.simpleName}")
-    val isScrollingUp by state.isScrollingUp()
+    val isScrollingUpState = state.isScrollingUp()
 
     LaunchedEffect(state) {
-        snapshotFlow { state.firstVisibleItemIndex }
-            .collect {
-                if (it <= 1) {
-                    onScrolling.invoke(true)
-                } else {
-                    onScrolling.invoke(isScrollingUp)
-                }
-            }
+        snapshotFlow { state.firstVisibleItemIndex <= 1 || isScrollingUpState.value }
+            .distinctUntilChanged()
+            .collect { onScrolling.invoke(it) }
     }
     val pullToRefreshState = rememberPullToRefreshState()
     PullToRefreshBox(

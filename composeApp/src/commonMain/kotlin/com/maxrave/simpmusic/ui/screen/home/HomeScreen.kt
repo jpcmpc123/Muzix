@@ -128,6 +128,7 @@ import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.extension.angledGradientBackground
 import com.maxrave.simpmusic.extension.artworkScrimBrush
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
+import com.maxrave.simpmusic.extension.glassHazeSource
 import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.extension.mouseDragScroll
 import com.maxrave.simpmusic.extension.rgbFactor
@@ -203,6 +204,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.http.Url
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -282,22 +284,49 @@ fun HomeScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberLazyListState()
-    val isScrollingUp by scrollState.isScrollingUp()
+    val isScrollingUpState = scrollState.isScrollingUp()
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val homeData by viewModel.homeItemList.collectAsStateWithLifecycle()
+    val quickPicksTitle = stringResource(Res.string.quick_picks)
     // Any shelf YouTube heads with the listener's own avatar over its title (Listen again is one of
     // several). Home's header already shows the avatar, so those shelves drop it and keep their name
     // and title. Matched on the name rather than on any shelf title, the way the old Welcome back row did.
-    val homeShelves =
-        remember(homeData, accountInfo) {
+    val (homeShelves, homeShelfKeys) =
+        remember(homeData, accountInfo, quickPicksTitle) {
             val accountName = accountInfo?.first
-            if (accountName.isNullOrBlank()) {
-                homeData
-            } else {
-                homeData.map {
-                    if (it.subtitle.equals(accountName, ignoreCase = true)) it.copy(thumbnail = null) else it
+            val shelves =
+                homeData.map { shelf ->
+                    val withoutDupAvatar =
+                        if (!accountName.isNullOrBlank() && shelf.subtitle.equals(accountName, ignoreCase = true)) {
+                            shelf.copy(thumbnail = null)
+                        } else {
+                            shelf
+                        }
+                    if (withoutDupAvatar.title == quickPicksTitle) {
+                        withoutDupAvatar.copy(
+                            contents =
+                                withoutDupAvatar.contents.mapNotNull { ct ->
+                                    ct?.copy(
+                                        artists =
+                                            ct.artists?.let { art ->
+                                                if (art.size > 1) art.dropLast(1) else art
+                                            },
+                                    )
+                                },
+                        )
+                    } else {
+                        withoutDupAvatar
+                    }
                 }
-            }
+            val seen = HashMap<String, Int>(shelves.size)
+            val keys =
+                shelves.map { item ->
+                    val base = item.title + "|" + (item.moreEndpoint?.browseId ?: item.channelId ?: "")
+                    val occurrence = seen[base] ?: 0
+                    seen[base] = occurrence + 1
+                    if (occurrence == 0) base else "$base#$occurrence"
+                }
+            shelves to keys
         }
     val newRelease by viewModel.newRelease.collectAsStateWithLifecycle()
     val chart by viewModel.chart.collectAsStateWithLifecycle()
@@ -343,17 +372,12 @@ fun HomeScreen(
         } else {
             backgroundColor
         }
-    var topHeaderColor by remember {
-        mutableStateOf(backgroundColor)
-    }
-    val animatedColor by animateColorAsState(topHeaderColor, tween(500))
     val mainHomeThumbnail by viewModel.mainHomeThumbnail.collectAsStateWithLifecycle()
     // YouTube's Home backdrop, drawn over the tint taken from the first card's artwork. A response
     // that carries none keeps the tint alone, and a failed load drops the image and its scrim,
     // leaving the tint as it was.
     val headerImage by viewModel.homeBackground.collectAsStateWithLifecycle()
-    var headerImageFailed by remember(headerImage) { mutableStateOf(false) }
-    val networkLoader = rememberNetworkLoader(HttpClient(CIO))
+    val networkLoader = com.maxrave.simpmusic.utils.rememberSharedPaletteNetworkLoader()
     val dominantColorState =
         rememberDominantColorState(
             defaultColor = backgroundColor,
@@ -364,14 +388,6 @@ fun HomeScreen(
     LaunchedEffect(mainHomeThumbnail) {
         mainHomeThumbnail?.let {
             dominantColorState.updateFrom(Url(it))
-        }
-    }
-
-    LaunchedEffect(dominantColorState, isLightTheme) {
-        snapshotFlow { dominantColorState.color }.collect {
-            // Light theme: pull the artwork color toward white for a soft pastel header;
-            // dark theme keeps the original darkened tone.
-            topHeaderColor = if (isLightTheme) lerp(it, Color.White, 0.85f) else it.rgbFactor(0.3f)
         }
     }
 
@@ -417,13 +433,10 @@ fun HomeScreen(
     val chipBackdrop = rememberBackdrop(MaterialTheme.colorScheme.background)
 
     LaunchedEffect(scrollState) {
-        snapshotFlow { scrollState.firstVisibleItemIndex }
-            .collect {
-                if (it <= 1) {
-                    onScrolling.invoke(true)
-                } else {
-                    onScrolling.invoke(isScrollingUp)
-                }
+        snapshotFlow { scrollState.firstVisibleItemIndex <= 1 || isScrollingUpState.value }
+            .distinctUntilChanged()
+            .collect { showBar ->
+                onScrolling.invoke(showBar)
             }
     }
 
@@ -744,7 +757,7 @@ fun HomeScreen(
             modifier =
                 Modifier
                     .then(if (LocalLiquidGlassEnabled.current) Modifier.layerBackdrop(chipBackdrop) else Modifier)
-                    .hazeSource(hazeState),
+                    .glassHazeSource(hazeState),
             state = pullToRefreshState,
             onRefresh = onRefresh,
             isRefreshing = isRefreshing,
@@ -786,75 +799,27 @@ fun HomeScreen(
                         state = scrollState,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        itemsIndexed(homeShelves, key = { index, item ->
-                            val base = item.title + "|" + (item.moreEndpoint?.browseId ?: item.channelId ?: "")
-                            val occurrence =
-                                homeShelves.take(index).count { other ->
-                                    other.title + "|" + (other.moreEndpoint?.browseId ?: other.channelId ?: "") == base
+                        itemsIndexed(
+                            items = homeShelves,
+                            key = { index, _ -> homeShelfKeys[index] },
+                            contentType = { _, item ->
+                                when {
+                                    item.title == quickPicksTitle -> "quick_picks"
+                                    item.isSongCardShelf() -> "discover"
+                                    else -> "shelf"
                                 }
-                            if (occurrence == 0) base else "$base#$occurrence"
-                        }) { index, item ->
+                            },
+                        ) { index, item ->
                             Box {
                                 if (index == 0) {
-                                    Box(
-                                        modifier =
-                                            Modifier
-                                                // matchParentSize, not height(300.dp): 300 is the
-                                                // height of this shelf ON A PHONE. On a desktop
-                                                // window the first item is taller, the gradient
-                                                // stopped mid-item and everything below it fell
-                                                // back to the flat background — a hard colour seam
-                                                // straight across Home. Sized by the item, the
-                                                // bottom scrim always lands on the item's edge.
-                                                .matchParentSize()
-                                                // The glow used to reach down past the old app bar and
-                                                // the Welcome back row, both gone with the Spotify
-                                                // header. It keeps that reach by running on below the
-                                                // first item instead of making the item taller; what
-                                                // runs over is the scrim's tail, already faded out.
-                                                .layout { measurable, constraints ->
-                                                    val height = constraints.maxHeight + HomeGlowOverflow.roundToPx()
-                                                    val placeable =
-                                                        measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
-                                                    layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
-                                                }.angledGradientBackground(listOf(animatedColor, pageBackground), 25f),
-                                    ) {
-                                        if (headerImage != null && !headerImageFailed) {
-                                            AsyncImage(
-                                                model =
-                                                    ImageRequest
-                                                        .Builder(LocalPlatformContext.current)
-                                                        .data(headerImage)
-                                                        .size(1440, 1440)
-                                                        .crossfade(150)
-                                                        .build(),
-                                                contentDescription = null,
-                                                contentScale = ContentScale.Crop,
-                                                onError = { headerImageFailed = true },
-                                                modifier = Modifier.fillMaxSize(),
-                                            )
-                                            // Always over the image, which can be very bright: a layer of the
-                                            // page's own colour tones it down in either theme and fades it
-                                            // into the page along the tint's own 25° line, not in a flat
-                                            // band at the bottom.
-                                            Box(
-                                                Modifier
-                                                    .fillMaxSize()
-                                                    .angledGradientBackground(listOf(pageBackground.copy(alpha = 0.6f), pageBackground), 25f),
-                                            )
-                                        }
-                                        Box(
-                                            modifier =
-                                                Modifier
-                                                    .fillMaxWidth()
-                                                    // A share of the glow, not a fixed 180dp: on a glow
-                                                    // ~560dp tall, 180dp made a long flat field that
-                                                    // dropped off in one short step.
-                                                    .fillMaxHeight(0.6f)
-                                                    .align(Alignment.BottomCenter)
-                                                    .background(artworkScrimBrush(pageBackground)),
-                                        )
-                                    }
+                                    HomeTopGlow(
+                                        dominantColorState = dominantColorState,
+                                        isLightTheme = isLightTheme,
+                                        backgroundColor = backgroundColor,
+                                        pageBackground = pageBackground,
+                                        headerImage = headerImage,
+                                        modifier = Modifier.matchParentSize(),
+                                    )
                                 }
                                 Column(
                                     modifier =
@@ -873,46 +838,12 @@ fun HomeScreen(
                                     // Android drops the 8dp over each section's title: the list's own 8dp
                                     // spacing already separates it from the shelf above.
                                     if (getPlatform() != Platform.Android) Spacer(modifier = Modifier.height(8.dp))
-                                    if (item.title == stringResource(Res.string.quick_picks)) {
-                                        AnimatedVisibility(
-                                            visible =
-                                                homeData.find {
-                                                    it.title ==
-                                                        stringResource(
-                                                            Res.string.quick_picks,
-                                                        )
-                                                } != null,
-                                        ) {
-                                            QuickPicks(
-                                                homeItem =
-                                                    (
-                                                        homeData.find {
-                                                            it.title ==
-                                                                stringResource(
-                                                                    Res.string.quick_picks,
-                                                                )
-                                                        } ?: return@AnimatedVisibility
-                                                    ).let { content ->
-                                                        content.copy(
-                                                            contents =
-                                                                content.contents.mapNotNull { ct ->
-                                                                    ct?.copy(
-                                                                        artists =
-                                                                            ct.artists?.let { art ->
-                                                                                if (art.size > 1) {
-                                                                                    art.dropLast(1)
-                                                                                } else {
-                                                                                    art
-                                                                                }
-                                                                            },
-                                                                    )
-                                                                },
-                                                        )
-                                                    },
-                                                navController = navController,
-                                                viewModel = viewModel,
-                                            )
-                                        }
+                                    if (item.title == quickPicksTitle) {
+                                        QuickPicks(
+                                            homeItem = item,
+                                            navController = navController,
+                                            viewModel = viewModel,
+                                        )
                                     } else if (item.isSongCardShelf()) {
                                         HomeDiscoverSection(
                                             data = item,
@@ -928,7 +859,7 @@ fun HomeScreen(
                                 }
                             }
                         }
-                        item {
+                        item(contentType = "pagination_loading") {
                             AnimatedVisibility(
                                 homeListState == ListState.PAGINATING,
                                 enter = expandVertically() + expandVertically(),
@@ -943,7 +874,11 @@ fun HomeScreen(
                             }
                         }
                         if (homeListState == ListState.PAGINATION_EXHAUST) {
-                            items(newRelease, key = { it.title + "|" + (it.moreEndpoint?.browseId ?: "") + "|" + (it.thumbnail?.firstOrNull()?.url ?: "") }) {
+                            items(
+                                items = newRelease,
+                                key = { it.title + "|" + (it.moreEndpoint?.browseId ?: "") + "|" + (it.thumbnail?.firstOrNull()?.url ?: "") },
+                                contentType = { "shelf" },
+                            ) {
                                 AnimatedVisibility(
                                     visible = newRelease.isNotEmpty(),
                                 ) {
@@ -959,7 +894,7 @@ fun HomeScreen(
                                     }
                                 }
                             }
-                            item {
+                            item(contentType = "mood_genre") {
                                 AnimatedVisibility(
                                     visible = moodMomentAndGenre != null,
                                 ) {
@@ -977,7 +912,7 @@ fun HomeScreen(
                                     }
                                 }
                             }
-                            item {
+                            item(contentType = "chart") {
                                 Column(
                                     Modifier
                                         .padding(vertical = 10.dp)
@@ -1030,7 +965,7 @@ fun HomeScreen(
                                 }
                             }
                         }
-                        item {
+                        item(contentType = "end_of_page") {
                             EndOfPage()
                         }
                     }
@@ -1058,28 +993,29 @@ fun HomeScreen(
         }
         // Spotify's header: the avatar, the chips and Create on one row, with no app bar. At the
         // top of the page it sits straight on the artwork glow; once the page scrolls under it, the blurred
-        // bar fades in behind it.
-        AnimatedContent(
-            targetState = atTop,
-            transitionSpec = {
-                fadeIn(tween(300)).togetherWith(fadeOut(tween(300)))
-            },
-        ) { target ->
-            Column(
-                modifier =
+        // bar fades in behind it without remounting the header subtree.
+        val barBgAlpha by animateFloatAsState(
+            targetValue = if (atTop) 0f else 1f,
+            animationSpec = tween(300),
+            label = "homeBarBgAlpha",
+        )
+        Box(
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .onGloballyPositioned { coordinates ->
+                        topAppBarHeightPx = coordinates.size.height
+                    },
+        ) {
+            if (barBgAlpha > 0f) {
+                Box(
                     Modifier
-                        .align(Alignment.TopCenter)
-                        .then(
-                            if (target) {
-                                Modifier.background(Color.Transparent)
-                            } else {
-                                Modifier
-                                    .ultraThinBarBlur(hazeState)
-                            },
-                        ).onGloballyPositioned { coordinates ->
-                            topAppBarHeightPx = coordinates.size.height
-                        },
-            ) {
+                        .matchParentSize()
+                        .graphicsLayer { alpha = barBgAlpha }
+                        .ultraThinBarBlur(hazeState),
+                )
+            }
+            Column {
                 Spacer(
                     modifier =
                         Modifier
@@ -1097,6 +1033,7 @@ fun HomeScreen(
                 val createPinned = getPlatform() == Platform.Desktop || getScreenSizeInfo().let { it.wDP >= it.hDP }
                 val chipHeadFade by animateFloatAsState(if (chipRowState.canScrollBackward) 1f else 0f)
                 val chipTailFade by animateFloatAsState(if (chipRowState.canScrollForward) 1f else 0f)
+                val moodLabels = homeMoods.map { stringResource(it.first) }
                 // Notifications moved into the avatar menu, Listen Together into the Create sheet.
                 val createActions: @Composable () -> Unit = {
                     CreateActions(
@@ -1151,7 +1088,7 @@ fun HomeScreen(
                                 }
                                 ExpandableChip(
                                     text = stringResource(Res.string.mood),
-                                    options = homeMoods.map { stringResource(it.first) },
+                                    options = moodLabels,
                                     selectedIndex = homeMoods.indexOfFirst { it.second == params }.takeIf { it >= 0 },
                                     expanded = moodExpanded,
                                     onExpandedChange = { moodExpanded = it },
@@ -1174,6 +1111,92 @@ fun HomeScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HomeTopGlow(
+    dominantColorState: com.kmpalette.DominantColorState<Url>,
+    isLightTheme: Boolean,
+    backgroundColor: Color,
+    pageBackground: Color,
+    headerImage: String?,
+    modifier: Modifier = Modifier,
+) {
+    var topHeaderColor by remember { mutableStateOf(backgroundColor) }
+    LaunchedEffect(dominantColorState, isLightTheme) {
+        snapshotFlow { dominantColorState.color }.collect {
+            // Light theme: pull the artwork color toward white for a soft pastel header;
+            // dark theme keeps the original darkened tone.
+            topHeaderColor = if (isLightTheme) lerp(it, Color.White, 0.85f) else it.rgbFactor(0.3f)
+        }
+    }
+    val animatedColor by animateColorAsState(topHeaderColor, tween(500), label = "homeTopGlowColor")
+    var headerImageFailed by remember(headerImage) { mutableStateOf(false) }
+    val bottomScrimBrush = remember(pageBackground) { artworkScrimBrush(pageBackground) }
+    val platformContext = LocalPlatformContext.current
+    val headerImageRequest =
+        remember(platformContext, headerImage) {
+            headerImage?.let { url ->
+                ImageRequest
+                    .Builder(platformContext)
+                    .data(url)
+                    .size(1440, 1440)
+                    .crossfade(150)
+                    .build()
+            }
+        }
+    Box(
+        modifier =
+            modifier
+                // matchParentSize, not height(300.dp): 300 is the
+                // height of this shelf ON A PHONE. On a desktop
+                // window the first item is taller, the gradient
+                // stopped mid-item and everything below it fell
+                // back to the flat background — a hard colour seam
+                // straight across Home. Sized by the item, the
+                // bottom scrim always lands on the item's edge.
+                // The glow used to reach down past the old app bar and
+                // the Welcome back row, both gone with the Spotify
+                // header. It keeps that reach by running on below the
+                // first item instead of making the item taller; what
+                // runs over is the scrim's tail, already faded out.
+                .layout { measurable, constraints ->
+                    val height = constraints.maxHeight + HomeGlowOverflow.roundToPx()
+                    val placeable =
+                        measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
+                    layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
+                }.angledGradientBackground(listOf(animatedColor, pageBackground), 25f),
+    ) {
+        if (headerImageRequest != null && !headerImageFailed) {
+            AsyncImage(
+                model = headerImageRequest,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                onError = { headerImageFailed = true },
+                modifier = Modifier.fillMaxSize(),
+            )
+            // Always over the image, which can be very bright: a layer of the
+            // page's own colour tones it down in either theme and fades it
+            // into the page along the tint's own 25° line, not in a flat
+            // band at the bottom.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .angledGradientBackground(listOf(pageBackground.copy(alpha = 0.6f), pageBackground), 25f),
+            )
+        }
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    // A share of the glow, not a fixed 180dp: on a glow
+                    // ~560dp tall, 180dp made a long flat field that
+                    // dropped off in one short step.
+                    .fillMaxHeight(0.6f)
+                    .align(Alignment.BottomCenter)
+                    .background(bottomScrimBrush),
+        )
     }
 }
 
@@ -1381,10 +1404,6 @@ fun QuickPicks(
     val lazyListState = rememberLazyGridState()
     val snapperFlingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = lazyListState, snapPosition = SnapPosition.Start))
     val isPortrait = getScreenSizeInfo().let { it.wDP < it.hDP }
-    val density = LocalDensity.current
-    var widthDp by remember {
-        mutableStateOf(0.dp)
-    }
     var bottomSheetShow by remember { mutableStateOf(false) }
     var track by remember { mutableStateOf<Track?>(null) }
 
@@ -1396,87 +1415,103 @@ fun QuickPicks(
         )
     }
 
+    val itemKeys =
+        remember(homeItem.contents) {
+            val seen = HashMap<String, Int>(homeItem.contents.size)
+            homeItem.contents.mapIndexed { idx, item ->
+                val base = item?.videoId ?: item?.browseId ?: item?.playlistId ?: item?.title ?: "null_$idx"
+                val count = seen[base] ?: 0
+                seen[base] = count + 1
+                if (count == 0) base else "$base#$count"
+            }
+        }
+
     // Quick picks draws its own header, and its 8dp around the block and 5dp around the title are
     // gaps no other shelf has: on Android they stood it 8dp further off the shelf above than the rest.
     val compact = getPlatform() == Platform.Android
-    Column(
+    BoxWithConstraints(
         Modifier
-            .padding(vertical = if (compact) 0.dp else 8.dp)
-            .onGloballyPositioned { coordinates ->
-                with(density) {
-                    widthDp = (coordinates.size.width).toDp()
-                }
-            },
+            .fillMaxWidth()
+            .padding(vertical = if (compact) 0.dp else 8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(Res.string.let_s_start_with_a_radio),
-                    style = typo().bodySmall,
-                )
-                Text(
-                    text = stringResource(Res.string.quick_picks),
-                    style = typo().headlineMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = if (compact) 0.dp else 5.dp),
-                )
-            }
-            if (homeItem.playAllEndpoint != null) {
-                SectionHeaderButton(
-                    text = stringResource(Res.string.play_all),
-                    onClick = { viewModel.playAll(homeItem) },
-                )
-            }
-        }
-        LazyHorizontalGrid(
-            rows = GridCells.Fixed(4),
-            // Four 64dp rows; 56dp on Android, where Home packs tighter (QuickPicksItem pads to match).
-            modifier =
-                Modifier
-                    .height(if (compact) 224.dp else 256.dp)
-                    .mouseDragScroll(lazyListState, snapperFlingBehavior),
-            state = lazyListState,
-            flingBehavior = snapperFlingBehavior,
-        ) {
-            items(homeItem.contents, key = { it?.videoId ?: it?.browseId ?: it?.playlistId ?: it?.title ?: "null" }) {
-                if (it != null) {
-                    QuickPicksItem(
-                        onClick = {
-                            val firstQueue: Track = it.toTrack()
-                            viewModel.setQueueData(
-                                QueueData.Data(
-                                    listTracks = arrayListOf(firstQueue),
-                                    firstPlayedTrack = firstQueue,
-                                    playlistId = "RDAMVM${it.videoId}",
-                                    playlistName = "\"${it.title}\" Radio",
-                                    playlistType = PlaylistType.RADIO,
-                                    continuation = null,
-                                ),
-                            )
-                            viewModel.loadMediaItem(
-                                firstQueue,
-                                type = Config.SONG_CLICK,
-                            )
-                        },
-                        onLongClick = {
-                            track = it.toTrack()
-                            bottomSheetShow = true
-                        },
-                        data = it,
-                        widthDp = if (isPortrait) widthDp else minOf(widthDp, LandscapeGridItemMaxWidth + 30.dp),
+        val widthDp = maxWidth
+        val itemWidthDp = if (isPortrait) widthDp else minOf(widthDp, LandscapeGridItemMaxWidth + 30.dp)
+        Column(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(Res.string.let_s_start_with_a_radio),
+                        style = typo().bodySmall,
+                    )
+                    Text(
+                        text = stringResource(Res.string.quick_picks),
+                        style = typo().headlineMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = if (compact) 0.dp else 5.dp),
+                    )
+                }
+                if (homeItem.playAllEndpoint != null) {
+                    SectionHeaderButton(
+                        text = stringResource(Res.string.play_all),
+                        onClick = { viewModel.playAll(homeItem) },
                     )
                 }
             }
+            LazyHorizontalGrid(
+                rows = GridCells.Fixed(4),
+                // Four 64dp rows; 56dp on Android, where Home packs tighter (QuickPicksItem pads to match).
+                modifier =
+                    Modifier
+                        .height(if (compact) 224.dp else 256.dp)
+                        .mouseDragScroll(lazyListState, snapperFlingBehavior),
+                state = lazyListState,
+                flingBehavior = snapperFlingBehavior,
+            ) {
+                items(
+                    count = homeItem.contents.size,
+                    key = { index -> itemKeys[index] },
+                    contentType = { "quick_pick" },
+                ) { index ->
+                    val it = homeItem.contents[index]
+                    if (it != null) {
+                        QuickPicksItem(
+                            onClick = {
+                                val firstQueue: Track = it.toTrack()
+                                viewModel.setQueueData(
+                                    QueueData.Data(
+                                        listTracks = arrayListOf(firstQueue),
+                                        firstPlayedTrack = firstQueue,
+                                        playlistId = "RDAMVM${it.videoId}",
+                                        playlistName = "\"${it.title}\" Radio",
+                                        playlistType = PlaylistType.RADIO,
+                                        continuation = null,
+                                    ),
+                                )
+                                viewModel.loadMediaItem(
+                                    firstQueue,
+                                    type = Config.SONG_CLICK,
+                                )
+                            },
+                            onLongClick = {
+                                track = it.toTrack()
+                                bottomSheetShow = true
+                            },
+                            data = it,
+                            widthDp = itemWidthDp,
+                        )
+                    }
+                }
+            }
+            HorizontalScrollBar(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                scrollState = lazyListState,
+                flingBehavior = snapperFlingBehavior,
+            )
         }
-        HorizontalScrollBar(
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            scrollState = lazyListState,
-            flingBehavior = snapperFlingBehavior,
-        )
     }
 }
 
@@ -1563,27 +1598,55 @@ fun ChartData(
     chart: Chart,
     navController: NavController,
 ) {
-    var gridWidthDp by remember {
-        mutableStateOf(0.dp)
-    }
-    val density = LocalDensity.current
-
     val lazyListState2 = rememberLazyGridState()
     // Start, not the default Center: a centred column leaves the one before it cut through its rank.
     val snapperFlingBehavior2 =
         rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = lazyListState2, snapPosition = SnapPosition.Start))
     val isPortrait = getScreenSizeInfo().let { it.wDP < it.hDP }
 
-    Column(
-        Modifier.onGloballyPositioned { coordinates ->
-            with(density) {
-                gridWidthDp = (coordinates.size.width).toDp()
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val gridWidthDp = maxWidth
+        val chartItemWidthDp = if (isPortrait) gridWidthDp else minOf(gridWidthDp, LandscapeGridItemMaxWidth)
+        Column(Modifier.fillMaxWidth()) {
+            chart.listChartItem.forEach { item ->
+                Text(
+                    text = item.title,
+                    style = typo().headlineMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 10.dp),
+                )
+                val lazyListState = rememberLazyListState()
+                val snapperFlingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyListState = lazyListState))
+                LazyRow(
+                    modifier = Modifier.mouseDragScroll(lazyListState, snapperFlingBehavior),
+                    state = lazyListState,
+                    flingBehavior = snapperFlingBehavior,
+                ) {
+                    items(
+                        count = item.playlists.size,
+                        key = { index -> item.playlists[index].id },
+                        contentType = { "chart_playlist" },
+                    ) {
+                        HomeItemContentPlaylist(
+                            onClick = {
+                                navController.navigate(
+                                    PlaylistDestination(
+                                        playlistId = item.playlists[it].id,
+                                        isYourYouTubePlaylist = false,
+                                    ),
+                                )
+                            },
+                            data = item.playlists[it],
+                        )
+                    }
+                }
             }
-        },
-    ) {
-        chart.listChartItem.forEach { item ->
             Text(
-                text = item.title,
+                text = stringResource(Res.string.top_artists),
                 style = typo().headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
@@ -1592,107 +1655,78 @@ fun ChartData(
                         .fillMaxWidth()
                         .padding(vertical = 10.dp),
             )
-            val lazyListState = rememberLazyListState()
-            val snapperFlingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyListState = lazyListState))
-            LazyRow(
-                modifier = Modifier.mouseDragScroll(lazyListState, snapperFlingBehavior),
-                state = lazyListState,
-                flingBehavior = snapperFlingBehavior,
+            LazyHorizontalGrid(
+                rows = GridCells.Fixed(3),
+                modifier = Modifier.height(240.dp).mouseDragScroll(lazyListState2, snapperFlingBehavior2),
+                state = lazyListState2,
+                flingBehavior = snapperFlingBehavior2,
             ) {
-                items(item.playlists.size, key = { index ->
-                    val data = item.playlists[index]
-                    data.id
-                }) {
-                    HomeItemContentPlaylist(
+                items(
+                    count = chart.artists.itemArtists.size,
+                    key = { index -> chart.artists.itemArtists[index].browseId },
+                    contentType = { "chart_artist" },
+                ) {
+                    val data = chart.artists.itemArtists[it]
+                    ItemArtistChart(
                         onClick = {
                             navController.navigate(
-                                PlaylistDestination(
-                                    playlistId = item.playlists[it].id,
-                                    isYourYouTubePlaylist = false,
+                                ArtistDestination(
+                                    channelId = data.browseId,
                                 ),
                             )
                         },
-                        data = item.playlists[it],
-                    )
-                }
-            }
-        }
-        Text(
-            text = stringResource(Res.string.top_artists),
-            style = typo().headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 1,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 10.dp),
-        )
-        LazyHorizontalGrid(
-            rows = GridCells.Fixed(3),
-            modifier = Modifier.height(240.dp).mouseDragScroll(lazyListState2, snapperFlingBehavior2),
-            state = lazyListState2,
-            flingBehavior = snapperFlingBehavior2,
-        ) {
-            items(chart.artists.itemArtists.size, key = { index ->
-                val item = chart.artists.itemArtists[index]
-                item.browseId
-            }) {
-                val data = chart.artists.itemArtists[it]
-                ItemArtistChart(
-                    onClick = {
-                        navController.navigate(
-                            ArtistDestination(
-                                channelId = data.browseId,
-                            ),
-                        )
-                    },
-                    data = data,
-                    widthDp = if (isPortrait) gridWidthDp else minOf(gridWidthDp, LandscapeGridItemMaxWidth),
-                )
-            }
-        }
-        HorizontalScrollBar(
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            scrollState = lazyListState2,
-            flingBehavior = snapperFlingBehavior2,
-        )
-        // Ranked podcast shows, laid out exactly like the artist chart above.
-        chart.podcasts?.let { podcasts ->
-            Text(
-                text = podcasts.title,
-                style = typo().headlineMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 10.dp),
-            )
-            val podcastGridState = rememberLazyGridState()
-            val podcastFlingBehavior =
-                rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = podcastGridState, snapPosition = SnapPosition.Start))
-            LazyHorizontalGrid(
-                rows = GridCells.Fixed(3),
-                modifier = Modifier.height(240.dp).mouseDragScroll(podcastGridState, podcastFlingBehavior),
-                state = podcastGridState,
-                flingBehavior = podcastFlingBehavior,
-            ) {
-                items(podcasts.shows.size, key = { index -> podcasts.shows[index].browseId }) {
-                    val data = podcasts.shows[it]
-                    ItemArtistChart(
-                        onClick = { navController.navigate(PodcastDestination(podcastId = data.browseId)) },
                         data = data,
-                        widthDp = if (isPortrait) gridWidthDp else minOf(gridWidthDp, LandscapeGridItemMaxWidth),
-                        thumbnailShape = ArtworkShape,
-                        subtitle = data.subscribers,
+                        widthDp = chartItemWidthDp,
                     )
                 }
             }
             HorizontalScrollBar(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                scrollState = podcastGridState,
-                flingBehavior = podcastFlingBehavior,
+                scrollState = lazyListState2,
+                flingBehavior = snapperFlingBehavior2,
             )
+            // Ranked podcast shows, laid out exactly like the artist chart above.
+            chart.podcasts?.let { podcasts ->
+                Text(
+                    text = podcasts.title,
+                    style = typo().headlineMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 10.dp),
+                )
+                val podcastGridState = rememberLazyGridState()
+                val podcastFlingBehavior =
+                    rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = podcastGridState, snapPosition = SnapPosition.Start))
+                LazyHorizontalGrid(
+                    rows = GridCells.Fixed(3),
+                    modifier = Modifier.height(240.dp).mouseDragScroll(podcastGridState, podcastFlingBehavior),
+                    state = podcastGridState,
+                    flingBehavior = podcastFlingBehavior,
+                ) {
+                    items(
+                        count = podcasts.shows.size,
+                        key = { index -> podcasts.shows[index].browseId },
+                        contentType = { "chart_podcast" },
+                    ) {
+                        val data = podcasts.shows[it]
+                        ItemArtistChart(
+                            onClick = { navController.navigate(PodcastDestination(podcastId = data.browseId)) },
+                            data = data,
+                            widthDp = chartItemWidthDp,
+                            thumbnailShape = ArtworkShape,
+                            subtitle = data.subscribers,
+                        )
+                    }
+                }
+                HorizontalScrollBar(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    scrollState = podcastGridState,
+                    flingBehavior = podcastFlingBehavior,
+                )
+            }
         }
     }
 }

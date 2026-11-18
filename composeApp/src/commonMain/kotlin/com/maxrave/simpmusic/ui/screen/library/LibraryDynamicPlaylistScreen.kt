@@ -86,6 +86,7 @@ import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
+import com.maxrave.simpmusic.extension.glassHazeSource
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import com.maxrave.simpmusic.ui.screen.home.analytics.formatNumericSpan
@@ -212,7 +213,7 @@ fun LibraryDynamicPlaylistScreen(
     val listState = rememberLazyListState()
     LazyColumn(
         state = listState,
-        modifier = Modifier.hazeSource(hazeState),
+        modifier = Modifier.glassHazeSource(hazeState),
         contentPadding = innerPadding,
     ) {
         item {

@@ -166,6 +166,7 @@ import com.mikepenz.aboutlibraries.ui.compose.m3.libraryColors
 import com.mikepenz.aboutlibraries.ui.compose.produceLibraries
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
+import com.maxrave.simpmusic.extension.glassHazeSource
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.collections.immutable.toImmutableList
@@ -706,7 +707,7 @@ fun SettingScreen(
         modifier =
             Modifier
                 .padding(horizontal = listSidePadding)
-                .hazeSource(hazeState),
+                .glassHazeSource(hazeState),
     ) {
         item(key = "user_interface") {
             Column {

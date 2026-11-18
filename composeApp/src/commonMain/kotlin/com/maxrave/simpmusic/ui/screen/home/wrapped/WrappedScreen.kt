@@ -188,8 +188,7 @@ private fun WrappedTheme(
     // rather than constructed inline the way those two do it — this composable reads the resolved
     // colour during composition, so a fresh client every pass would key a fresh loader and a fresh
     // state, and the colour would reset to the fallback on the very recomposition it caused.
-    val httpClient = remember { HttpClient(CIO) }
-    val networkLoader = rememberNetworkLoader(httpClient)
+    val networkLoader = com.maxrave.simpmusic.utils.rememberSharedPaletteNetworkLoader()
     val dominantColorState =
         rememberDominantColorState(
             defaultColor = seed,

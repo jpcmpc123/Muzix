@@ -119,6 +119,7 @@ import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
 import com.maxrave.simpmusic.viewModel.UIEvent
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
+import com.maxrave.simpmusic.extension.glassHazeSource
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.flow.flowOf
@@ -250,12 +251,13 @@ fun AlbumScreen(
     Crossfade(uiState.loadState) {
         when (it) {
             LocalPlaylistState.PlaylistLoadState.Success -> {
+                val albumScrimBrush = remember(mutedPaletteBg) { artworkScrimBrush(mutedPaletteBg) }
                 LazyColumn(
                     modifier =
                         Modifier
                             .fillMaxWidth()
                             .background(mutedPaletteBg)
-                            .hazeSource(hazeState),
+                            .glassHazeSource(hazeState),
                     state = lazyState,
                 ) {
                     item(contentType = "header") {
@@ -319,7 +321,7 @@ fun AlbumScreen(
                                                             .fillMaxWidth()
                                                             .height((screenInfo.hDP * 0.35f).dp)
                                                             .align(Alignment.BottomCenter)
-                                                            .background(artworkScrimBrush(mutedPaletteBg)),
+                                                            .background(albumScrimBrush),
                                                 )
                                                 // Title/artist/year overlay (centered horizontally like Apple Music)
                                                 Column(

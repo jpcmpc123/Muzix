@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -50,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.DrawModifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -87,6 +89,7 @@ import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.blur.HazeColorEffect
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
@@ -99,48 +102,64 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
-fun Modifier.shimmer(): Modifier =
-    composed {
-        val appColors = LocalAppColors.current
-        var size by remember {
-            mutableStateOf(IntSize.Zero)
-        }
-        val transition = rememberInfiniteTransition(label = "Shimmer")
-        val startOffsetX by transition.animateFloat(
-            initialValue = -2 * size.width.toFloat(),
-            targetValue = 2 * size.width.toFloat(),
+val LocalShimmerProgress = compositionLocalOf<State<Float>?> { null }
+
+@Composable
+fun ProvideSharedShimmer(content: @Composable () -> Unit) {
+    val transition = rememberInfiniteTransition(label = "SharedShimmer")
+    val progressState =
+        transition.animateFloat(
+            initialValue = -2f,
+            targetValue = 2f,
             animationSpec =
                 infiniteRepeatable(
                     animation = tween(1000),
                 ),
-            label = "Shimmer",
+            label = "SharedShimmerProgress",
         )
+    CompositionLocalProvider(LocalShimmerProgress provides progressState, content = content)
+}
 
-        background(
-            brush =
-                Brush.linearGradient(
-                    colors =
-                        listOf(
-                            appColors.shimmerBackground,
-                            appColors.shimmerLine,
-                            appColors.shimmerBackground,
+fun Modifier.shimmer(): Modifier =
+    composed {
+        val appColors = LocalAppColors.current
+        val progressState =
+            LocalShimmerProgress.current
+                ?: rememberInfiniteTransition(label = "Shimmer").animateFloat(
+                    initialValue = -2f,
+                    targetValue = 2f,
+                    animationSpec =
+                        infiniteRepeatable(
+                            animation = tween(1000),
                         ),
-                    start = Offset(startOffsetX, 0f),
-                    end = Offset(startOffsetX + size.width.toFloat(), size.height.toFloat()),
-                ),
-        ).onGloballyPositioned {
-            size = it.size
+                    label = "Shimmer",
+                )
+        val shimmerBg = appColors.shimmerBackground
+        val shimmerLine = appColors.shimmerLine
+        drawBehind {
+            if (size.width > 0f && size.height > 0f) {
+                val startOffsetX = progressState.value * size.width
+                drawRect(
+                    brush =
+                        Brush.linearGradient(
+                            colors = listOf(shimmerBg, shimmerLine, shimmerBg),
+                            start = Offset(startOffsetX, 0f),
+                            end = Offset(startOffsetX + size.width, size.height),
+                        ),
+                )
+            }
         }
     }
 
 class GreyScaleModifier : DrawModifier {
-    override fun ContentDrawScope.draw() {
+    private val paint by lazy {
         val saturationMatrix = ColorMatrix().apply { setToSaturation(0f) }
-        val saturationFilter = ColorFilter.colorMatrix(saturationMatrix)
-        val paint =
-            Paint().apply {
-                colorFilter = saturationFilter
-            }
+        Paint().apply {
+            colorFilter = ColorFilter.colorMatrix(saturationMatrix)
+        }
+    }
+
+    override fun ContentDrawScope.draw() {
         drawIntoCanvas {
             it.saveLayer(Rect(0f, 0f, size.width, size.height), paint)
             drawContent()
@@ -149,6 +168,8 @@ class GreyScaleModifier : DrawModifier {
     }
 }
 
+private val DefaultGreyScaleModifier = GreyScaleModifier()
+
 fun LazyListState.visibilityPercent(info: LazyListItemInfo): Float {
     val cutTop = max(0, layoutInfo.viewportStartOffset - info.offset)
     val cutBottom = max(0, info.offset + info.size - layoutInfo.viewportEndOffset)
@@ -156,7 +177,7 @@ fun LazyListState.visibilityPercent(info: LazyListItemInfo): Float {
     return max(0f, 100f - (cutTop + cutBottom) * 100f / info.size)
 }
 
-fun Modifier.greyScale() = this.then(GreyScaleModifier())
+fun Modifier.greyScale() = this.then(DefaultGreyScaleModifier)
 
 /**
  * [colors] as gradient stops eased with smoothstep, the way [smoothScrimBrush] eases a scrim. Handed
@@ -183,7 +204,7 @@ fun Modifier.angledGradientBackground(
     if (colors.size < 2) {
         Modifier
     } else {
-        Modifier.drawBehind {
+        Modifier.drawWithCache {
             /*
             Have to compute length of gradient vector so that it lies within
             the visible rectangle.
@@ -218,56 +239,62 @@ fun Modifier.angledGradientBackground(
             val (x, y) = size
             val gamma = atan2(y, x)
 
-            if (gamma == 0f || gamma == (PI / 2).toFloat()) {
-                // degenerate rectangle
-                return@drawBehind
-            }
+            val brush =
+                if (gamma == 0f || gamma == (PI / 2).toFloat()) {
+                    null
+                } else {
+                    val degreesNormalised = (degrees % 360).let { if (it < 0) it + 360 else it }
+                    val alpha = (degreesNormalised * PI / 180).toFloat()
 
-            val degreesNormalised = (degrees % 360).let { if (it < 0) it + 360 else it }
+                    val gradientLength =
+                        when (alpha) {
+                            // ray from centre cuts the right edge of the rectangle
+                            in 0f..gamma, in (2 * PI - gamma)..2 * PI -> {
+                                x / cos(alpha)
+                            }
 
-            val alpha = (degreesNormalised * PI / 180).toFloat()
+                            // ray from centre cuts the top edge of the rectangle
+                            in gamma..(PI - gamma).toFloat() -> {
+                                y / sin(alpha)
+                            }
 
-            val gradientLength =
-                when (alpha) {
-                    // ray from centre cuts the right edge of the rectangle
-                    in 0f..gamma, in (2 * PI - gamma)..2 * PI -> {
-                        x / cos(alpha)
-                    }
+                            // ray from centre cuts the left edge of the rectangle
+                            in (PI - gamma)..(PI + gamma) -> {
+                                x / -cos(alpha)
+                            }
 
-                    // ray from centre cuts the top edge of the rectangle
-                    in gamma..(PI - gamma).toFloat() -> {
-                        y / sin(alpha)
-                    }
+                            // ray from centre cuts the bottom edge of the rectangle
+                            in (PI + gamma)..(2 * PI - gamma) -> {
+                                y / -sin(alpha)
+                            }
 
-                    // ray from centre cuts the left edge of the rectangle
-                    in (PI - gamma)..(PI + gamma) -> {
-                        x / -cos(alpha)
-                    }
+                            // default case (which shouldn't really happen)
+                            else -> {
+                                hypot(x, y)
+                            }
+                        }
 
-                    // ray from centre cuts the bottom edge of the rectangle
-                    in (PI + gamma)..(2 * PI - gamma) -> {
-                        y / -sin(alpha)
-                    }
+                    val centerOffsetX = cos(alpha) * gradientLength / 2
+                    val centerOffsetY = sin(alpha) * gradientLength / 2
+                    val centerX = size.width / 2f
+                    val centerY = size.height / 2f
 
-                    // default case (which shouldn't really happen)
-                    else -> {
-                        hypot(x, y)
-                    }
-                }
-
-            val centerOffsetX = cos(alpha) * gradientLength / 2
-            val centerOffsetY = sin(alpha) * gradientLength / 2
-
-            drawRect(
-                brush =
                     Brush.linearGradient(
                         colorStops = easedColorStops(colors),
                         // negative here so that 0 degrees is left -> right
-                        start = Offset(center.x - centerOffsetX, center.y - centerOffsetY),
-                        end = Offset(center.x + centerOffsetX, center.y + centerOffsetY),
-                    ),
-                size = size,
-            )
+                        start = Offset(centerX - centerOffsetX, centerY - centerOffsetY),
+                        end = Offset(centerX + centerOffsetX, centerY + centerOffsetY),
+                    )
+                }
+
+            onDrawBehind {
+                brush?.let {
+                    drawRect(
+                        brush = it,
+                        size = size,
+                    )
+                }
+            }
         }
     },
 )
@@ -572,31 +599,39 @@ suspend fun LazyListState.animateScrollAndCentralizeItem(index: Int) {
 @Composable
 expect fun KeepScreenOn()
 
+private class ScrollPositionTracker(
+    var index: Int,
+    var offset: Int,
+)
+
 @Composable
 fun LazyListState.isScrollingUp(): State<Boolean> {
-    var previousIndex by remember(this) { mutableIntStateOf(firstVisibleItemIndex) }
-    var previousScrollOffset by remember(this) { mutableIntStateOf(firstVisibleItemScrollOffset) }
+    val tracker = remember(this) { ScrollPositionTracker(firstVisibleItemIndex, firstVisibleItemScrollOffset) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(this) {
         snapshotFlow { layoutInfo.totalItemsCount }.collect {
-            Logger.w("isScrollingUp", "firstVisibleItemIndex: $firstVisibleItemIndex")
-            previousIndex = firstVisibleItemIndex
-            previousScrollOffset = firstVisibleItemScrollOffset
+            tracker.index = firstVisibleItemIndex
+            tracker.offset = firstVisibleItemScrollOffset
         }
     }
 
     return remember(this) {
         derivedStateOf {
-            if (firstVisibleItemIndex > 0) {
-                if (previousIndex != firstVisibleItemIndex) {
-                    previousIndex > firstVisibleItemIndex
-                } else {
-                    previousScrollOffset >= firstVisibleItemScrollOffset
-                }.also {
-                    previousIndex = firstVisibleItemIndex
-                    previousScrollOffset = firstVisibleItemScrollOffset
-                }
+            val currentIndex = firstVisibleItemIndex
+            val currentOffset = firstVisibleItemScrollOffset
+            if (currentIndex > 0) {
+                val up =
+                    if (tracker.index != currentIndex) {
+                        tracker.index > currentIndex
+                    } else {
+                        tracker.offset >= currentOffset
+                    }
+                tracker.index = currentIndex
+                tracker.offset = currentOffset
+                up
             } else {
+                tracker.index = currentIndex
+                tracker.offset = currentOffset
                 true
             }
         }
@@ -605,29 +640,32 @@ fun LazyListState.isScrollingUp(): State<Boolean> {
 
 @Composable
 fun LazyGridState.isScrollingUp(): State<Boolean> {
-    var previousIndex by remember(this) { mutableIntStateOf(firstVisibleItemIndex) }
-    var previousScrollOffset by remember(this) { mutableIntStateOf(firstVisibleItemScrollOffset) }
+    val tracker = remember(this) { ScrollPositionTracker(firstVisibleItemIndex, firstVisibleItemScrollOffset) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(this) {
         snapshotFlow { layoutInfo.totalItemsCount }.collect {
-            Logger.w("isScrollingUp", "firstVisibleItemIndex: $firstVisibleItemIndex")
-            previousIndex = firstVisibleItemIndex
-            previousScrollOffset = firstVisibleItemScrollOffset
+            tracker.index = firstVisibleItemIndex
+            tracker.offset = firstVisibleItemScrollOffset
         }
     }
 
     return remember(this) {
         derivedStateOf {
-            if (firstVisibleItemIndex > 0) {
-                if (previousIndex != firstVisibleItemIndex) {
-                    previousIndex > firstVisibleItemIndex
-                } else {
-                    previousScrollOffset >= firstVisibleItemScrollOffset
-                }.also {
-                    previousIndex = firstVisibleItemIndex
-                    previousScrollOffset = firstVisibleItemScrollOffset
-                }
+            val currentIndex = firstVisibleItemIndex
+            val currentOffset = firstVisibleItemScrollOffset
+            if (currentIndex > 0) {
+                val up =
+                    if (tracker.index != currentIndex) {
+                        tracker.index > currentIndex
+                    } else {
+                        tracker.offset >= currentOffset
+                    }
+                tracker.index = currentIndex
+                tracker.offset = currentOffset
+                up
             } else {
+                tracker.index = currentIndex
+                tracker.offset = currentOffset
                 true
             }
         }
@@ -736,6 +774,21 @@ fun ultraThinBarStyle(): HazeBlurStyle {
     val surface = MaterialTheme.colorScheme.surface
     return HazeMaterials.ultraThin(surface).then { fallbackColorEffect(HazeColorEffect.tint(surface)) }
 }
+
+/**
+ * Records this subtree into [hazeState] only while glass effects are active
+ * ([LocalGlassEffectsEnabled]). When glass effects are off (the Android default unless Liquid Glass
+ * is enabled), [ultraThinBarBlur] and [tintedBarBlur] draw solid fallbacks and never sample
+ * [hazeState], so skipping [hazeSource] avoids recording the entire scrolling list into an offscreen
+ * graphics layer on every frame.
+ */
+@Composable
+fun Modifier.glassHazeSource(hazeState: HazeState): Modifier =
+    if (LocalGlassEffectsEnabled.current) {
+        hazeSource(hazeState)
+    } else {
+        this
+    }
 
 /**
  * The plain top bars' frost, gated on the glass-effects setting: with glass on, the live

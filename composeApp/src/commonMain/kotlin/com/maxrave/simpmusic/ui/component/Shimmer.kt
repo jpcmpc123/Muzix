@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.maxrave.simpmusic.extension.ProvideSharedShimmer
 import com.maxrave.simpmusic.extension.shimmer
 import com.maxrave.simpmusic.ui.theme.LocalAppColors
 
@@ -35,8 +36,8 @@ fun HomeItemShimmer() {
                 ).clip(RoundedCornerShape(10))
                 .shimmer(),
         )
-        LazyRow(userScrollEnabled = false) {
-            items(10) {
+        Row {
+            repeat(4) {
                 PlaylistShimmer()
             }
         }
@@ -138,8 +139,8 @@ fun QuickPicksShimmer() {
                 ).clip(RoundedCornerShape(10))
                 .shimmer(),
         )
-        LazyColumn(userScrollEnabled = false) {
-            items(4) {
+        Column {
+            repeat(4) {
                 QuickPicksShimmerItem()
             }
         }
@@ -148,12 +149,12 @@ fun QuickPicksShimmer() {
 
 @Composable
 fun HomeShimmer() {
-    Column(
-        Modifier.padding(horizontal = 15.dp),
-    ) {
-        QuickPicksShimmer()
-        LazyColumn(userScrollEnabled = false) {
-            items(10) {
+    ProvideSharedShimmer {
+        Column(
+            Modifier.padding(horizontal = 15.dp),
+        ) {
+            QuickPicksShimmer()
+            repeat(3) {
                 HomeItemShimmer()
             }
         }

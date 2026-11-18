@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Shape
@@ -161,6 +162,22 @@ fun HomeItem(
         )
     }
 
+    val rowKeys =
+        remember(data.contents) {
+            val seen = HashMap<String, Int>(data.contents.size)
+            data.contents.mapIndexed { idx, item ->
+                val base =
+                    item?.videoId?.takeIf { it.isNotEmpty() }
+                        ?: item?.playlistId?.takeIf { it.isNotEmpty() }
+                        ?: item?.browseId?.takeIf { it.isNotEmpty() }
+                        ?: item?.title
+                        ?: "null_$idx"
+                val count = seen[base] ?: 0
+                seen[base] = count + 1
+                if (count == 0) base else "$base#$count"
+            }
+        }
+
     Column {
         HomeSectionHeader(data = data, navController = navController, onPlayAll = { homeViewModel.playAll(data) })
         LazyRow(
@@ -168,7 +185,11 @@ fun HomeItem(
             state = lazyListState,
             flingBehavior = snapperFlingBehavior,
         ) {
-            items(data.contents) { temp ->
+            itemsIndexed(
+                items = data.contents,
+                key = { index, _ -> rowKeys[index] },
+                contentType = { _, temp -> temp?.homeCardContentType() ?: "empty" },
+            ) { _, temp ->
                 if (temp != null) {
                     HomeContentCard(
                         temp = temp,
@@ -195,6 +216,17 @@ fun HomeItem(
     }
 }
 
+private fun Content.homeCardContentType(): String {
+    val pid = playlistId
+    val bid = browseId
+    return when {
+        !pid.isNullOrEmpty() && videoId.isNullOrEmpty() -> if (pid.startsWith("UC")) "artist" else "playlist"
+        !bid.isNullOrEmpty() && videoId.isNullOrEmpty() -> if (bid.startsWith("UC")) "artist" else "playlist"
+        thumbnails.firstOrNull()?.width != thumbnails.firstOrNull()?.height -> "video"
+        else -> "song"
+    }
+}
+
 /**
  * A Home shelf's header: the optional avatar, strapline and title, plus the one button YouTube
  * sends with the shelf — "More" (a browse page) or "Play all" (a watch endpoint). Every shelf
@@ -208,6 +240,21 @@ fun HomeSectionHeader(
 ) {
     val channelId = data.channelId
     val moreEndpoint = data.moreEndpoint
+    val platformContext = LocalPlatformContext.current
+    val headerThumbUrl = data.thumbnail?.lastOrNull()?.url
+    val headerImageRequest =
+        remember(platformContext, headerThumbUrl) {
+            headerThumbUrl?.let { url ->
+                ImageRequest
+                    .Builder(platformContext)
+                    .data(url)
+                    .size(256, 256)
+                    .diskCachePolicy(CachePolicy.ENABLED)
+                    .diskCacheKey(url)
+                    .crossfade(150)
+                    .build()
+            }
+        }
     Row(
         modifier =
             if (channelId != null) {
@@ -233,19 +280,11 @@ fun HomeSectionHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AnimatedVisibility(
-            visible = (data.thumbnail?.lastOrNull() != null),
+            visible = (headerImageRequest != null),
             modifier = Modifier.align(Alignment.CenterVertically),
         ) {
             AsyncImage(
-                model =
-                    ImageRequest
-                        .Builder(LocalPlatformContext.current)
-                        .data(data.thumbnail?.lastOrNull()?.url)
-                        .size(256, 256)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .diskCacheKey(data.thumbnail?.lastOrNull()?.url)
-                        .crossfade(150)
-                        .build(),
+                model = headerImageRequest,
                 contentDescription = "",
                 placeholder = rememberHolderPainter(),
                 error = rememberHolderPainter(),
@@ -403,6 +442,7 @@ fun HomeContentCard(
  * which have nothing to play, get no button.
  */
 private fun Content.hoverPlay(viewModel: BaseViewModel): (() -> Unit)? {
+    if (compactCards) return null
     if (!videoId.isNullOrEmpty()) return { playRadio(viewModel) }
     val endpoint =
         playEndpoint
@@ -416,6 +456,10 @@ private fun Content.hoverPlay(viewModel: BaseViewModel): (() -> Unit)? {
 private val compactCards = getPlatform() == Platform.Android
 private val cardSidePadding = if (compactCards) 8.dp else 10.dp
 
+private var cachedFloorDensity: Float = -1f
+private var cachedFloorFontScale: Float = -1f
+private var cachedFloorValue: Dp = 66.dp
+
 /**
  * The tallest text block under a Home card's artwork — HomeItemSong's: 8dp, two title lines, and the
  * subtitle row (its line plus 6dp, or the 20dp explicit badge) — measured in this device's own text.
@@ -424,15 +468,22 @@ private val cardSidePadding = if (compactCards) 8.dp else 10.dp
  */
 @Composable
 private fun cardTextBlockFloor(): Dp {
-    val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
+    if (cachedFloorDensity == density.density && cachedFloorFontScale == density.fontScale) {
+        return cachedFloorValue
+    }
+    val measurer = rememberTextMeasurer()
     val title = typo().titleSmall
     val subtitle = typo().bodySmall
     return remember(measurer, density, title, subtitle) {
         with(density) {
             val titleLines = measurer.measure("A\nA", title).size.height.toDp()
             val subtitleRow = maxOf(measurer.measure("A", subtitle).size.height.toDp() + 6.dp, 20.dp)
-            8.dp + titleLines + subtitleRow
+            (8.dp + titleLines + subtitleRow).also {
+                cachedFloorDensity = density.density
+                cachedFloorFontScale = density.fontScale
+                cachedFloorValue = it
+            }
         }
     }
 }
@@ -445,10 +496,11 @@ private fun cardTextBlockFloor(): Dp {
  */
 @Composable
 internal fun rememberCardHover(enabled: Boolean): Pair<Modifier, Boolean> {
+    if (!enabled || compactCards) return Modifier to false
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     var focused by remember { mutableStateOf(false) }
-    val active = enabled && (hovered || focused)
+    val active = hovered || focused
     val tint by animateColorAsState(
         targetValue = if (active) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f) else Color.Transparent,
         label = "cardHoverTint",
@@ -467,11 +519,13 @@ internal fun rememberCardHover(enabled: Boolean): Pair<Modifier, Boolean> {
  */
 @Composable
 internal fun Modifier.hoverZoom(active: Boolean): Modifier {
+    if (compactCards) return this
     val scale by animateFloatAsState(
         targetValue = if (active) 1.06f else 1f,
         animationSpec = tween(200),
         label = "hoverZoom",
     )
+    if (scale == 1f) return this
     return graphicsLayer {
         scaleX = scale
         scaleY = scale
@@ -484,11 +538,13 @@ internal fun BoxScope.HoverPlayButton(
     visible: Boolean,
     onClick: () -> Unit,
 ) {
+    if (compactCards) return
     val progress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec = tween(200),
         label = "hoverPlay",
     )
+    if (progress == 0f) return
     Box(
         Modifier
             .align(Alignment.BottomEnd)
@@ -629,17 +685,21 @@ fun HomeItemContentPlaylist(
                     is MonthlyRecapItem -> null
                     else -> null
                 }
+            val platformContext = LocalPlatformContext.current
+            val imageRequest =
+                remember(platformContext, thumb) {
+                    ImageRequest
+                        .Builder(platformContext)
+                        .data(thumb)
+                        .size(640, 640)
+                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .diskCacheKey(thumb)
+                        .crossfade(150)
+                        .build()
+                }
             Box {
                 AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(LocalPlatformContext.current)
-                            .data(thumb)
-                            .size(640, 640)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(thumb)
-                            .crossfade(150)
-                            .build(),
+                    model = imageRequest,
                     placeholder =
                         when (data) {
                             is LocalPlaylistEntity -> {
@@ -866,16 +926,21 @@ fun QuickPicksItem(
                     // 44dp artwork plus this padding is the grid's cell: 64dp, or 56dp on Android.
                     .padding(horizontal = 10.dp, vertical = if (compactCards) 6.dp else 10.dp),
         ) {
-            AsyncImage(
-                model =
+            val platformContext = LocalPlatformContext.current
+            val thumbUrl = data.thumbnails.lastOrNull()?.url
+            val imageRequest =
+                remember(platformContext, thumbUrl) {
                     ImageRequest
-                        .Builder(LocalPlatformContext.current)
-                        .data(data.thumbnails.lastOrNull()?.url)
+                        .Builder(platformContext)
+                        .data(thumbUrl)
                         .size(256, 256)
                         .crossfade(150)
-                        .diskCacheKey(data.thumbnails.lastOrNull()?.url)
+                        .diskCacheKey(thumbUrl)
                         .diskCachePolicy(CachePolicy.ENABLED)
-                        .build(),
+                        .build()
+                }
+            AsyncImage(
+                model = imageRequest,
                 placeholder = rememberHolderPainter(),
                 contentDescription = stringResource(Res.string.description),
                 contentScale = ContentScale.Crop,
@@ -916,49 +981,44 @@ fun QuickPicksItem(
                                 velocity = 25.dp,
                             ),
                 )
-                val subtitleRowState = rememberLazyListState()
-                LazyRow(
-                    modifier = Modifier.mouseDragScroll(subtitleRowState),
-                    state = subtitleRowState,
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    item {
-                        androidx.compose.animation.AnimatedVisibility(visible = data.isExplicit == true) {
-                            ExplicitBadge(
-                                modifier =
-                                    Modifier
-                                        .size(20.dp)
-                                        .padding(end = 4.dp)
-                                        .weight(1f),
-                            )
-                        }
-                    }
-                    if (data.isLive) {
-                        item { LiveBadge(modifier = Modifier.padding(end = 6.dp)) }
-                    }
-                    item {
-                        Text(
-                            text = data.artists.toListName().connectArtists(),
-                            style = typo().bodySmall,
-                            minLines = 1,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                    if (data.isExplicit == true) {
+                        ExplicitBadge(
                             modifier =
                                 Modifier
-                                    .fillMaxWidth()
-                                    .wrapContentHeight(align = Alignment.CenterVertically)
-                                    .basicMarquee(
-                                        initialDelayMillis = 2000,
-                                        repeatDelayMillis = 2000,
-                                        velocity = 25.dp,
-                                    ),
+                                    .size(20.dp)
+                                    .padding(end = 4.dp),
                         )
                     }
+                    if (data.isLive) {
+                        LiveBadge(modifier = Modifier.padding(end = 6.dp))
+                    }
+                    Text(
+                        text = data.artists.toListName().connectArtists(),
+                        style = typo().bodySmall,
+                        minLines = 1,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .wrapContentHeight(align = Alignment.CenterVertically)
+                                .basicMarquee(
+                                    initialDelayMillis = 2000,
+                                    repeatDelayMillis = 2000,
+                                    velocity = 25.dp,
+                                ),
+                    )
                 }
             }
         }
     }
 }
+
+private val ThumbUpgradeRegex = Regex("([wh])120")
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -973,6 +1033,7 @@ fun HomeItemSong(
 ) {
     val textWidth = if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier.width(160.dp)
     val (hoverModifier, hovered) = rememberCardHover(enabled = onPlay != null)
+    val platformContext = LocalPlatformContext.current
     Box(
         modifier =
             Modifier
@@ -991,25 +1052,25 @@ fun HomeItemSong(
                     .padding(start = cardSidePadding, top = 10.dp, end = cardSidePadding, bottom = 6.dp)
                     .heightIn(min = if (compactCards) 160.dp + cardTextBlockFloor() else 230.dp),
         ) {
-            val thumb =
-                data.thumbnails.lastOrNull()?.url?.let {
-                    if (it.contains("w120")) {
-                        Regex("([wh])120").replace(it, "$1544")
-                    } else {
-                        it
-                    }
+            val rawThumb = data.thumbnails.lastOrNull()?.url
+            val imageRequest =
+                remember(platformContext, rawThumb) {
+                    val thumb =
+                        rawThumb?.let {
+                            if (it.contains("w120")) ThumbUpgradeRegex.replace(it, "$1544") else it
+                        }
+                    ImageRequest
+                        .Builder(platformContext)
+                        .data(thumb)
+                        .size(640, 640)
+                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .diskCacheKey(thumb)
+                        .crossfade(150)
+                        .build()
                 }
             Box(Modifier.align(Alignment.CenterHorizontally)) {
                 AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(LocalPlatformContext.current)
-                            .data(thumb)
-                            .size(640, 640)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(thumb)
-                            .crossfade(150)
-                            .build(),
+                    model = imageRequest,
                     placeholder = rememberHolderPainter(),
                     error = rememberHolderPainter(),
                     contentDescription = null,
@@ -1104,17 +1165,21 @@ fun HomeItemVideo(
                     .heightIn(min = if (compactCards) 160.dp + cardTextBlockFloor() else 230.dp),
         ) {
             val thumb = data.thumbnails.lastOrNull()?.url
+            val platformContext = LocalPlatformContext.current
+            val imageRequest =
+                remember(platformContext, thumb) {
+                    ImageRequest
+                        .Builder(platformContext)
+                        .data(thumb)
+                        .size(640, 640)
+                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .diskCacheKey(thumb)
+                        .crossfade(150)
+                        .build()
+                }
             Box(Modifier.align(Alignment.CenterHorizontally)) {
                 AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(LocalPlatformContext.current)
-                            .data(thumb)
-                            .size(640, 640)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(thumb)
-                            .crossfade(150)
-                            .build(),
+                    model = imageRequest,
                     placeholder = rememberHolderPainter(),
                     error = rememberHolderPainter(),
                     contentDescription = null,
@@ -1207,6 +1272,7 @@ fun HomeItemArtist(
 ) {
     val titleColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val textWidth = if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier.width(160.dp)
+    val platformContext = LocalPlatformContext.current
     Box(
         Modifier
             .fillMaxSize()
@@ -1223,16 +1289,19 @@ fun HomeItemArtist(
                     .heightIn(min = if (compactCards) 160.dp + cardTextBlockFloor() else 230.dp),
         ) {
             val thumb = data.thumbnails.lastOrNull()?.url
-            AsyncImage(
-                model =
+            val imageRequest =
+                remember(platformContext, thumb) {
                     ImageRequest
-                        .Builder(LocalPlatformContext.current)
+                        .Builder(platformContext)
                         .data(thumb)
                         .size(640, 640)
                         .diskCachePolicy(CachePolicy.ENABLED)
                         .diskCacheKey(thumb)
                         .crossfade(150)
-                        .build(),
+                        .build()
+                }
+            AsyncImage(
+                model = imageRequest,
                 placeholder = rememberHolderPainter(),
                 error = rememberHolderPainter(),
                 contentDescription = null,

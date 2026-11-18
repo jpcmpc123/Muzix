@@ -37,6 +37,10 @@ compose.resources {
     generateResClass = always
 }
 
+composeCompiler {
+    stabilityConfigurationFiles.add(layout.projectDirectory.file("compose_stability.conf"))
+}
+
 kotlin {
     compilerOptions {
         freeCompilerArgs.add("-Xwhen-guards")

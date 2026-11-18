@@ -57,6 +57,7 @@ import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownTypography
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
+import com.maxrave.simpmusic.extension.glassHazeSource
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import org.jetbrains.compose.resources.painterResource
@@ -78,7 +79,7 @@ fun CreditScreen(
                 .padding(paddingValues)
                 .padding(top = 64.dp)
                 .verticalScroll(scrollState)
-                .hazeSource(state = hazeState),
+                .glassHazeSource(hazeState),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(modifier = Modifier.height(30.dp))

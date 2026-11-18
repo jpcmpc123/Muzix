@@ -317,15 +317,15 @@ class SharedViewModel(
                             // every new segment — not a new length, so it must not re-run what a new
                             // length triggers (this fired every few seconds for as long as one played).
                             val sameLiveStream = old.first.isLive && new.first.isLive
-                            (old.first.total.toString() + old.second.songEntity?.videoId).hashCode() ==
-                                (new.first.total.toString() + new.second.songEntity?.videoId).hashCode() ||
-                                (sameLiveStream && old.second.songEntity?.videoId == new.second.songEntity?.videoId)
+                            val sameVideo = old.second.songEntity?.videoId == new.second.songEntity?.videoId
+                            (sameVideo && old.first.total == new.first.total) ||
+                                (sameLiveStream && sameVideo)
                         }.collectLatest {
                             val nowPlaying = it.second
                             val timeline = it.first
                             // Lyrics and canvas both key off the track's length, which a live stream has none of.
                             if (timeline.isLive) return@collectLatest
-                            log("Timeline job ${(it.first.total.toString() + it.second.songEntity?.videoId).hashCode()}")
+                            log("Timeline job ${timeline.total} ${nowPlaying.songEntity?.videoId}")
                             if (timeline.total > 0 && nowPlaying.songEntity != null) {
                                 if (nowPlaying.mediaItem.isSong() && nowPlayingScreenData.value.canvasData == null) {
                                     Logger.w(tag, "Duration is ${timeline.total}")
@@ -376,7 +376,7 @@ class SharedViewModel(
 //            controllerStateJob.join()
         }
 
-        runBlocking {
+        viewModelScope.launch {
             dataStoreManager.getString("miniplayer_guide").first().let {
                 isFirstMiniplayer = it != STATUS_DONE
             }
@@ -688,8 +688,8 @@ class SharedViewModel(
         duration: Int,
     ) {
         Logger.w(tag, "Start getCanvas: $videoId $duration")
-//        canvasJob?.cancel()
-        viewModelScope.launch {
+        canvasJob?.cancel()
+        canvasJob = viewModelScope.launch {
             // Both sources fill the same slot, so they are tried in order rather than raced:
             // animated artwork first, and a Spotify canvas only if that found nothing AND the user
             // has that switch on too. Neither switch touches the other — a track with no animated

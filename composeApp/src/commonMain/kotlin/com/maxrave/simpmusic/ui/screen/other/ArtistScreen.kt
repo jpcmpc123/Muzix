@@ -152,6 +152,7 @@ import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
+import com.maxrave.simpmusic.extension.glassHazeSource
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.flow.flowOf
@@ -310,7 +311,7 @@ fun ArtistScreen(
                             Modifier
                                 .fillMaxWidth()
                                 .background(mutedPaletteBg)
-                                .hazeSource(hazeState),
+                                .glassHazeSource(hazeState),
                         state = lazyState,
                     ) {
                         item(contentType = "header") {

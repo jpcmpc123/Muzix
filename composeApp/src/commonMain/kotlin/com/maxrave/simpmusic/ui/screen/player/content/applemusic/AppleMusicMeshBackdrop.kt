@@ -125,6 +125,11 @@ internal fun AppleMusicMeshBackdrop(
         incoming = null
     }
 
+    val scrimBrush =
+        remember {
+            smoothScrimBrush(from = Color.Black.copy(alpha = 0.06f), to = Color.Black.copy(alpha = 0.30f))
+        }
+
     Canvas(
         modifier =
             modifier
@@ -143,7 +148,7 @@ internal fun AppleMusicMeshBackdrop(
         incoming?.let { drawMesh(it, seamY, topHoldY, alpha = fade.value) }
         // Just enough to keep white text readable over a bright sleeve. The colours are the sleeve's
         // own, so a sleeve that ends dark should leave a dark page, not a greyed one.
-        drawRect(brush = smoothScrimBrush(from = Color.Black.copy(alpha = 0.06f), to = Color.Black.copy(alpha = 0.30f)))
+        drawRect(brush = scrimBrush)
     }
 }
 

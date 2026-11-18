@@ -98,7 +98,9 @@ import com.maxrave.simpmusic.viewModel.TasteUiState
 import com.maxrave.simpmusic.viewModel.TasteViewModel
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
+import com.maxrave.simpmusic.extension.glassHazeSource
 import dev.chrisbanes.haze.hazeSource
+import kotlinx.coroutines.flow.distinctUntilChanged
 import dev.chrisbanes.haze.rememberHazeState
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -241,22 +243,17 @@ fun LibraryScreen(
     // the row its sibling (nesting the row inside the source is the RuntimeShader feedback loop).
     val chipBackdrop = rememberBackdrop(MaterialTheme.colorScheme.background)
     Crossfade(
-        modifier = Modifier.then(if (LocalLiquidGlassEnabled.current) Modifier.layerBackdrop(chipBackdrop) else Modifier).hazeSource(hazeState),
+        modifier = Modifier.then(if (LocalLiquidGlassEnabled.current) Modifier.layerBackdrop(chipBackdrop) else Modifier).glassHazeSource(hazeState),
         targetState = currentFilter,
     ) { filter ->
         when (filter) {
             LibraryChipType.YOUR_LIBRARY -> {
                 val state = rememberLazyListState()
-                val isScrollingUp by state.isScrollingUp()
+                val isScrollingUpState = state.isScrollingUp()
                 LaunchedEffect(state) {
-                    snapshotFlow { state.firstVisibleItemIndex }
-                        .collect {
-                            if (it <= 1) {
-                                onScrolling.invoke(true)
-                            } else {
-                                onScrolling.invoke(isScrollingUp)
-                            }
-                        }
+                    snapshotFlow { state.firstVisibleItemIndex <= 1 || isScrollingUpState.value }
+                        .distinctUntilChanged()
+                        .collect { onScrolling.invoke(it) }
                 }
                 // Desktop windows run wide; this tab keeps to the floating capsule player's width
                 // so its cards line up with the capsule instead of stretching edge to edge. Done

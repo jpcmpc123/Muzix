@@ -16,10 +16,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import kotlin.coroutines.coroutineContext
 
 /**
  * HTTP(S) images use cache for 24 hours, then try the network with stale-cache fallback.
@@ -66,9 +68,15 @@ class NetworkFirstInterceptor(
                 loadWithTtl(chain, request, diskKey)
             }
         } finally {
-            withContext(NonCancellable) {
+            if (coroutineContext.isActive) {
                 registryMutex.withLock {
                     if (--requestLock.users == 0) requestLocks.remove(diskKey)
+                }
+            } else {
+                withContext(NonCancellable) {
+                    registryMutex.withLock {
+                        if (--requestLock.users == 0) requestLocks.remove(diskKey)
+                    }
                 }
             }
         }
@@ -95,10 +103,12 @@ class NetworkFirstInterceptor(
         val cachedResult = chain.withRequest(cacheRequest).proceed()
         if (cachedResult is SuccessResult) {
             val cachedValue = cachedResult.memoryCacheKey?.let { loader.memoryCache?.get(it) }
+            val memoryCachedAt =
+                cachedValue?.takeIf { it.image === cachedResult.image }?.extras?.get(CACHED_AT_KEY) as? Long
             val cachedAtMillis =
-                (cachedValue?.takeIf { it.image === cachedResult.image }?.extras?.get(CACHED_AT_KEY) as? Long)
+                memoryCachedAt
                     ?: readCachedAt(diskCache, cachedResult.diskCacheKey ?: diskKey)
-            if (cachedAtMillis != null) {
+            if (cachedAtMillis != null && memoryCachedAt != cachedAtMillis) {
                 // Warming RAM from disk must carry the original age, not start a new TTL.
                 updateMemoryEntry(loader.memoryCache, cachedResult, cachedAtMillis = cachedAtMillis)
             }

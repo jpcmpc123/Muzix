@@ -15,9 +15,11 @@ import com.maxrave.logger.LogLevel
 import com.maxrave.logger.Logger
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import multiplatform.network.cmptoast.ToastDuration
@@ -34,13 +36,29 @@ abstract class BaseViewModel :
     ViewModel(),
     KoinComponent {
     protected val mediaPlayerHandler: MediaPlayerHandler by inject<MediaPlayerHandler>()
-    private val _nowPlayingVideoId: MutableStateFlow<String> = MutableStateFlow("")
 
     /**
      * Get now playing video id
      * If empty, no video is playing
      */
-    val nowPlayingVideoId: StateFlow<String> get() = _nowPlayingVideoId
+    val nowPlayingVideoId: StateFlow<String> by lazy {
+        combine(mediaPlayerHandler.nowPlayingState, mediaPlayerHandler.controlState) { nowPlayingState, controlState ->
+            if (controlState.isPlaying) {
+                nowPlayingState.songEntity?.videoId.orEmpty()
+            } else {
+                ""
+            }
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000L),
+            initialValue =
+                if (mediaPlayerHandler.controlState.value.isPlaying) {
+                    mediaPlayerHandler.nowPlayingState.value.songEntity?.videoId.orEmpty()
+                } else {
+                    ""
+                },
+        )
+    }
 
     /**
      * Tag for logging
@@ -71,8 +89,8 @@ abstract class BaseViewModel :
         log("ViewModel cleared", LogLevel.WARN)
     }
 
-    init {
-        getNowPlayingVideoId()
+    internal fun clearViewModelScope() {
+        onCleared()
     }
 
     fun makeToast(message: String?) {
@@ -90,7 +108,7 @@ abstract class BaseViewModel :
         }
 
     // Loading dialog
-    private val _showLoadingDialog: MutableStateFlow<Pair<Boolean, String>> = MutableStateFlow(false to getString(Res.string.loading))
+    private val _showLoadingDialog: MutableStateFlow<Pair<Boolean, String>> = MutableStateFlow(false to "")
     val showLoadingDialog: StateFlow<Pair<Boolean, String>> get() = _showLoadingDialog
 
     fun showLoadingDialog(message: String? = null) {
@@ -98,21 +116,7 @@ abstract class BaseViewModel :
     }
 
     fun hideLoadingDialog() {
-        _showLoadingDialog.value = false to getString(Res.string.loading)
-    }
-
-    private fun getNowPlayingVideoId() {
-        viewModelScope.launch {
-            combine(mediaPlayerHandler.nowPlayingState, mediaPlayerHandler.controlState) { nowPlayingState, controlState ->
-                Pair(nowPlayingState, controlState)
-            }.collect { (nowPlayingState, controlState) ->
-                if (controlState.isPlaying) {
-                    _nowPlayingVideoId.value = nowPlayingState.songEntity?.videoId ?: ""
-                } else {
-                    _nowPlayingVideoId.value = ""
-                }
-            }
-        }
+        _showLoadingDialog.value = false to ""
     }
 
     /**

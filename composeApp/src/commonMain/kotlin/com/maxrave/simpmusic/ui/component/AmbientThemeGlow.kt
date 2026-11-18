@@ -106,7 +106,7 @@ fun AmbientThemeGlow(
  */
 @Composable
 fun rememberNowPlayingGlowTint(thumbnailUrl: String?): Color? {
-    val networkLoader = rememberNetworkLoader(HttpClient(CIO))
+    val networkLoader = com.maxrave.simpmusic.utils.rememberSharedPaletteNetworkLoader()
     val dominantColorState =
         rememberDominantColorState(
             defaultColor = Color.Unspecified,

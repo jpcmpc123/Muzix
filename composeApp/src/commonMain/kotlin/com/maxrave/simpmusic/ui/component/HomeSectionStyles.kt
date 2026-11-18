@@ -85,6 +85,16 @@ fun HomeDiscoverSection(
     // The carousel's own default, named so a mouse drag released on Desktop advances the same one card.
     val flingBehavior = CarouselDefaults.singleAdvanceFlingBehavior(state = state)
     val scope = rememberCoroutineScope()
+    val platformContext = LocalPlatformContext.current
+    val scrimColor = MaterialTheme.colorScheme.scrim
+    val discoverScrimBrush =
+        remember(scrimColor) {
+            smoothScrimBrush(
+                from = scrimColor.copy(alpha = 0f),
+                to = scrimColor.copy(alpha = 0.78f),
+                startFraction = 0.45f,
+            )
+        }
     Column {
         HomeSectionHeader(data = data, navController = navController, onPlayAll = { homeViewModel.playAll(data) })
         BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -111,6 +121,18 @@ fun HomeDiscoverSection(
                     if (info.isHero()) song.playRadio(homeViewModel) else scope.launch { state.animateScrollToItem(index) }
                 }
                 val (hoverModifier, hovered) = rememberCardHover(enabled = true)
+                val thumbUrl = song.thumbnails.lastOrNull()?.url
+                val imageRequest =
+                    remember(platformContext, thumbUrl) {
+                        ImageRequest
+                            .Builder(platformContext)
+                            .data(thumbUrl)
+                            .size(1080, 1080)
+                            .diskCachePolicy(CachePolicy.ENABLED)
+                            .diskCacheKey(thumbUrl)
+                            .crossfade(150)
+                            .build()
+                    }
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -122,14 +144,7 @@ fun HomeDiscoverSection(
                         ),
                 ) {
                     AsyncImage(
-                        model =
-                            ImageRequest
-                                .Builder(LocalPlatformContext.current)
-                                .data(song.thumbnails.lastOrNull()?.url)
-                                .diskCachePolicy(CachePolicy.ENABLED)
-                                .diskCacheKey(song.thumbnails.lastOrNull()?.url)
-                                .crossfade(550)
-                                .build(),
+                        model = imageRequest,
                         contentDescription = null,
                         placeholder = rememberHolderPainter(),
                         error = rememberHolderPainter(),
@@ -139,13 +154,7 @@ fun HomeDiscoverSection(
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .background(
-                                smoothScrimBrush(
-                                    from = MaterialTheme.colorScheme.scrim.copy(alpha = 0f),
-                                    to = MaterialTheme.colorScheme.scrim.copy(alpha = 0.78f),
-                                    startFraction = 0.45f,
-                                ),
-                            ),
+                            .background(discoverScrimBrush),
                     )
                     // The scrim is dark in either theme, so the text takes the app's force-dark styles.
                     // Both colours are named: force-dark typo() paints headlineMedium and bodyMedium in its

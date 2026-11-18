@@ -63,14 +63,11 @@
 -keep class com.maxrave.simpmusic.extension.AllExtKt$* { *; }
 -keep class com.maxrave.kotlinytmusicscraper.extension.MapExtKt$* { *; }
 
-## Removes all Logs as they cause perfomance issues in prod
-#-assumenosideeffects class android.util.Log {
-#    public static int w(...);
-#    public static int e(...);
-#    public static int i(...);
-#    public static int d(...);
-#    public static int v(...);
-#}
+## Strip debug/verbose Logcat calls in release while keeping Info/Warn/Error intact
+-assumenosideeffects class android.util.Log {
+    public static int d(...);
+    public static int v(...);
+}
 ## Rules for NewPipeExtractor
 -keep class org.schabi.newpipe.extractor.timeago.patterns.** { *; }
 -keep class dev.maxrave.pipepipe.extractor.timeago.patterns.** { *; }

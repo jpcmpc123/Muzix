@@ -3674,29 +3674,6 @@
             ]
         },
         {
-            "uniqueId": "com.charleskorn.kaml:kaml",
-            "artifactVersion": "0.79.0",
-            "name": "kaml",
-            "description": "YAML support for kotlinx.serialization",
-            "website": "https://github.com/charleskorn/kaml",
-            "developers": [
-                {
-                    "name": "Charles Korn"
-                }
-            ],
-            "scm": {
-                "connection": "scm:git:git://github.com/charleskorn/kaml.git",
-                "developerConnection": "scm:git:ssh://github.com:charleskorn/kaml.git",
-                "url": "https://github.com/charleskorn/kaml"
-            },
-            "licenses": [
-                "Apache-2.0"
-            ],
-            "funding": [
-                
-            ]
-        },
-        {
             "uniqueId": "com.eygraber:uri-kmp",
             "artifactVersion": "0.0.21",
             "name": "Uri KMP",
@@ -3836,7 +3813,7 @@
         },
         {
             "uniqueId": "com.github.maxrave-dev.PipePipeExtractor:PipePipeExtractor",
-            "artifactVersion": "27aac1e14e",
+            "artifactVersion": "bba8d84453",
             "name": "com.github.maxrave-dev.PipePipeExtractor:PipePipeExtractor",
             "description": "",
             "developers": [
@@ -3851,7 +3828,7 @@
         },
         {
             "uniqueId": "com.github.maxrave-dev.PipePipeExtractor:extractor",
-            "artifactVersion": "27aac1e14e",
+            "artifactVersion": "bba8d84453",
             "name": "com.github.maxrave-dev.PipePipeExtractor:extractor",
             "description": "",
             "developers": [
@@ -3866,7 +3843,7 @@
         },
         {
             "uniqueId": "com.github.maxrave-dev.PipePipeExtractor:timeago-parser",
-            "artifactVersion": "27aac1e14e",
+            "artifactVersion": "bba8d84453",
             "name": "com.github.maxrave-dev.PipePipeExtractor:timeago-parser",
             "description": "",
             "developers": [
@@ -3881,7 +3858,7 @@
         },
         {
             "uniqueId": "com.github.maxrave-dev:BravePipeExtractor",
-            "artifactVersion": "105aad96c7",
+            "artifactVersion": "991b158fee",
             "name": "NewPipe Extractor",
             "description": "A library for extracting data from streaming websites, used in NewPipe",
             "website": "https://github.com/TeamNewPipe/NewPipeExtractor",
@@ -3904,7 +3881,7 @@
         },
         {
             "uniqueId": "com.github.maxrave-dev:PipePipeExtractor",
-            "artifactVersion": "27aac1e14e",
+            "artifactVersion": "bba8d84453",
             "name": "com.github.maxrave-dev:PipePipeExtractor",
             "description": "",
             "developers": [
@@ -5827,6 +5804,32 @@
             ]
         },
         {
+            "uniqueId": "io.heapy.kotaml:kotaml",
+            "artifactVersion": "0.113.0",
+            "name": "kotaml",
+            "description": "YAML support for kotlinx.serialization",
+            "website": "https://github.com/Heapy/kotaml",
+            "developers": [
+                {
+                    "name": "Charles Korn"
+                },
+                {
+                    "name": "Ruslan Ibrahimau"
+                }
+            ],
+            "scm": {
+                "connection": "scm:git:git://github.com/Heapy/kotaml.git",
+                "developerConnection": "scm:git:ssh://github.com:Heapy/kotaml.git",
+                "url": "https://github.com/Heapy/kotaml"
+            },
+            "licenses": [
+                "Apache-2.0"
+            ],
+            "funding": [
+                
+            ]
+        },
+        {
             "uniqueId": "io.insert-koin:koin-android",
             "artifactVersion": "4.2.2",
             "name": "Koin",
@@ -6599,7 +6602,7 @@
         },
         {
             "uniqueId": "it.krzeminski:snakeyaml-engine-kmp",
-            "artifactVersion": "3.1.1",
+            "artifactVersion": "5.0.0",
             "name": "SnakeYAML Engine KMP",
             "description": "SnakeYAML Engine KMP is a YAML 1.2 processor for Kotlin Multiplatform",
             "website": "https://github.com/krzema12/snakeyaml-engine-kmp/",
@@ -7413,7 +7416,7 @@
             ]
         },
         {
-            "uniqueId": "org.jetbrains.compose.desktop:desktop-jvm-macos-arm64",
+            "uniqueId": "org.jetbrains.compose.desktop:desktop-jvm-linux-x64",
             "artifactVersion": "1.12.2",
             "name": "Compose Desktop",
             "description": "Compose Desktop",
@@ -8588,9 +8591,9 @@
             ]
         },
         {
-            "uniqueId": "org.jetbrains.skiko:skiko-awt-runtime-macos-arm64",
+            "uniqueId": "org.jetbrains.skiko:skiko-awt-runtime-linux-x64",
             "artifactVersion": "0.150.2",
-            "name": "Skiko JVM Runtime for MacOS Arm64",
+            "name": "Skiko JVM Runtime for Linux X64",
             "description": "Kotlin Skia bindings",
             "website": "https://www.github.com/JetBrains/skiko",
             "developers": [
@@ -8660,7 +8663,7 @@
         },
         {
             "uniqueId": "org.jsoup:jsoup",
-            "artifactVersion": "1.23.2",
+            "artifactVersion": "1.24.1",
             "name": "jsoup Java HTML Parser",
             "description": "jsoup is a Java library that simplifies working with real-world HTML and XML. It offers an easy-to-use API for URL fetching, data parsing, extraction, and manipulation using DOM API methods, CSS, and xpath selectors. jsoup implements the WHATWG HTML5 specification, and parses HTML to the same DOM as modern browsers.",
             "website": "https://jsoup.org/",

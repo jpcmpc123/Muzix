@@ -173,6 +173,8 @@ import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
 import com.maxrave.simpmusic.viewModel.UIEvent
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
+import com.maxrave.simpmusic.extension.glassHazeSource
+import com.maxrave.simpmusic.extension.tintedBarBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -447,7 +449,7 @@ fun LocalPlaylistScreen(
             Modifier
                 .fillMaxWidth()
                 .background(mutedPaletteBg)
-                .hazeSource(hazeState)
+                .glassHazeSource(hazeState)
                 .pointerInput(changingOrder) {
                     if (!changingOrder) return@pointerInput
                     val onDrag: (change: androidx.compose.ui.input.pointer.PointerInputChange, offset: Offset) -> Unit =
@@ -1458,7 +1460,7 @@ fun LocalPlaylistScreen(
             },
             onOpenActions = { showSelectionSheet = true },
             modifier =
-                Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
+                Modifier.tintedBarBlur(hazeState, mutedPaletteBg, 0.55f),
         )
     }
     if (showSelectionSheet) {
@@ -1631,7 +1633,7 @@ fun LocalPlaylistScreen(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
+                    .tintedBarBlur(hazeState, mutedPaletteBg, 0.55f),
             ) {
                 Row(
                     modifier =
@@ -1757,7 +1759,7 @@ fun LocalPlaylistScreen(
                     containerColor = Color.Transparent,
                 ),
             modifier =
-                Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
+                Modifier.tintedBarBlur(hazeState, mutedPaletteBg, 0.55f),
         )
     }
 }

@@ -1,0 +1,335 @@
+diff --git a/common/src/commonMain/kotlin/com/maxrave/logger/Logger.kt b/common/src/commonMain/kotlin/com/maxrave/logger/Logger.kt
+index 8b3c1c0..fc0d1b4 100644
+--- a/common/src/commonMain/kotlin/com/maxrave/logger/Logger.kt
++++ b/common/src/commonMain/kotlin/com/maxrave/logger/Logger.kt
+@@ -62,11 +62,15 @@ object Logger {
+         }
+     }
+ 
++    /** Whether [d] debug logs are emitted; disabled in release builds via AppIdentity.isDevBuild. */
++    @kotlin.concurrent.Volatile
++    var debugLoggingEnabled: Boolean = true
++
+     fun d(
+         tag: String,
+         message: String,
+     ) {
+-        if (isMuted(tag)) return
++        if (!debugLoggingEnabled || isMuted(tag)) return
+         logger.d(
+             tag = tag,
+             message = {
+diff --git a/data/src/androidMain/kotlin/com/maxrave/data/mediaservice/MediaServiceHandlerImpl.kt b/data/src/androidMain/kotlin/com/maxrave/data/mediaservice/MediaServiceHandlerImpl.kt
+index 296f454..c47321a 100644
+--- a/data/src/androidMain/kotlin/com/maxrave/data/mediaservice/MediaServiceHandlerImpl.kt
++++ b/data/src/androidMain/kotlin/com/maxrave/data/mediaservice/MediaServiceHandlerImpl.kt
+@@ -1103,7 +1103,7 @@ internal class MediaServiceHandlerImpl(
+                 val positionPersistIntervalMs = 5_000L
+                 // Named so the persist counter below cannot drift out of step with it, which is
+                 // what a second hardcoded copy of the number did.
+-                val tickIntervalMs = 50L
++                val tickIntervalMs = 100L
+                 var sinceLastPositionSaveMs = 0L
+                 while (true) {
+                     delay(tickIntervalMs)
+diff --git a/data/src/commonMain/kotlin/com/maxrave/data/di/DatabaseModule.kt b/data/src/commonMain/kotlin/com/maxrave/data/di/DatabaseModule.kt
+index 4024528..7c8927d 100644
+--- a/data/src/commonMain/kotlin/com/maxrave/data/di/DatabaseModule.kt
++++ b/data/src/commonMain/kotlin/com/maxrave/data/di/DatabaseModule.kt
+@@ -29,11 +29,11 @@ import org.simpmusic.autoeq.AutoEq
+ @OptIn(ExperimentalTime::class)
+ val databaseModule =
+     module {
+-        single(createdAtStart = true) {
++        single {
+             Converters()
+         }
+         // Database
+-        single(createdAtStart = true) {
++        single {
+             getDatabaseBuilder(
+                 get<Converters>()
+             )
+@@ -42,51 +42,51 @@ val databaseModule =
+                 .build()
+         }
+         // DatabaseDao
+-        single(createdAtStart = true) {
++        single {
+             get<MusicDatabase>().getDatabaseDao()
+         }
+         // Library sync (#2663): its own small preferences file, its DAO, and the recorder every
+         // write to a synced item goes through.
+-        single(createdAtStart = true) {
++        single {
+             get<MusicDatabase>().getSyncDao()
+         }
+-        single(createdAtStart = true) {
++        single {
+             SyncPrefs(createLibrarySyncDataStore())
+         }
+-        single(createdAtStart = true) {
++        single {
+             SyncChangeRecorder(get<SyncDao>(), get<SyncPrefs>())
+         }
+         // LocalDataSource
+-        single(createdAtStart = true) {
++        single {
+             LocalDataSource(get<DatabaseDao>(), get<MusicDatabase>(), get<SyncChangeRecorder>())
+         }
+         // AnalyticsDatasource
+-        single(createdAtStart = true) {
++        single {
+             AnalyticsDatasource(get<DatabaseDao>(), get<SyncChangeRecorder>())
+         }
+         // Datastore
+-        single(createdAtStart = true) {
++        single {
+             createDataStoreInstance()
+         }
+         // DatastoreManager
+-        single<DataStoreManager>(createdAtStart = true) {
++        single<DataStoreManager> {
+             DataStoreManagerImpl(get<DataStore<Preferences>>())
+         }
+ 
+         // Move YouTube from Singleton to Koin DI
+-        single(createdAtStart = true) {
++        single {
+             YouTube()
+         }
+ 
+-        single(createdAtStart = true) {
++        single {
+             Spotify()
+         }
+ 
+-        single(createdAtStart = true) {
++        single {
+             AiClient()
+         }
+ 
+-        single(createdAtStart = true) {
++        single {
+             SimpMusicLyricsClient()
+         }
+ 
+diff --git a/data/src/commonMain/kotlin/com/maxrave/data/di/loader/Loader.kt b/data/src/commonMain/kotlin/com/maxrave/data/di/loader/Loader.kt
+index 72cd9aa..e5837d3 100644
+--- a/data/src/commonMain/kotlin/com/maxrave/data/di/loader/Loader.kt
++++ b/data/src/commonMain/kotlin/com/maxrave/data/di/loader/Loader.kt
+@@ -9,6 +9,7 @@ import org.koin.core.context.loadKoinModules
+ import org.koin.dsl.module
+ 
+ fun loadAllModules(appIdentity: AppIdentity) {
++    com.maxrave.logger.Logger.debugLoggingEnabled = appIdentity.isDevBuild
+     loadKoinModules(
+         listOf(
+             module { single { appIdentity } },
+diff --git a/media/media3/src/main/java/com/maxrave/media3/di/Media3ServiceModule.kt b/media/media3/src/main/java/com/maxrave/media3/di/Media3ServiceModule.kt
+index 5abb112..7e8b780 100644
+--- a/media/media3/src/main/java/com/maxrave/media3/di/Media3ServiceModule.kt
++++ b/media/media3/src/main/java/com/maxrave/media3/di/Media3ServiceModule.kt
+@@ -583,37 +583,47 @@ private fun provideCacheDataSource(
+         ).setCacheWriteDataSinkFactory(null)
+         .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+ 
+-/** The network underneath every player source: OkHttp behind the user's proxy, with header logging. */
++private val sharedMediaOkHttpClient: OkHttpClient by lazy {
++    OkHttpClient
++        .Builder()
++        .connectTimeout(30.seconds)
++        .readTimeout(30.seconds)
++        .build()
++}
++
++/** The network underneath every player source: OkHttp behind the user's proxy, with header logging in debug builds. */
+ @UnstableApi
+ private fun provideHttpDataSourceFactory(
+     context: Context,
+     proxy: Proxy?,
+-): DataSource.Factory =
+-    DefaultDataSource.Factory(
+-        context,
+-        OkHttpDataSource.Factory(
+-            OkHttpClient
+-                .Builder()
+-                .connectTimeout(30.seconds)
+-                .readTimeout(30.seconds)
+-                .proxy(
+-                    proxy,
+-                ).addInterceptor(
+-                    HttpLoggingInterceptor()
+-                        .apply {
++): DataSource.Factory {
++    val isDebuggable = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
++    val client =
++        sharedMediaOkHttpClient
++            .newBuilder()
++            .proxy(proxy)
++            .apply {
++                if (isDebuggable) {
++                    addInterceptor(
++                        HttpLoggingInterceptor().apply {
+                             level = HttpLoggingInterceptor.Level.HEADERS
+                         },
+-                ).build(),
+-        ),
++                    )
++                }
++            }.build()
++    return DefaultDataSource.Factory(
++        context,
++        OkHttpDataSource.Factory(client),
+     )
++}
+ 
+ @UnstableApi
+ private fun provideLoadControl(): LoadControl =
+     DefaultLoadControl
+         .Builder()
+         .setBufferDurationsMs(
+-            DEFAULT_MIN_BUFFER_MS * 4,
+-            DEFAULT_MAX_BUFFER_MS * 4,
++            DEFAULT_MIN_BUFFER_MS,
++            DEFAULT_MAX_BUFFER_MS,
+             // bufferForPlaybackMs=
+             0,
+             // bufferForPlaybackAfterRebufferMs=
+diff --git a/media/media3/src/main/java/com/maxrave/media3/exoplayer/CrossfadeExoPlayerAdapter.kt b/media/media3/src/main/java/com/maxrave/media3/exoplayer/CrossfadeExoPlayerAdapter.kt
+index fc4c729..23ebb19 100644
+--- a/media/media3/src/main/java/com/maxrave/media3/exoplayer/CrossfadeExoPlayerAdapter.kt
++++ b/media/media3/src/main/java/com/maxrave/media3/exoplayer/CrossfadeExoPlayerAdapter.kt
+@@ -361,7 +361,7 @@ internal class CrossfadeExoPlayerAdapter(
+         }
+     }
+     private var precacheEnabled = true
+-    private val maxPrecacheCount = 2
++    private val maxPrecacheCount = 1
+     private var precacheJob: Job? = null
+ 
+     // ========== Crossfade System ==========
+@@ -657,8 +657,8 @@ internal class CrossfadeExoPlayerAdapter(
+                     DefaultLoadControl
+                         .Builder()
+                         .setBufferDurationsMs(
+-                            DefaultLoadControl.DEFAULT_MIN_BUFFER_MS * 4,
+-                            DefaultLoadControl.DEFAULT_MAX_BUFFER_MS * 4,
++                            DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
++                            DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
+                             0,
+                             0,
+                         ).build(),
+@@ -3266,7 +3266,8 @@ internal class CrossfadeExoPlayerAdapter(
+                         // Ignore query errors - don't log to avoid spam
+                     }
+ 
+-                    delay(50) // Update every 50ms
++                    val activePlayback = currentPlayer?.isPlaying == true || isCrossfading
++                    delay(if (activePlayback) 100L else 250L)
+                 }
+             }
+     }
+diff --git a/media/media3/src/main/java/com/maxrave/media3/utils/CoilBitmapLoader.kt b/media/media3/src/main/java/com/maxrave/media3/utils/CoilBitmapLoader.kt
+index 4858d5d..3386ec6 100644
+--- a/media/media3/src/main/java/com/maxrave/media3/utils/CoilBitmapLoader.kt
++++ b/media/media3/src/main/java/com/maxrave/media3/utils/CoilBitmapLoader.kt
+@@ -37,13 +37,16 @@ class CoilBitmapLoader(
+ 
+     override fun loadBitmap(uri: Uri): ListenableFuture<Bitmap> =
+         coroutineScope.future(Dispatchers.IO) {
++            val limit = runCatching { platformArtworkLimitPx(context) }.getOrDefault(0)
+             val result =
+                 (
+                     context.imageLoader.execute(
+                         ImageRequest
+                             .Builder(context)
+                             .data(uri)
+-                            .allowHardware(false)
++                            .apply {
++                                if (limit > 0) size(limit)
++                            }.allowHardware(false)
+                             .build(),
+                     )
+                 )
+diff --git a/service/kizzy/src/commonMain/kotlin/com/my/kizzy/remote/ApiService.kt b/service/kizzy/src/commonMain/kotlin/com/my/kizzy/remote/ApiService.kt
+index acee30c..0317965 100644
+--- a/service/kizzy/src/commonMain/kotlin/com/my/kizzy/remote/ApiService.kt
++++ b/service/kizzy/src/commonMain/kotlin/com/my/kizzy/remote/ApiService.kt
+@@ -40,6 +40,7 @@ class ApiService {
+             })
+         }
+         install(CurlLogger) {
++            enabled = { Logger.debugLoggingEnabled }
+             logger = { Logger.d("KizzyApi", it) }
+         }
+         install(HttpTimeout) {
+diff --git a/service/kotlinYtmusicScraper/src/commonMain/kotlin/com/maxrave/kotlinytmusicscraper/Ytmusic.kt b/service/kotlinYtmusicScraper/src/commonMain/kotlin/com/maxrave/kotlinytmusicscraper/Ytmusic.kt
+index 07965f8..3208a6d 100644
+--- a/service/kotlinYtmusicScraper/src/commonMain/kotlin/com/maxrave/kotlinytmusicscraper/Ytmusic.kt
++++ b/service/kotlinYtmusicScraper/src/commonMain/kotlin/com/maxrave/kotlinytmusicscraper/Ytmusic.kt
+@@ -171,6 +171,7 @@ class Ytmusic {
+         HttpClient(getEngine()) {
+             expectSuccess = true
+             install(CurlLogger) {
++                enabled = { Logger.debugLoggingEnabled }
+                 logger = { Logger.d(TAG, it) }
+             }
+             // Every rejected sign-in on this client lands in the app log in one place. Host and path
+diff --git a/service/ktorExt/src/commonMain/kotlin/com/maxrave/ktorext/curl/CurlLoggerPlugin.kt b/service/ktorExt/src/commonMain/kotlin/com/maxrave/ktorext/curl/CurlLoggerPlugin.kt
+index 256f17b..0909651 100644
+--- a/service/ktorExt/src/commonMain/kotlin/com/maxrave/ktorext/curl/CurlLoggerPlugin.kt
++++ b/service/ktorExt/src/commonMain/kotlin/com/maxrave/ktorext/curl/CurlLoggerPlugin.kt
+@@ -29,6 +29,11 @@ class CurlLoggerConfig {
+      */
+     var redactHeaders: Set<String> = emptySet()
+ 
++    /**
++     * When false, skips reading request bodies and building curl strings completely.
++     */
++    var enabled: () -> Boolean = { true }
++
+     /**
+      * When true, drops the `Accept-Encoding` request header and appends `--compressed`
+      * so the response is auto-decoded by curl instead of printing as compressed bytes.
+@@ -54,10 +59,12 @@ class CurlLoggerConfig {
+  */
+ val CurlLogger = createClientPlugin("CurlLogger", ::CurlLoggerConfig) {
+     val log = pluginConfig.logger
++    val isEnabled = pluginConfig.enabled
+     val redactHeaders = pluginConfig.redactHeaders.mapTo(mutableSetOf()) { it.lowercase() }
+     val handleCompression = pluginConfig.handleCompression
+ 
+     on(SendingRequest) { request, content ->
++        if (!isEnabled()) return@on
+         try {
+             log(buildCurlCommand(request, content, redactHeaders, handleCompression))
+         } catch (e: CancellationException) {
+diff --git a/service/lyricsService/src/commonMain/kotlin/org/simpmusic/lyrics/SimpMusicLyrics.kt b/service/lyricsService/src/commonMain/kotlin/org/simpmusic/lyrics/SimpMusicLyrics.kt
+index 7540612..aad3c93 100644
+--- a/service/lyricsService/src/commonMain/kotlin/org/simpmusic/lyrics/SimpMusicLyrics.kt
++++ b/service/lyricsService/src/commonMain/kotlin/org/simpmusic/lyrics/SimpMusicLyrics.kt
+@@ -48,6 +48,7 @@ class SimpMusicLyrics {
+             followRedirects = true
+             install(HttpCache)
+             install(CurlLogger) {
++                enabled = { Logger.debugLoggingEnabled }
+                 logger = { Logger.d("SimpMusicLyrics", it) }
+             }
+             install(HttpSend) {
+diff --git a/service/spotify/src/commonMain/kotlin/com/maxrave/spotify/SpotifyClient.kt b/service/spotify/src/commonMain/kotlin/com/maxrave/spotify/SpotifyClient.kt
+index c817510..651e885 100644
+--- a/service/spotify/src/commonMain/kotlin/com/maxrave/spotify/SpotifyClient.kt
++++ b/service/spotify/src/commonMain/kotlin/com/maxrave/spotify/SpotifyClient.kt
+@@ -72,9 +72,10 @@ class SpotifyClient {
+             install(HttpCache)
+             install(Logging) {
+                 logger = Logger.DEFAULT
+-                level = LogLevel.ALL
++                level = if (com.maxrave.logger.Logger.debugLoggingEnabled) LogLevel.ALL else LogLevel.NONE
+             }
+             install(CurlLogger) {
++                enabled = { com.maxrave.logger.Logger.debugLoggingEnabled }
+                 logger = { Logger.DEFAULT.log(it) }
+             }
+             install(HttpSend) {

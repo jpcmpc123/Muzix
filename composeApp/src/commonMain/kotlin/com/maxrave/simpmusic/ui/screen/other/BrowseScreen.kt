@@ -83,6 +83,8 @@ import com.maxrave.simpmusic.viewModel.BrowseUIState
 import com.maxrave.simpmusic.viewModel.BrowseViewModel
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
+import androidx.compose.animation.core.animateFloatAsState
+import com.maxrave.simpmusic.extension.glassHazeSource
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import io.ktor.client.HttpClient
@@ -140,8 +142,7 @@ fun BrowseScreen(
         }
     var topHeaderColor by remember { mutableStateOf(backgroundColor) }
     val animatedColor by animateColorAsState(topHeaderColor, tween(500))
-    val httpClient = remember { HttpClient(CIO) }
-    val networkLoader = rememberNetworkLoader(httpClient)
+    val networkLoader = com.maxrave.simpmusic.utils.rememberSharedPaletteNetworkLoader()
     val dominantColorState =
         rememberDominantColorState(
             defaultColor = backgroundColor,
@@ -177,11 +178,12 @@ fun BrowseScreen(
         )
     }
 
+    val bottomScrimBrush = remember(pageBackground) { artworkScrimBrush(pageBackground) }
     Box(Modifier.fillMaxSize()) {
         Box(
             Modifier
                 .fillMaxSize()
-                .hazeSource(hazeState),
+                .glassHazeSource(hazeState),
         ) {
             // Drawn before the list and scrolled away with it, as on Mix for you: the draw-phase
             // translation tracks the first row and parks once it has passed.
@@ -203,7 +205,7 @@ fun BrowseScreen(
                         .fillMaxWidth()
                         .height(180.dp)
                         .align(Alignment.BottomCenter)
-                        .background(artworkScrimBrush(pageBackground)),
+                        .background(bottomScrimBrush),
                 )
             }
             Crossfade(targetState = uiState) { state ->
@@ -296,57 +298,55 @@ fun BrowseScreen(
         }
         // Transparent while the list sits at pixel zero, frosted the moment it scrolls — Mix for
         // you's crossfade and frost recipe.
-        AnimatedContent(
-            targetState = isAtTop,
-            transitionSpec = {
-                fadeIn(tween(300)).togetherWith(fadeOut(tween(300)))
-            },
-        ) { atTop ->
-            Column(
-                Modifier.then(
-                    if (atTop) {
-                        Modifier.background(Color.Transparent)
-                    } else {
-                        Modifier.tintedBarBlur(hazeState, pageBackground, 0.3f)
-                    },
-                ),
-            ) {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = (uiState as? BrowseUIState.Success)?.page?.title ?: title.orEmpty(),
-                            style = typo().titleMedium,
-                            maxLines = 1,
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .wrapContentHeight(
-                                        align = Alignment.CenterVertically,
-                                    ).basicMarquee(
-                                        iterations = Int.MAX_VALUE,
-                                        animationMode = MarqueeAnimationMode.Immediately,
-                                    ).focusable(),
-                        )
-                    },
-                    navigationIcon = {
-                        Box(Modifier.padding(horizontal = 5.dp)) {
-                            RippleIconButton(
-                                SimpIcons.ArrowBackIosNew,
-                                Modifier
-                                    .size(32.dp),
-                                true,
-                                tint = MaterialTheme.colorScheme.onSurface,
-                            ) {
-                                navController.navigateUp()
-                            }
-                        }
-                    },
-                    colors =
-                        TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.Transparent,
-                        ),
+        val barBgAlpha by animateFloatAsState(
+            targetValue = if (isAtTop) 0f else 1f,
+            animationSpec = tween(300),
+            label = "browseBarAlpha",
+        )
+        Box {
+            if (barBgAlpha > 0f) {
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .graphicsLayer { alpha = barBgAlpha }
+                        .tintedBarBlur(hazeState, pageBackground, 0.3f),
                 )
             }
+            TopAppBar(
+                title = {
+                    Text(
+                        text = (uiState as? BrowseUIState.Success)?.page?.title ?: title.orEmpty(),
+                        style = typo().titleMedium,
+                        maxLines = 1,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight(
+                                    align = Alignment.CenterVertically,
+                                ).basicMarquee(
+                                    iterations = Int.MAX_VALUE,
+                                    animationMode = MarqueeAnimationMode.Immediately,
+                                ),
+                    )
+                },
+                navigationIcon = {
+                    Box(Modifier.padding(horizontal = 5.dp)) {
+                        RippleIconButton(
+                            SimpIcons.ArrowBackIosNew,
+                            Modifier
+                                .size(32.dp),
+                            true,
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        ) {
+                            navController.navigateUp()
+                        }
+                    }
+                },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                    ),
+            )
         }
     }
 }

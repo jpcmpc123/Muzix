@@ -55,6 +55,7 @@ class SimpMusicApplication :
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val dataStoreManager: DataStoreManager by inject()
     private lateinit var autoBackupScheduler: AutoBackupScheduler
+    private val imageHttpClient: OkHttpClient by lazy { OkHttpClient() }
 
     override fun onCreate() {
         super.onCreate()
@@ -65,7 +66,7 @@ class SimpMusicApplication :
         // Before Koin: DiscordRepository is created at start and reads which login this build uses.
         configDiscord(BuildKonfig.discordClientId)
         startKoin {
-            androidLogger(level = Level.DEBUG)
+            androidLogger(level = if (BuildConfig.DEBUG) Level.DEBUG else Level.ERROR)
             androidContext(this@SimpMusicApplication)
             loadAllModules(
                 AppIdentity(
@@ -139,7 +140,7 @@ class SimpMusicApplication :
                     add(
                         OkHttpNetworkFetcherFactory(
                             callFactory = {
-                                OkHttpClient()
+                                imageHttpClient
                             },
                         ),
                     )
