@@ -116,6 +116,7 @@ import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.MoodCategoryCard
+import com.maxrave.simpmusic.ui.component.sizedThumb
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.extension.getStringBlocking
 import com.maxrave.simpmusic.extension.toAppDeepLinkOrNull
@@ -1380,10 +1381,10 @@ fun SuggestItemRow(
                 model =
                     ImageRequest
                         .Builder(LocalPlatformContext.current)
-                        .data(url)
+                        .data(url.sizedThumb(226))
                         .size(256, 256)
                         .diskCachePolicy(CachePolicy.ENABLED)
-                        .diskCacheKey(url)
+                        .diskCacheKey(url.sizedThumb(226))
                         .crossfade(150)
                         .build(),
                 placeholder = rememberHolderPainter(),

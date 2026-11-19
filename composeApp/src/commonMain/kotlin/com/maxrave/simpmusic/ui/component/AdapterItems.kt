@@ -931,7 +931,7 @@ fun QuickPicksItem(
                     .padding(horizontal = 10.dp, vertical = if (compactCards) 6.dp else 10.dp),
         ) {
             val platformContext = LocalPlatformContext.current
-            val thumbUrl = data.thumbnails.lastOrNull()?.url
+            val thumbUrl = data.thumbnails.lastOrNull()?.url.sizedThumb(226)
             val imageRequest =
                 remember(platformContext, thumbUrl) {
                     ImageRequest
@@ -1023,6 +1023,18 @@ fun QuickPicksItem(
 }
 
 private val ThumbUpgradeRegex = Regex("([wh])120")
+
+private val ThumbSizeRegex = Regex("=w\\d+-h\\d+")
+
+/**
+ * googleusercontent serves the size named in the URL itself. List rows show the artwork
+ * small (40-48dp) but used to download the largest thumbnail anyway (usually 540px),
+ * which is most of a row's first-load time on a slow connection. Ask the URL for a size
+ * close to the slot instead. URLs without a size segment (e.g. video thumbnails) pass
+ * through unchanged.
+ */
+internal fun String?.sizedThumb(px: Int): String? =
+    this?.let { url -> ThumbSizeRegex.replace(url) { "=w$px-h$px" } }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

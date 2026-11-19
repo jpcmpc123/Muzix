@@ -289,7 +289,7 @@ fun SongFullWidthItems(
                                 modifier = Modifier.fillMaxSize(),
                             )
                         } else if (index == null) {
-                            val thumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
+                            val thumb = (track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails).sizedThumb(226)
                             val imageRequest =
                                 remember(platformContext, thumb) {
                                     ImageRequest
@@ -456,7 +456,7 @@ fun SuggestItems(
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {
-                        val thumb = track.thumbnails?.lastOrNull()?.url
+                        val thumb = track.thumbnails?.lastOrNull()?.url.sizedThumb(226)
                         val imageRequest =
                             remember(platformContext, thumb) {
                                 ImageRequest
@@ -612,14 +612,15 @@ fun PlaylistFullWidthItems(
                 thirdRowSubtitle = data.description
             }
         }
+        val sizedThumb = thumb.sizedThumb(226)
         val imageRequest =
-            remember(platformContext, thumb) {
+            remember(platformContext, sizedThumb) {
                 ImageRequest
                     .Builder(platformContext)
-                    .data(thumb)
+                    .data(sizedThumb)
                     .size(256, 256)
                     .diskCachePolicy(CachePolicy.ENABLED)
-                    .diskCacheKey(thumb)
+                    .diskCacheKey(sizedThumb)
                     .crossfade(150)
                     .build()
             }
@@ -733,14 +734,15 @@ fun ArtistFullWidthItems(
             is ArtistsResult -> Pair(data.artist, data.thumbnails.lastOrNull()?.url)
             else -> Pair("", null)
         }
+    val sizedThumbnails = thumbnails.sizedThumb(226)
     val imageRequest =
-        remember(platformContext, thumbnails) {
+        remember(platformContext, sizedThumbnails) {
             ImageRequest
                 .Builder(platformContext)
-                .data(thumbnails)
+                .data(sizedThumbnails)
                 .size(256, 256)
                 .diskCachePolicy(CachePolicy.ENABLED)
-                .diskCacheKey(thumbnails)
+                .diskCacheKey(sizedThumbnails)
                 .crossfade(150)
                 .build()
         }
