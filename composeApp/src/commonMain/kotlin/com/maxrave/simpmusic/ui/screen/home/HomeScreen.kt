@@ -288,6 +288,15 @@ fun HomeScreen(
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val homeData by viewModel.homeItemList.collectAsStateWithLifecycle()
     val quickPicksTitle = stringResource(Res.string.quick_picks)
+    // YouTube names this shelf in its own translation, which does not always match the app's
+    // string — in PT the shelf arrives as "Escolha a dedo" while the app string is "Escolhas
+    // rápidas", so the exact-title match never fired and the shelf stayed wherever YouTube
+    // placed it, rendered as a plain shelf. Match on the distinctive part of the name instead.
+    val isQuickPicks: (String) -> Boolean = { title ->
+        title.equals(quickPicksTitle, ignoreCase = true) ||
+            title.contains("quick pick", ignoreCase = true) ||
+            title.contains("escolha", ignoreCase = true)
+    }
     // Any shelf YouTube heads with the listener's own avatar over its title (Listen again is one of
     // several). Home's header already shows the avatar, so those shelves drop it and keep their name
     // and title. Matched on the name rather than on any shelf title, the way the old Welcome back row did.
@@ -302,7 +311,7 @@ fun HomeScreen(
                         } else {
                             shelf
                         }
-                    if (withoutDupAvatar.title == quickPicksTitle) {
+                    if (isQuickPicks(withoutDupAvatar.title)) {
                         withoutDupAvatar.copy(
                             contents =
                                 withoutDupAvatar.contents.mapNotNull { ct ->
@@ -320,7 +329,7 @@ fun HomeScreen(
                 }
             // Quick picks first: joao wants it as the first shelf on Home, wherever YouTube placed it in the feed.
             val ordered =
-                shelves.indexOfFirst { it.title == quickPicksTitle }.let { idx ->
+                shelves.indexOfFirst { isQuickPicks(it.title) }.let { idx ->
                     if (idx > 0) listOf(shelves[idx]) + shelves.filterIndexed { i, _ -> i != idx } else shelves
                 }
             val seen = HashMap<String, Int>(ordered.size)
@@ -809,7 +818,7 @@ fun HomeScreen(
                             key = { index, _ -> homeShelfKeys[index] },
                             contentType = { _, item ->
                                 when {
-                                    item.title == quickPicksTitle -> "quick_picks"
+                                    isQuickPicks(item.title) -> "quick_picks"
                                     item.isSongCardShelf() -> "discover"
                                     else -> "shelf"
                                 }
@@ -843,7 +852,7 @@ fun HomeScreen(
                                     // Android drops the 8dp over each section's title: the list's own 8dp
                                     // spacing already separates it from the shelf above.
                                     if (getPlatform() != Platform.Android) Spacer(modifier = Modifier.height(8.dp))
-                                    if (item.title == quickPicksTitle) {
+                                    if (isQuickPicks(item.title)) {
                                         QuickPicks(
                                             homeItem = item,
                                             navController = navController,
