@@ -519,7 +519,22 @@ class SharedViewModel(
                                             it.copy(
                                                 total = newTotal,
                                                 current = mediaState.progress,
-                                                loading = !hasLength,
+                                                // A Progress publish at position 0 is not
+                                                // evidence that anything loaded: during a
+                                                // load that cannot proceed (no network) the
+                                                // position ticker keeps publishing 0, and
+                                                // clearing the flag here froze the bar at
+                                                // 0:00 over a track with zero bytes
+                                                // buffered. Only a playhead that actually
+                                                // moved past 0 (or a live stream) may clear
+                                                // it; at 0 the flag is left as the
+                                                // Buffering/Loading events set it.
+                                                loading =
+                                                    if (mediaState.progress > 0L || it.isLive) {
+                                                        !hasLength
+                                                    } else {
+                                                        it.loading
+                                                    },
                                             )
                                         }
                                     }
@@ -547,9 +562,26 @@ class SharedViewModel(
 
                             is SimpleMediaState.Ready -> {
                                 _timeline.update {
+                                    // A Ready carrying neither a duration nor any progress
+                                    // is a track that never loaded a single byte: the
+                                    // player adapter reports READY for a dead load too
+                                    // (its READY and PAUSED states both surface as
+                                    // STATE_READY, with duration still TIME_UNSET).
+                                    // Clearing the loading flag for it left a static bar
+                                    // at 0:00 over a track still waiting on the network,
+                                    // so such a Ready keeps the loading state instead.
+                                    val readyProgress = mediaPlayerHandler.getProgress()
+                                    // Duration alone is not proof either: if the network
+                                    // dies after the container was parsed, the duration is
+                                    // already known while not a single byte is playable.
+                                    // What proves readiness is progress, or buffered media
+                                    // ahead of the playhead.
+                                    val actuallyReady =
+                                        readyProgress > 0L ||
+                                            (mediaState.duration > 0L && mediaPlayerHandler.player.bufferedPosition > readyProgress)
                                     it.copy(
-                                        current = mediaPlayerHandler.getProgress(),
-                                        loading = false,
+                                        current = readyProgress,
+                                        loading = !actuallyReady,
                                         // The player's own duration wins, but ONLY when it has one.
                                         // ExoPlayer answers C.TIME_UNSET (a large negative, not
                                         // null) until it has parsed the container, and Ready is
