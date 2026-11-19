@@ -122,6 +122,7 @@ import com.maxrave.simpmusic.ui.component.ExplicitBadge
 import com.maxrave.simpmusic.ui.component.HeartCheckBox
 import com.maxrave.simpmusic.ui.component.PlayPauseButton
 import com.maxrave.simpmusic.ui.component.PlayerControlLayout
+import com.maxrave.simpmusic.ui.component.sizedThumb
 import com.maxrave.simpmusic.ui.component.QueueBottomSheet
 import com.maxrave.simpmusic.ui.component.liquidGlass
 import com.maxrave.simpmusic.ui.component.rememberGlassLuminance
@@ -389,7 +390,7 @@ fun MiniPlayer(
                                     model =
                                         ImageRequest
                                             .Builder(LocalPlatformContext.current)
-                                            .data(songEntity?.thumbnails)
+                                            .data(songEntity?.thumbnails.sizedThumb(226))
                                             .size(128)
                                             .crossfade(550)
                                             .build(),
@@ -732,7 +733,7 @@ fun MiniPlayer(
                                 model =
                                     ImageRequest
                                         .Builder(LocalPlatformContext.current)
-                                        .data(songEntity?.thumbnails)
+                                        .data(songEntity?.thumbnails.sizedThumb(226))
                                         .size(128)
                                         .crossfade(550)
                                         .build(),

@@ -97,6 +97,7 @@ import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.ui.component.SearchBarExit
 import com.maxrave.simpmusic.ui.component.SearchBarEnter
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
+import com.maxrave.simpmusic.ui.component.sizedThumb
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
@@ -430,11 +431,11 @@ fun PlaylistScreen(
                                                         model =
                                                             ImageRequest
                                                                 .Builder(LocalPlatformContext.current)
-                                                                .data(data.thumbnail)
+                                                                .data(data.thumbnail.sizedThumb(720))
                                                                 .diskCachePolicy(CachePolicy.ENABLED)
                                                                 .memoryCachePolicy(CachePolicy.ENABLED)
-                                                                .diskCacheKey(data.thumbnail)
-                                                                .memoryCacheKey(data.thumbnail)
+                                                                .diskCacheKey(data.thumbnail.sizedThumb(720))
+                                                                .memoryCacheKey(data.thumbnail.sizedThumb(720))
                                                                 .crossfade(550)
                                                                 .build(),
                                                         placeholder = rememberHolderPainter(),
@@ -608,11 +609,11 @@ fun PlaylistScreen(
                                                             model =
                                                                 ImageRequest
                                                                     .Builder(LocalPlatformContext.current)
-                                                                    .data(data.thumbnail)
+                                                                    .data(data.thumbnail.sizedThumb(720))
                                                                     .diskCachePolicy(CachePolicy.ENABLED)
                                                                     .memoryCachePolicy(CachePolicy.ENABLED)
-                                                                    .diskCacheKey(data.thumbnail)
-                                                                    .memoryCacheKey(data.thumbnail)
+                                                                    .diskCacheKey(data.thumbnail.sizedThumb(720))
+                                                                    .memoryCacheKey(data.thumbnail.sizedThumb(720))
                                                                     .crossfade(550)
                                                                     .build(),
                                                             placeholder = rememberHolderPainter(),
