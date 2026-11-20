@@ -112,7 +112,16 @@ abstract class BaseViewModel :
     val showLoadingDialog: StateFlow<Pair<Boolean, String>> get() = _showLoadingDialog
 
     fun showLoadingDialog(message: String? = null) {
-        _showLoadingDialog.value = true to (message ?: getString(Res.string.loading))
+        if (message != null) {
+            _showLoadingDialog.value = true to message
+        } else {
+            viewModelScope.launch {
+                val text =
+                    org.jetbrains.compose.resources
+                        .getString(Res.string.loading)
+                _showLoadingDialog.value = true to text
+            }
+        }
     }
 
     fun hideLoadingDialog() {
@@ -173,7 +182,11 @@ abstract class BaseViewModel :
                     )
                     loadMediaItem(tracks.first(), if (isRadio) Config.RADIO_CLICK else Config.PLAYLIST_CLICK, 0)
                 } else {
-                    makeToast(res.message ?: getString(Res.string.error))
+                    val errText =
+                        res.message
+                            ?: org.jetbrains.compose.resources
+                                .getString(Res.string.error)
+                    makeToast(errText)
                 }
             }
         }

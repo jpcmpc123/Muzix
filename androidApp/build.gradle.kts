@@ -179,6 +179,7 @@ dependencies {
 
     implementation(projects.composeApp)
     implementation(projects.data)
+    implementation(libs.androidx.profileinstaller)
 
     if (isFullBuild) {
         implementation(projects.crashlytics)

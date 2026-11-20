@@ -87,7 +87,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -96,6 +96,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -216,7 +217,7 @@ fun NowPlayingContentSpotify(
     // Live timeline for the deferred artwork progress read further down: that
     // lambda runs at draw time, so this collection never recomposes the content
     // on a progress tick.
-    val liveTimeline by state.timelineFlow.collectAsStateWithLifecycle()
+    val liveTimelineState = state.timelineFlow.collectAsStateWithLifecycle()
 
     val localDensity = LocalDensity.current
     val uriHandler = LocalUriHandler.current
@@ -292,40 +293,44 @@ fun NowPlayingContentSpotify(
                             // the gradient instead would stretch it across the entire content,
                             // which is what made it run on forever while scrolling.
                             .background(PlayerBackdropColor)
-                            .drawBehind {
+                            .drawWithCache {
                                 val gradientHeight = screenInfo.hPX.toFloat()
                                 val area = Size(size.width, gradientHeight)
-                                // Palette gradient, keeping its diagonal angle.
-                                drawRect(
-                                    brush =
-                                        Brush.linearGradient(
-                                            colors =
-                                                listOf(
-                                                    state.startColor.value,
-                                                    state.endColor.value,
-                                                ),
-                                            start = state.gradientOffset.start,
-                                            end = state.gradientOffset.end,
-                                        ),
-                                    size = area,
-                                )
-                                // Vertical fade to the backdrop colour, fully opaque from 90%
-                                // down, so the bottom edge meets the area underneath seamlessly
-                                // across the whole width. Adding the same colour as a stop to
-                                // the diagonal gradient above could not do that — it would only
-                                // arrive in one corner and leave a visible diagonal seam.
-                                drawRect(
-                                    brush =
-                                        smoothScrimBrush(
-                                            from = PlayerBackdropColor.copy(alpha = 0f),
-                                            to = PlayerBackdropColor,
-                                            startY = 0f,
-                                            // Reaches full opacity at 95% and is held there by Clamp,
-                                            // same as the old `0.95f to PlayerBackdropColor` stop.
-                                            endY = gradientHeight * 0.95f,
-                                        ),
-                                    size = area,
-                                )
+                                val paletteBrush =
+                                    Brush.linearGradient(
+                                        colors =
+                                            listOf(
+                                                state.startColor.value,
+                                                state.endColor.value,
+                                            ),
+                                        start = state.gradientOffset.start,
+                                        end = state.gradientOffset.end,
+                                    )
+                                val scrimBrush =
+                                    smoothScrimBrush(
+                                        from = PlayerBackdropColor.copy(alpha = 0f),
+                                        to = PlayerBackdropColor,
+                                        startY = 0f,
+                                        // Reaches full opacity at 95% and is held there by Clamp,
+                                        // same as the old `0.95f to PlayerBackdropColor` stop.
+                                        endY = gradientHeight * 0.95f,
+                                    )
+                                onDrawBehind {
+                                    // Palette gradient, keeping its diagonal angle.
+                                    drawRect(
+                                        brush = paletteBrush,
+                                        size = area,
+                                    )
+                                    // Vertical fade to the backdrop colour, fully opaque from 90%
+                                    // down, so the bottom edge meets the area underneath seamlessly
+                                    // across the whole width. Adding the same colour as a stop to
+                                    // the diagonal gradient above could not do that — it would only
+                                    // arrive in one corner and leave a visible diagonal seam.
+                                    drawRect(
+                                        brush = scrimBrush,
+                                        size = area,
+                                    )
+                                }
                             }
                     } else {
                         Modifier.background(Color.Black)
@@ -1714,41 +1719,32 @@ fun NowPlayingContentSpotify(
                                                 animationMode = MarqueeAnimationMode.Immediately,
                                             ).focusable(),
                                 )
-                                val artistRowState = rememberLazyListState()
-                                LazyRow(
-                                    modifier = Modifier.mouseDragScroll(artistRowState),
-                                    state = artistRowState,
+                                Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    item {
-                                        AnimatedVisibility(visible = state.screenData.isExplicit) {
-                                            ExplicitBadge(
-                                                modifier =
-                                                    Modifier
-                                                        .size(20.dp)
-                                                        .padding(end = 4.dp)
-                                                        .weight(1f),
-                                            )
-                                        }
-                                    }
-                                    item(
-                                        key = state.screenData.artistName,
-                                    ) {
-                                        Text(
-                                            text = state.screenData.artistName,
-                                            style = typo().bodySmall,
-                                            maxLines = 1,
+                                    AnimatedVisibility(visible = state.screenData.isExplicit) {
+                                        ExplicitBadge(
                                             modifier =
                                                 Modifier
-                                                    .fillMaxWidth()
-                                                    .wrapContentHeight(
-                                                        align = Alignment.CenterVertically,
-                                                    ).basicMarquee(
-                                                        iterations = Int.MAX_VALUE,
-                                                        animationMode = MarqueeAnimationMode.Immediately,
-                                                    ).focusable(),
+                                                    .size(20.dp)
+                                                    .padding(end = 4.dp),
                                         )
                                     }
+                                    Text(
+                                        text = state.screenData.artistName,
+                                        style = typo().bodySmall,
+                                        maxLines = 1,
+                                        modifier =
+                                            Modifier
+                                                .weight(1f)
+                                                .wrapContentHeight(
+                                                    align = Alignment.CenterVertically,
+                                                ).graphicsLayer { }
+                                                .basicMarquee(
+                                                    iterations = Int.MAX_VALUE,
+                                                    animationMode = MarqueeAnimationMode.Immediately,
+                                                ).focusable(),
+                                    )
                                 }
                             }
                         }
@@ -1780,7 +1776,10 @@ fun NowPlayingContentSpotify(
                                 .align(Alignment.BottomCenter),
                     ) {
                         LinearProgressIndicator(
-                            progress = { if (liveTimeline.total > 0) liveTimeline.current.toFloat() / liveTimeline.total else 0f },
+                            progress = {
+                                val timeline = liveTimelineState.value
+                                if (timeline.total > 0) timeline.current.toFloat() / timeline.total else 0f
+                            },
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
@@ -1882,42 +1881,36 @@ internal fun NowPlayingTrackInfoRow(
                         ).focusable(),
             )
             Spacer(modifier = Modifier.height(3.dp))
-            val artistRowState = rememberLazyListState()
-            LazyRow(
-                modifier = Modifier.fillMaxWidth().mouseDragScroll(artistRowState),
-                state = artistRowState,
+            Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                item(state.screenData.isExplicit) {
-                    AnimatedVisibility(visible = state.screenData.isExplicit) {
-                        ExplicitBadge(
-                            modifier =
-                                Modifier
-                                    .size(20.dp)
-                                    .padding(end = 4.dp)
-                                    .weight(1f),
-                        )
-                    }
-                }
-                item(state.screenData.artistName) {
-                    Text(
-                        text = state.screenData.artistName,
-                        style = typo().bodyMedium,
-                        color = state.secondaryTextColor(),
-                        maxLines = 1,
+                AnimatedVisibility(visible = state.screenData.isExplicit) {
+                    ExplicitBadge(
                         modifier =
                             Modifier
-                                .fillMaxWidth()
-                                .wrapContentHeight(align = Alignment.CenterVertically)
-                                .basicMarquee(
-                                    iterations = Int.MAX_VALUE,
-                                    animationMode = MarqueeAnimationMode.Immediately,
-                                ).focusable()
-                                .clickable {
-                                    actions.onNavigateToArtist()
-                                },
+                                .size(20.dp)
+                                .padding(end = 4.dp),
                     )
                 }
+                Text(
+                    text = state.screenData.artistName,
+                    style = typo().bodyMedium,
+                    color = state.secondaryTextColor(),
+                    maxLines = 1,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .wrapContentHeight(align = Alignment.CenterVertically)
+                            .graphicsLayer { }
+                            .basicMarquee(
+                                iterations = Int.MAX_VALUE,
+                                animationMode = MarqueeAnimationMode.Immediately,
+                            ).focusable()
+                            .clickable {
+                                actions.onNavigateToArtist()
+                            },
+                )
             }
         }
         if (state.isUserLoggedIn) {
@@ -2133,26 +2126,22 @@ internal fun ColumnScope.SpotifyPlaybackControls(
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Left,
         )
-        // Sweep head for the "Crossfading" shimmer, 0..1. Runs
-        // unconditionally: behind the crossfade check it would
-        // restart from zero each time the label appears (same
-        // rationale as MiniPlayer's crossfadeSweep).
-        val sweepTransition = rememberInfiniteTransition(label = "nowPlayingCrossfadeSweep")
-        val crossfadeSweep by sweepTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec =
-                infiniteRepeatable(
-                    animation = tween(3200, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart,
-                ),
-            label = "nowPlayingSweepHead",
-        )
         AnimatedVisibility(
             enter = fadeIn(),
             exit = fadeOut(),
             visible = liveTimeline.isCrossfading,
         ) {
+            val sweepTransition = rememberInfiniteTransition(label = "nowPlayingCrossfadeSweep")
+            val crossfadeSweep by sweepTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec =
+                    infiniteRepeatable(
+                        animation = tween(3200, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart,
+                    ),
+                label = "nowPlayingSweepHead",
+            )
             // Same effect as the desktop MiniPlayer label: a
             // highlight sweeping through the glyphs via a text
             // brush — no overlay, no clipping.

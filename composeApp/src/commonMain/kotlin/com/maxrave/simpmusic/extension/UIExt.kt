@@ -753,15 +753,22 @@ fun Palette?.toImmersiveBackground(): Color {
  * saveably, so coming back to a page starts on its colour rather than fading in again.
  */
 @Composable
+fun rememberPaletteColorState(
+    palette: Palette?,
+    fallback: Color = Color.Black,
+    pick: (Palette) -> Color = { it.toImmersiveBackground() },
+): State<Color> {
+    var held by rememberSaveable { mutableStateOf<Int?>(null) }
+    LaunchedEffect(palette) { palette?.let { held = pick(it).toArgb() } }
+    return animateColorAsState(held?.let { Color(it) } ?: fallback, tween(500), label = "paletteColor")
+}
+
+@Composable
 fun rememberPaletteColor(
     palette: Palette?,
     fallback: Color = Color.Black,
     pick: (Palette) -> Color = { it.toImmersiveBackground() },
-): Color {
-    var held by rememberSaveable { mutableStateOf<Int?>(null) }
-    LaunchedEffect(palette) { palette?.let { held = pick(it).toArgb() } }
-    return animateColorAsState(held?.let { Color(it) } ?: fallback, tween(500), label = "paletteColor").value
-}
+): Color = rememberPaletteColorState(palette, fallback, pick).value
 
 /**
  * The frosted top bar of the immersive screens: their own page colour behind a 24dp blur, washed

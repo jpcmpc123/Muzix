@@ -8,7 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -63,7 +63,7 @@ fun AudioPlayingIndicator(
     color: Color = AudioIndicatorCyan,
 ) {
     val transition = rememberInfiniteTransition(label = "audioPlaying")
-    val phase by transition.animateFloat(
+    val phase = transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec =
@@ -75,6 +75,7 @@ fun AudioPlayingIndicator(
     )
 
     Canvas(modifier = modifier) {
+        val currentPhase = phase.value
         val scale = minOf(size.width / AUDIO_COMP_WIDTH, size.height / AUDIO_COMP_HEIGHT)
         val originX = (size.width - AUDIO_COMP_WIDTH * scale) / 2f
         val originY = (size.height - AUDIO_COMP_HEIGHT * scale) / 2f
@@ -83,7 +84,7 @@ fun AudioPlayingIndicator(
         val capRadius = strokeWidth / 2f
 
         AUDIO_BAR_X.forEachIndexed { bar, barX ->
-            val height = audioBarHeight(bar, phase) * scale
+            val height = audioBarHeight(bar, currentPhase) * scale
             // Round caps extend half a stroke past each end, so the drawn segment is the bar minus
             // its two caps — otherwise every bar renders one full stroke width too tall.
             val half = (height / 2f - capRadius).coerceAtLeast(0f)
@@ -136,7 +137,7 @@ fun DownloadingIndicator(
     color: Color = Color.White,
 ) {
     val transition = rememberInfiniteTransition(label = "downloading")
-    val phase by transition.animateFloat(
+    val phase = transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec =
@@ -146,13 +147,15 @@ fun DownloadingIndicator(
             ),
         label = "phase",
     )
+    val mattePath = remember { Path() }
+    val arrowHeadPath = remember { Path() }
 
     Canvas(modifier = modifier) {
         val scale = minOf(size.width, size.height) / DL_COMP
         val originX = (size.width - DL_COMP * scale) / 2f
         val originY = (size.height - DL_COMP * scale) / 2f
         val centre = Offset(originX + DL_CENTRE * scale, originY + DL_CENTRE * scale)
-        val frame = phase * DL_FRAMES
+        val frame = phase.value * DL_FRAMES
 
         drawTrimmedRing(color, centre, scale, keyframe(frame, 0f, 20f, 0f, 100f))
         // The redraw copy is the same ring under a horizontal mirror. It has to be a real transform
@@ -164,20 +167,18 @@ fun DownloadingIndicator(
         // Both arrows are drawn every frame; the matte hides whichever is out of view, exactly as
         // in the source — no visibility branching is needed.
         val matteRadius = DL_MATTE_DIAMETER / 2f * scale
-        clipPath(
-            Path().apply {
-                addOval(
-                    Rect(
-                        centre.x - matteRadius,
-                        centre.y - matteRadius,
-                        centre.x + matteRadius,
-                        centre.y + matteRadius,
-                    ),
-                )
-            },
-        ) {
-            drawArrow(color, centre, keyframe(frame, 0f, 15f, 500f, 880f), scale)
-            drawArrow(color, centre, keyframe(frame, 22f, 37f, 120f, 500f), scale)
+        mattePath.reset()
+        mattePath.addOval(
+            Rect(
+                centre.x - matteRadius,
+                centre.y - matteRadius,
+                centre.x + matteRadius,
+                centre.y + matteRadius,
+            ),
+        )
+        clipPath(mattePath) {
+            drawArrow(color, centre, keyframe(frame, 0f, 15f, 500f, 880f), scale, arrowHeadPath)
+            drawArrow(color, centre, keyframe(frame, 22f, 37f, 120f, 500f), scale, arrowHeadPath)
         }
     }
 }
@@ -214,6 +215,7 @@ private fun DrawScope.drawArrow(
     centre: Offset,
     centreY: Float,
     scale: Float,
+    headPath: Path,
 ) {
     val x = centre.x
     val y = centre.y + (centreY - DL_CENTRE - DL_ARROW_ANCHOR_Y) * scale
@@ -225,18 +227,16 @@ private fun DrawScope.drawArrow(
         size = Size(halfShaftW * 2f, halfShaftH * 2f),
         cornerRadius = CornerRadius(DL_SHAFT_CORNER * scale),
     )
-    val head =
-        Path().apply {
-            DL_HEAD_ANGLES.forEachIndexed { i, degrees ->
-                val radians = degrees * PI.toFloat() / 180f
-                val px = x + DL_HEAD_RADIUS * cos(radians) * scale
-                val py =
-                    y + (DL_HEAD_RADIUS * sin(radians) + DL_HEAD_OFFSET_Y) * DL_HEAD_SQUASH * scale
-                if (i == 0) moveTo(px, py) else lineTo(px, py)
-            }
-            close()
-        }
-    drawPath(path = head, color = color)
+    headPath.reset()
+    DL_HEAD_ANGLES.forEachIndexed { i, degrees ->
+        val radians = degrees * PI.toFloat() / 180f
+        val px = x + DL_HEAD_RADIUS * cos(radians) * scale
+        val py =
+            y + (DL_HEAD_RADIUS * sin(radians) + DL_HEAD_OFFSET_Y) * DL_HEAD_SQUASH * scale
+        if (i == 0) headPath.moveTo(px, py) else headPath.lineTo(px, py)
+    }
+    headPath.close()
+    drawPath(path = headPath, color = color)
 }
 
 // ---------------------------------------------------------------------------------------------

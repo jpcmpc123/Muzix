@@ -57,6 +57,29 @@ class NetworkFirstInterceptor(
             return chain.proceed()
         }
 
+        // Fast-path for fresh in-memory bitmaps: avoid registryMutex + per-key Mutex + disk I/O
+        // during fast scrolling and recompositions.
+        if (request.memoryCachePolicy.readEnabled) {
+            val ramRequest =
+                request
+                    .newBuilder()
+                    .memoryCachePolicy(
+                        if (request.memoryCachePolicy.writeEnabled) CachePolicy.ENABLED else CachePolicy.READ_ONLY,
+                    ).diskCachePolicy(CachePolicy.DISABLED)
+                    .networkCachePolicy(CachePolicy.DISABLED)
+                    .build()
+            val ramResult = chain.withRequest(ramRequest).proceed()
+            if (ramResult is SuccessResult) {
+                val loader = imageLoader()
+                val cachedValue = ramResult.memoryCacheKey?.let { loader.memoryCache?.get(it) }
+                val memoryCachedAt =
+                    cachedValue?.takeIf { it.image === ramResult.image }?.extras?.get(CACHED_AT_KEY) as? Long
+                if (isFresh(memoryCachedAt)) {
+                    return ramResult.copy(request = request)
+                }
+            }
+        }
+
         val diskKey = request.diskCacheKey ?: url
         // Serialize only requests for the same disk entry so promotion and RAM updates agree.
         // Remove the lock after its last user; browsing new URLs must not grow a permanent map.

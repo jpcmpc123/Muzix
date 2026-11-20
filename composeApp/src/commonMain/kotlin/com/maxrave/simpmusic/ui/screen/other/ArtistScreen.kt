@@ -423,6 +423,7 @@ fun ArtistScreen(
                                                         ImageRequest
                                                             .Builder(LocalPlatformContext.current)
                                                             .data(headerImageUrl)
+                                                            .size(256, 256)
                                                             .crossfade(550)
                                                             .build(),
                                                     contentDescription = null,

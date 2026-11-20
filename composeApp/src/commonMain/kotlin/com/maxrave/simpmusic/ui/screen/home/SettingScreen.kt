@@ -3131,7 +3131,11 @@ fun SettingScreen(
                                 )
                             }
                         } else {
-                            items(data) {
+                            items(
+                                items = data,
+                                key = { it.email },
+                                contentType = { "google_account" },
+                            ) {
                                 Row(
                                     modifier =
                                         Modifier
@@ -3289,7 +3293,11 @@ fun SettingScreen(
                             .padding(vertical = 6.dp)
                             .heightIn(0.dp, 500.dp),
                     ) {
-                        items(alertState.selectOne.listSelect) { item ->
+                        items(
+                            items = alertState.selectOne.listSelect,
+                            key = { it.second },
+                            contentType = { "select_one_option" },
+                        ) { item ->
                             val onSelect = {
                                 viewModel.setAlertData(
                                     alertState.copy(
@@ -3342,7 +3350,11 @@ fun SettingScreen(
                     LazyColumn(
                         Modifier.padding(vertical = 6.dp),
                     ) {
-                        items(alertState.multipleSelect.listSelect) { item ->
+                        items(
+                            items = alertState.multipleSelect.listSelect,
+                            key = { it.second },
+                            contentType = { "select_multiple_option" },
+                        ) { item ->
                             val onCheck = {
                                 viewModel.setAlertData(
                                     alertState.copy(

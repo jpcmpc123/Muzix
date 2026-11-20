@@ -591,6 +591,18 @@ fun LyricsView(
         // list simply runs out of content and the closing lines pile up against the bottom edge,
         // so the final third of every song reads bottom-anchored instead of top-anchored.
         val tailPadding = if (appleStyle) maxHeight * 0.72f else 0.dp
+        val baseBodyMedium = typo().bodyMedium
+        val appleSubLineStyle =
+            remember(appleStyle, baseBodyMedium) {
+                if (appleStyle) {
+                    baseBodyMedium.copy(
+                        fontSize = AppleMusicSubLineFontSize,
+                        lineHeight = AppleMusicSubLineHeight,
+                    )
+                } else {
+                    null
+                }
+            }
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -675,15 +687,7 @@ fun LyricsView(
                                         glow = if (appleStyle && index == currentLineIndex) AppleMusicActiveLineGlow else null,
                                         pendingColorOverride = if (appleStyle) AppleMusicPendingWordColor else null,
                                         translatedColorOverride = if (appleStyle) AppleMusicTranslatedColor else null,
-                                        translatedStyleOverride =
-                                            if (appleStyle) {
-                                                typo().bodyMedium.copy(
-                                                    fontSize = AppleMusicSubLineFontSize,
-                                                    lineHeight = AppleMusicSubLineHeight,
-                                                )
-                                            } else {
-                                                null
-                                            },
+                                        translatedStyleOverride = appleSubLineStyle,
                                         customPadding = if (appleStyle) AppleMusicLyricGap else 12.dp,
                                         wrappedLineSpacing = if (appleStyle) AppleMusicWrappedLineSpacing else 0.dp,
                                         // Apple takes its click from the wrapper Column below, which
@@ -1154,10 +1158,12 @@ private fun AnimatedWord(
         }
     val wordDirection = if (wordBidi.baseIsLeftToRight()) TextDirection.Ltr else TextDirection.Rtl
     val style =
-        typo().headlineLarge.copy(
-            fontSize = customFontSize ?: typo().headlineLarge.fontSize,
-            textDirection = wordDirection,
-        )
+        remember(customFontSize, wordDirection, typo().headlineLarge) {
+            typo().headlineLarge.copy(
+                fontSize = customFontSize ?: typo().headlineLarge.fontSize,
+                textDirection = wordDirection,
+            )
+        }
 
     if (!isCurrent) {
         Text(text = word, style = style, color = pendingColorOverride ?: DimOriginalColor)
@@ -1169,12 +1175,6 @@ private fun AnimatedWord(
     // - Active word: snap to current % then animateTo(1f) over the remaining duration of the
     //   word, in real wall-clock time. Independent of timeline emit rate, so wipe is smooth.
     // - Past word: snap to 1f.
-
-    // The gap to the next word, and nothing else. Both the floor that used to sit here (100 ms) and
-    // the one on the wipe below (150 ms) made a short word's animation outlive the word, so by the
-    // time it finished the next two or three had started their own and the line looked like the
-    // words were chasing each other. A syllable sung in 40 ms gets a 40 ms wipe; only the divide
-    // needs protecting.
     val wordDurationMs = (wordEndTimeMs - wordStartTimeMs).coerceAtLeast(1L)
     val anim =
         remember(wordStartTimeMs, wordEndTimeMs) {
@@ -1183,46 +1183,28 @@ private fun AnimatedWord(
 
     LaunchedEffect(wordStartTimeMs, wordEndTimeMs, isActive, isPast) {
         when {
-            // Nothing to carry over any more: the wipe now runs for exactly the word's own span,
-            // so it reaches 1f on the same frame this flips. Only a word shorter than one frame
-            // arrives unfinished, and that one has no time to animate in anyway.
             isPast -> anim.snapTo(1f)
             isActive -> {
-                // From the interpolated playhead, not from the last tick. isActive now flips within
-                // a frame of the word's real start, so a tick-aged `now` would snap the wipe behind
-                // where it belongs and then stretch it past the end of the word.
                 val now = playheadMs.value
                 val current =
                     ((now - wordStartTimeMs).toFloat() / wordDurationMs.toFloat())
                         .coerceIn(0f, 1f)
                 anim.snapTo(current)
-                // Exactly what is left of this word, so it finishes as the next one starts and no
-                // two wipes are ever in flight at once.
                 val remainingMs = (wordEndTimeMs - now).coerceAtLeast(0L).toInt().coerceAtLeast(1)
                 anim.animateTo(1f, tween(remainingMs, easing = LinearEasing))
             }
-            // Future word (not active, not past): keep current value.
-            // Don't snap to 0 — playback position can jitter backwards by a few ms,
-            // briefly flipping isActive false. Snapping would jerk the wipe back.
         }
     }
 
-    val progress = anim.value
-
-    // The word's position, resolved by STATE rather than read raw. The Animatable is what carries
-    // the 100ms timeline ticks at frame rate — it snaps to the real position and then animates to
-    // the end of the word in wall-clock time, so the wipe keeps moving between ticks instead of
-    // stepping ten times a second.
-    //
-    // But it is only ever snapped on the isActive and isPast branches. A word that has not started
-    // holds whatever it was constructed with, which is why reading it directly lit the first letter
-    // of every upcoming word. Deciding 0 / anim / 1 from the state fixes that without giving up the
-    // interpolation.
-    val wordProgress =
-        when {
-            isPast -> 1f
-            isActive -> progress
-            else -> 0f
+    val readProgress: () -> Float =
+        remember(anim, isActive, isPast) {
+            {
+                when {
+                    isPast -> 1f
+                    isActive -> anim.value
+                    else -> 0f
+                }
+            }
         }
 
     // AMLL's emphasis strengths, derived from the word's OWN duration.
@@ -1243,41 +1225,45 @@ private fun AnimatedWord(
             val shaped = if (raw > 1f) sqrt(raw) else raw * raw * raw
             min(EMP_BLUR_CAP, shaped * EMP_BLUR_GAIN * if (isLastWord) EMP_LAST_WORD_BLUR else 1f)
         }
-    // The flare's on/off, animated instead of switched. A word that has just been sung keeps its
-    // light for FLARE_FADE_MS while the next word's comes up, so the hand-over happens across the
-    // word boundary rather than at it. Settled words hold 0 and animate nothing.
-    val flareGate =
+    // The flare's on/off, animated instead of switched. Held as State<Float> so only graphicsLayer reads it.
+    val flareGateState =
         if (glow != null) {
             animateFloatAsState(
                 targetValue = if (isActive) 1f else 0f,
-                // The duration is picked from the direction being travelled: snap up with the singing, ebb
-                // away slowly behind it.
                 animationSpec =
                     tween(
                         durationMillis = if (isActive) FLARE_ATTACK_MS else FLARE_FADE_MS,
                         easing = LinearEasing,
                     ),
                 label = "flareGate",
-            ).value
+            )
         } else {
-            0f
+            null
         }
 
-    val eased = if (amount <= 0f && blurAmount <= 0f) 0f else empEasing(wordProgress)
     val fontPx = with(LocalDensity.current) { style.fontSize.toPx() }
-    val heldGlow =
-        if (eased * blurAmount <= 0.01f) {
-            null
-        } else {
-            glow?.copy(
-                color = glow.color.copy(alpha = (eased * blurAmount).coerceIn(0f, 1f)),
-                blurRadius = min(EMP_GLOW_RADIUS_EM, blurAmount * EMP_GLOW_RADIUS_EM) * fontPx,
-            )
+    val wordGlow =
+        remember(glow, fontPx, blurAmount) {
+            glow?.let { base ->
+                val radius =
+                    if (blurAmount > 0f) {
+                        min(EMP_GLOW_RADIUS_EM, blurAmount * EMP_GLOW_RADIUS_EM) * fontPx
+                    } else {
+                        SUNG_BASE_GLOW_EM * fontPx
+                    }
+                base.copy(
+                    color = base.color.copy(alpha = SUNG_BASE_GLOW_ALPHA),
+                    blurRadius = radius,
+                )
+            }
         }
+    val pendingColor = pendingColorOverride ?: DimRichPendingColor
 
     Box(
         modifier =
             Modifier.graphicsLayer {
+                val eased =
+                    if (amount <= 0f && blurAmount <= 0f) 0f else empEasing(readProgress())
                 val scale = 1f + eased * EMP_SCALE_EM * amount
                 scaleX = scale
                 scaleY = scale
@@ -1290,11 +1276,13 @@ private fun AnimatedWord(
             ShapedLyricsWord(
                 word = word,
                 style = style,
-                progress = wordProgress,
+                readProgress = readProgress,
+                isActive = isActive,
+                isPast = isPast,
                 isRtl = wordDirection == TextDirection.Rtl,
-                restingColor = pendingColorOverride ?: DimRichPendingColor,
-                glow = heldGlow ?: glow?.copy(blurRadius = SUNG_BASE_GLOW_EM * fontPx),
-                flare = flareGate,
+                restingColor = pendingColor,
+                glow = wordGlow,
+                flareState = flareGateState,
                 fontPx = fontPx,
             )
         } else {
@@ -1303,11 +1291,13 @@ private fun AnimatedWord(
                 ShapedLyricsWord(
                     word = word,
                     style = style,
-                    progress = wordProgress,
+                    readProgress = readProgress,
+                    isActive = isActive,
+                    isPast = isPast,
                     isRtl = false,
-                    restingColor = pendingColorOverride ?: DimRichPendingColor,
-                    glow = heldGlow ?: glow?.copy(blurRadius = SUNG_BASE_GLOW_EM * fontPx),
-                    flare = flareGate,
+                    restingColor = pendingColor,
+                    glow = wordGlow,
+                    flareState = flareGateState,
                     fontPx = fontPx,
                 )
             }
@@ -1319,30 +1309,40 @@ private fun AnimatedWord(
 private fun ShapedLyricsWord(
     word: String,
     style: TextStyle,
-    progress: Float,
+    readProgress: () -> Float,
+    isActive: Boolean,
+    isPast: Boolean,
     isRtl: Boolean,
     restingColor: Color,
     glow: Shadow?,
-    flare: Float,
+    flareState: State<Float>?,
     fontPx: Float,
 ) {
-    val rise =
+    val hasStartedRise by
+        remember(isActive, isPast, readProgress) {
+            derivedStateOf { isPast || (isActive && readProgress() > 0f) }
+        }
+    val riseState =
         if (glow != null) {
             animateFloatAsState(
-                targetValue = if (progress > 0f) 1f else 0f,
+                targetValue = if (hasStartedRise) 1f else 0f,
                 animationSpec = tween(CHAR_RISE_MS, easing = FastOutSlowInEasing),
                 label = "shapedWordRise",
-            ).value
+            )
         } else {
-            0f
+            null
         }
-    Box(Modifier.graphicsLayer { translationY = -rise * CHAR_RISE_EM * fontPx }) {
+    Box(Modifier.graphicsLayer { translationY = -(riseState?.value ?: 0f) * CHAR_RISE_EM * fontPx }) {
         Text(text = word, style = style, color = restingColor)
         if (glow != null) {
+            val glowStyle = remember(style, glow) { style.copy(shadow = glow) }
             Text(
                 text = word,
-                modifier = Modifier.clearAndSetSemantics {},
-                style = style.copy(shadow = glow.copy(color = glow.color.copy(alpha = SUNG_BASE_GLOW_ALPHA * flare))),
+                modifier =
+                    Modifier
+                        .clearAndSetSemantics {}
+                        .graphicsLayer { alpha = flareState?.value ?: 0f },
+                style = glowStyle,
                 color = Color.Transparent,
             )
         }
@@ -1354,6 +1354,7 @@ private fun ShapedLyricsWord(
                 Modifier
                     .clearAndSetSemantics {}
                     .drawWithContent {
+                        val progress = readProgress()
                         if (progress >= 1f) {
                             drawContent()
                         } else if (progress > 0f) {

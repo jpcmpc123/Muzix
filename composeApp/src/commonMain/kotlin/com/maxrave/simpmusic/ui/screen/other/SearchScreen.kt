@@ -510,7 +510,29 @@ fun SearchScreen(
                         state = suggestionsState,
                         contentPadding = PaddingValues(top = searchBarHeight, bottom = 10.dp),
                     ) {
-                        items(searchScreenState.suggestYTItems) { item ->
+                        val suggestKeys =
+                            remember(searchScreenState.suggestYTItems) {
+                                val seen = HashMap<String, Int>(searchScreenState.suggestYTItems.size)
+                                searchScreenState.suggestYTItems.map { s ->
+                                    val base =
+                                        when (s) {
+                                            is SongsResult -> "song_${s.videoId}"
+                                            is VideosResult -> "video_${s.videoId}"
+                                            is ArtistsResult -> "artist_${s.browseId}"
+                                            is AlbumsResult -> "album_${s.browseId}"
+                                            is PlaylistsResult -> "playlist_${s.browseId}"
+                                            else -> "other_${s.hashCode()}"
+                                        }
+                                    val count = seen[base] ?: 0
+                                    seen[base] = count + 1
+                                    if (count == 0) base else "$base#$count"
+                                }
+                            }
+                        itemsIndexed(
+                            items = searchScreenState.suggestYTItems,
+                            key = { index, _ -> suggestKeys[index] },
+                            contentType = { _, item -> item::class.simpleName ?: "suggest_item" },
+                        ) { _, item ->
                             SuggestItemRow(
                                 searchResult = item,
                                 onItemClick = { item ->
@@ -554,7 +576,20 @@ fun SearchScreen(
                                 },
                             )
                         }
-                        items(searchScreenState.suggestQueries) { suggestion ->
+                        val suggestQueryKeys =
+                            remember(searchScreenState.suggestQueries) {
+                                val seen = HashMap<String, Int>(searchScreenState.suggestQueries.size)
+                                searchScreenState.suggestQueries.map { q ->
+                                    val count = seen[q] ?: 0
+                                    seen[q] = count + 1
+                                    if (count == 0) "q_$q" else "q_$q#$count"
+                                }
+                            }
+                        itemsIndexed(
+                            items = searchScreenState.suggestQueries,
+                            key = { index, _ -> suggestQueryKeys[index] },
+                            contentType = { _, _ -> "suggest_query" },
+                        ) { _, suggestion ->
                             Row(
                                 modifier =
                                     Modifier
@@ -648,7 +683,11 @@ fun SearchScreen(
                                     }
                                 }
                             }
-                            items(searchHistory) { historyItem ->
+                            items(
+                                items = searchHistory,
+                                key = { historyItem -> "hist_$historyItem" },
+                                contentType = { "search_history" },
+                            ) { historyItem ->
                                 Row(
                                     modifier =
                                         Modifier
@@ -914,7 +953,29 @@ fun SearchScreen(
                                                             ),
                                                         state = resultsState,
                                                     ) {
-                                                        items(currentResults) { result ->
+                                                        val resultKeys =
+                                                            remember(currentResults) {
+                                                                val seen = HashMap<String, Int>(currentResults.size)
+                                                                currentResults.map { entry ->
+                                                                    val base =
+                                                                        when (entry) {
+                                                                            is SongsResult -> "song_${entry.videoId}"
+                                                                            is VideosResult -> "video_${entry.videoId}"
+                                                                            is AlbumsResult -> "album_${entry.browseId}"
+                                                                            is ArtistsResult -> "artist_${entry.browseId}"
+                                                                            is PlaylistsResult -> "playlist_${entry.browseId}"
+                                                                            else -> "res_${entry.hashCode()}"
+                                                                        }
+                                                                    val count = seen[base] ?: 0
+                                                                    seen[base] = count + 1
+                                                                    if (count == 0) base else "$base#$count"
+                                                                }
+                                                            }
+                                                        itemsIndexed(
+                                                            items = currentResults,
+                                                            key = { index, _ -> resultKeys[index] },
+                                                            contentType = { _, entry -> entry::class.simpleName ?: "search_result" },
+                                                        ) { _, result ->
                                                             when (result) {
                                                                 is SongsResult -> {
                                                                     SongFullWidthItems(

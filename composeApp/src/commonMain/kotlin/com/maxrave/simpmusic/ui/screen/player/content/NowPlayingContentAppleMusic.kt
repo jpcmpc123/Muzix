@@ -843,6 +843,7 @@ internal fun BoxScope.AppleMusicArtworkBackdrop(
                 ImageRequest
                     .Builder(LocalPlatformContext.current)
                     .data(backdropUrl)
+                    .size(200, 200)
                     .diskCachePolicy(CachePolicy.ENABLED)
                     .diskCacheKey(backdropUrl + "BIGGER")
                     .build(),
@@ -861,7 +862,13 @@ internal fun BoxScope.AppleMusicArtworkBackdrop(
     // The tint still rides on top, but as a translucent wash rather than the whole background:
     // it keeps the vertical darkening that makes the controls readable at the bottom, while the
     // frosted artwork shows through it.
-    Box(modifier = Modifier.fillMaxSize().alpha(BACKDROP_TINT_ALPHA).background(backdropBrush))
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = BACKDROP_TINT_ALPHA }
+                .background(backdropBrush),
+    )
 }
 
 @Composable

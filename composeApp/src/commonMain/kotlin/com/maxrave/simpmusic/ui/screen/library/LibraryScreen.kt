@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -54,8 +55,13 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.maxrave.common.LibraryChipType
+import com.maxrave.domain.data.entities.AlbumEntity
+import com.maxrave.domain.data.entities.ArtistEntity
+import com.maxrave.domain.data.entities.PlaylistEntity
+import com.maxrave.domain.data.entities.PodcastsEntity
 import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.data.model.taste.TasteProfile
+import com.maxrave.domain.data.type.RecentlyType
 import com.maxrave.domain.utils.LocalResource
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
@@ -77,6 +83,8 @@ import com.maxrave.simpmusic.ui.component.LibraryItem
 import com.maxrave.simpmusic.ui.component.LibraryItemState
 import com.maxrave.simpmusic.ui.component.LibraryItemType
 import com.maxrave.simpmusic.ui.component.LibraryTilingBox
+import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
+import com.maxrave.simpmusic.ui.component.RecentlyAddedRow
 import com.maxrave.simpmusic.ui.component.taste.ShareTasteSheet
 import com.maxrave.simpmusic.ui.component.taste.TasteCard
 import com.maxrave.simpmusic.ui.component.ListenTogetherIconButton
@@ -313,13 +321,14 @@ fun LibraryScreen(
                             }
                         }
 
-                        item {
+                        item(key = "recently_added_header", contentType = "library_section_header") {
                             LibraryItem(
                                 state =
                                     LibraryItemState(
                                         type =
                                             LibraryItemType.RecentlyAdded(
                                                 playingVideoId = nowPlaying,
+                                                skipInlineList = true,
                                             ),
                                         data = recentlyAdded.data ?: emptyList(),
                                         isLoading = recentlyAdded is LocalResource.Loading,
@@ -327,6 +336,55 @@ fun LibraryScreen(
                                 navController = navController,
                                 selectionState = selectionState,
                             )
+                        }
+                        if (recentlyAdded !is LocalResource.Loading) {
+                            val recentItems = (recentlyAdded.data ?: emptyList()).filterIsInstance<RecentlyType>()
+                            val recentKeys =
+                                remember(recentItems) {
+                                    val seen = HashMap<String, Int>(recentItems.size)
+                                    recentItems.map { entry ->
+                                        val base =
+                                            when (entry) {
+                                                is SongEntity -> "song_${entry.videoId}"
+                                                is ArtistEntity -> "artist_${entry.channelId}"
+                                                is AlbumEntity -> "album_${entry.browseId}"
+                                                is PlaylistEntity -> "playlist_${entry.id}"
+                                                is PodcastsEntity -> "podcast_${entry.podcastId}"
+                                                else -> "recent_${entry.hashCode()}"
+                                            }
+                                        val count = seen[base] ?: 0
+                                        seen[base] = count + 1
+                                        if (count == 0) base else "$base#$count"
+                                    }
+                                }
+                            itemsIndexed(
+                                items = recentItems,
+                                key = { index, _ -> recentKeys[index] },
+                                contentType = { _, entry -> entry.objectType().name },
+                            ) { _, entry ->
+                                val radioSuffix = org.jetbrains.compose.resources.stringResource(simpmusic.composeapp.generated.resources.Res.string.radio)
+                                var sheetSong by remember { mutableStateOf<SongEntity?>(null) }
+                                if (sheetSong != null) {
+                                    NowPlayingBottomSheet(
+                                        onDismiss = { sheetSong = null },
+                                        navController = navController,
+                                        song = sheetSong!!,
+                                        onLibraryDelete = {
+                                            sheetSong?.videoId?.let { viewModel.deleteSong(it) }
+                                        },
+                                    )
+                                }
+                                RecentlyAddedRow(
+                                    item = entry,
+                                    playingVideoId = nowPlaying,
+                                    radioSuffix = radioSuffix,
+                                    navController = navController,
+                                    viewModel = viewModel,
+                                    sharedViewModel = sharedViewModel,
+                                    selectionState = selectionState,
+                                    onShowBottomSheet = { clicked -> sheetSong = clicked },
+                                )
+                            }
                         }
                         item {
                             EndOfPage()

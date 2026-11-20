@@ -156,6 +156,11 @@ class SimpMusicApplication :
                             },
                         ),
                     )
+                }.memoryCache {
+                    MemoryCache
+                        .Builder()
+                        .maxSizePercent(context, 0.15)
+                        .build()
                 }.diskCachePolicy(CachePolicy.ENABLED)
                 .networkCachePolicy(CachePolicy.ENABLED)
                 .diskCache(

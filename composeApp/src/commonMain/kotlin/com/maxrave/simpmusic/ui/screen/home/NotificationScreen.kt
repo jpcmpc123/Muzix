@@ -147,7 +147,11 @@ fun NotificationScreen(
                         ),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    items(it) { notification ->
+                    items(
+                        items = it,
+                        key = { notification -> "${notification.channelId}_${notification.time}_${notification.name}" },
+                        contentType = { "notification_artist" },
+                    ) { notification ->
                         NotificationItem(
                             notification = notification,
                             navController,
@@ -283,7 +287,11 @@ fun NotificationItem(
                 Modifier.padding(top = 15.dp).mouseDragScroll(singlesRowState),
                 state = singlesRowState,
             ) {
-                items(notification.single) { single ->
+                items(
+                    items = notification.single,
+                    key = { single -> "single_${single["browseId"] ?: single["title"] ?: single.hashCode()}" },
+                    contentType = { "notification_single" },
+                ) { single ->
                     ItemAlbumNotification(
                         isAlbum = false,
                         browseId = single["browseId"] ?: "",
@@ -292,7 +300,11 @@ fun NotificationItem(
                         navController,
                     )
                 }
-                items(notification.album) { album ->
+                items(
+                    items = notification.album,
+                    key = { album -> "album_${album["browseId"] ?: album["title"] ?: album.hashCode()}" },
+                    contentType = { "notification_album" },
+                ) { album ->
                     ItemAlbumNotification(
                         isAlbum = true,
                         browseId = album["browseId"] ?: "",

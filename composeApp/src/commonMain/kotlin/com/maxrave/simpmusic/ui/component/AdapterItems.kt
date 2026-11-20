@@ -1755,7 +1755,28 @@ fun MoodAndGenresContentItem(
                     is Item -> (data).contents
                     else -> listOf()
                 }
-            items(itemList) { item ->
+            val itemKeys =
+                remember(itemList) {
+                    val seen = HashMap<String, Int>(itemList.size)
+                    itemList.map { entry ->
+                        val base =
+                            when (entry) {
+                                is com.maxrave.domain.data.model.mood.moodmoments.Content ->
+                                    entry.videoId ?: entry.playlistBrowseId ?: entry.title
+                                is com.maxrave.domain.data.model.mood.genre.Content ->
+                                    entry.playlistBrowseId ?: entry.title.toString()
+                                else -> entry.hashCode().toString()
+                            }
+                        val count = seen[base] ?: 0
+                        seen[base] = count + 1
+                        if (count == 0) base else "$base#$count"
+                    }
+                }
+            itemsIndexed(
+                items = itemList,
+                key = { index, _ -> itemKeys[index] },
+                contentType = { _, entry -> entry?.let { it::class.simpleName } ?: "playlist_item" },
+            ) { _, item ->
                 HomeItemContentPlaylist(onClick = {
                     // The "Songs" shelf mixes tracks into a list that is otherwise all playlists,
                     // so route by videoId: a track starts its radio, everything else opens a page.

@@ -76,6 +76,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -292,11 +293,14 @@ fun HomeScreen(
     // string — in PT the shelf arrives as "Escolha a dedo" while the app string is "Escolhas
     // rápidas", so the exact-title match never fired and the shelf stayed wherever YouTube
     // placed it, rendered as a plain shelf. Match on the distinctive part of the name instead.
-    val isQuickPicks: (String) -> Boolean = { title ->
-        title.equals(quickPicksTitle, ignoreCase = true) ||
-            title.contains("quick pick", ignoreCase = true) ||
-            title.contains("escolha", ignoreCase = true)
-    }
+    val isQuickPicks: (String) -> Boolean =
+        remember(quickPicksTitle) {
+            { title ->
+                title.equals(quickPicksTitle, ignoreCase = true) ||
+                    title.contains("quick pick", ignoreCase = true) ||
+                    title.contains("escolha", ignoreCase = true)
+            }
+        }
     // Any shelf YouTube heads with the listener's own avatar over its title (Listen again is one of
     // several). Home's header already shows the avatar, so those shelves drop it and keep their name
     // and title. Matched on the name rather than on any shelf title, the way the old Welcome back row did.
@@ -1047,9 +1051,10 @@ fun HomeScreen(
                 // along instead of sliding under it. On Desktop and in landscape Create stays put at the
                 // right edge, like the avatar.
                 val createPinned = getPlatform() == Platform.Desktop || getScreenSizeInfo().let { it.wDP >= it.hDP }
-                val chipHeadFade by animateFloatAsState(if (chipRowState.canScrollBackward) 1f else 0f)
-                val chipTailFade by animateFloatAsState(if (chipRowState.canScrollForward) 1f else 0f)
-                val moodLabels = homeMoods.map { stringResource(it.first) }
+                val chipHeadFadeState = animateFloatAsState(if (chipRowState.canScrollBackward) 1f else 0f)
+                val chipTailFadeState = animateFloatAsState(if (chipRowState.canScrollForward) 1f else 0f)
+                val rawMoodLabels = homeMoods.map { stringResource(it.first) }
+                val moodLabels = remember(rawMoodLabels) { rawMoodLabels }
                 // Notifications moved into the avatar menu, Listen Together into the Create sheet.
                 // Remembered so the lambda (and the onSettings lambda inside it) is only rebuilt
                 // when the backdrop or the nav controller actually changes, not on every
@@ -1087,7 +1092,7 @@ fun HomeScreen(
                             modifier =
                                 Modifier
                                     .fillMaxHeight()
-                                    .chipStripEdgeFades(32.dp, start = { chipHeadFade }, end = { chipTailFade })
+                                    .chipStripEdgeFades(32.dp, start = { chipHeadFadeState.value }, end = { chipTailFadeState.value })
                                     .mouseDragScroll(chipRowState)
                                     .horizontalScroll(chipRowState)
                                     .widthIn(min = maxWidth)
@@ -1233,27 +1238,38 @@ internal fun Modifier.chipStripEdgeFades(
     end: () -> Float,
 ): Modifier =
     graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-        .drawWithContent {
-            drawContent()
+        .drawWithCache {
             val fadePx = width.toPx().coerceAtMost(size.width / 2f)
             val startFade = start()
-            if (startFade > 0f) {
-                drawRect(
-                    brush = Brush.horizontalGradient(colorStops = chipFadeStops(startFade, fadingOut = false), startX = 0f, endX = fadePx),
-                    blendMode = BlendMode.DstIn,
-                )
-            }
             val endFade = end()
-            if (endFade > 0f) {
-                drawRect(
-                    brush =
-                        Brush.horizontalGradient(
-                            colorStops = chipFadeStops(endFade, fadingOut = true),
-                            startX = size.width - fadePx,
-                            endX = size.width,
-                        ),
-                    blendMode = BlendMode.DstIn,
-                )
+            val startBrush =
+                if (startFade > 0f) {
+                    Brush.horizontalGradient(
+                        colorStops = chipFadeStops(startFade, fadingOut = false),
+                        startX = 0f,
+                        endX = fadePx,
+                    )
+                } else {
+                    null
+                }
+            val endBrush =
+                if (endFade > 0f) {
+                    Brush.horizontalGradient(
+                        colorStops = chipFadeStops(endFade, fadingOut = true),
+                        startX = size.width - fadePx,
+                        endX = size.width,
+                    )
+                } else {
+                    null
+                }
+            onDrawWithContent {
+                drawContent()
+                if (startBrush != null) {
+                    drawRect(brush = startBrush, blendMode = BlendMode.DstIn)
+                }
+                if (endBrush != null) {
+                    drawRect(brush = endBrush, blendMode = BlendMode.DstIn)
+                }
             }
         }
 

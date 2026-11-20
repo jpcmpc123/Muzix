@@ -68,7 +68,11 @@ fun MoodScreen(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
             ) {
-                items(moodData?.items ?: emptyList()) { item ->
+                items(
+                    items = moodData?.items ?: emptyList(),
+                    key = { item -> "${item.header}_${item.items.firstOrNull()?.playlistBrowseId ?: item.hashCode()}" },
+                    contentType = { "mood_section" },
+                ) { item ->
                     MoodAndGenresContentItem(
                         data = item,
                         navController = navController,

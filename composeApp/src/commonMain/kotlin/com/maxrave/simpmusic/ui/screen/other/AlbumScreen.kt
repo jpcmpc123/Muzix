@@ -54,6 +54,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -84,7 +86,7 @@ import com.maxrave.simpmusic.extension.artworkScrimBrush
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.mouseDragScroll
-import com.maxrave.simpmusic.extension.rememberPaletteColor
+import com.maxrave.simpmusic.extension.rememberPaletteColorState
 import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.DescriptionView
@@ -227,7 +229,7 @@ fun AlbumScreen(
     val isPortrait = screenInfo.wDP < screenInfo.hDP
     val dominantColor = uiState.colors.firstOrNull() ?: Color.Black
     // Apple Music-style page background from the artwork's dominant tone, held and faded (see UIExt.rememberPaletteColor).
-    val mutedPaletteBg = rememberPaletteColor(paletteState.palette)
+    val mutedPaletteBgState = rememberPaletteColorState(paletteState.palette)
 
     // Stable, position-free item keys: a track keeps its key when the list changes around
     // it; a repeated track gets an occurrence suffix, never its index.
@@ -252,12 +254,11 @@ fun AlbumScreen(
     Crossfade(uiState.loadState) {
         when (it) {
             LocalPlaylistState.PlaylistLoadState.Success -> {
-                val albumScrimBrush = remember(mutedPaletteBg) { artworkScrimBrush(mutedPaletteBg) }
                 LazyColumn(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .background(mutedPaletteBg)
+                            .drawBehind { drawRect(mutedPaletteBgState.value) }
                             .glassHazeSource(hazeState),
                     state = lazyState,
                 ) {
@@ -322,7 +323,10 @@ fun AlbumScreen(
                                                             .fillMaxWidth()
                                                             .height((screenInfo.hDP * 0.35f).dp)
                                                             .align(Alignment.BottomCenter)
-                                                            .background(albumScrimBrush),
+                                                            .drawWithCache {
+                                                                val scrimBrush = artworkScrimBrush(mutedPaletteBgState.value)
+                                                                onDrawBehind { drawRect(scrimBrush) }
+                                                            },
                                                 )
                                                 // Title/artist/year overlay (centered horizontally like Apple Music)
                                                 Column(
@@ -1017,7 +1021,7 @@ fun AlbumScreen(
                                 containerColor = Color.Transparent,
                             ),
                         modifier =
-                            Modifier.tintedBarBlur(hazeState, mutedPaletteBg, 0.55f),
+                            Modifier.tintedBarBlur(hazeState, mutedPaletteBgState.value, 0.55f),
                     )
                 }
                 AnimatedVisibility(
@@ -1032,7 +1036,7 @@ fun AlbumScreen(
                         },
                         onOpenActions = { showSelectionSheet = true },
                         modifier =
-                            Modifier.tintedBarBlur(hazeState, mutedPaletteBg, 0.55f),
+                            Modifier.tintedBarBlur(hazeState, mutedPaletteBgState.value, 0.55f),
                     )
                 }
                 if (showSelectionSheet) {

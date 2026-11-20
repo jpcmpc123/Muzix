@@ -523,18 +523,24 @@ class SharedViewModel(
                                 if (mediaState.progress >= 0L && mediaState.progress != _timeline.value.current) {
                                     // A live stream never reports a length (ExoPlayer: C.TIME_UNSET), so
                                     // a missing one means "loading" for everything except a live stream.
-                                    val hasLength = _timeline.value.total > 0L || _timeline.value.isLive
+                                    val currentTotal = _timeline.value.total
+                                    val hasLength = currentTotal > 0L || _timeline.value.isLive
+                                    val progressDelta = mediaState.progress - lastPublishedProgressMs
+                                    val dueByTime =
+                                        lastPublishedProgressMs < 0L || progressDelta < 0L || progressDelta >= 200L
+                                    if (!dueByTime && currentTotal > 0L && hasLength != _timeline.value.loading) {
+                                        continue@collect
+                                    }
                                     val newTotal =
-                                        mediaPlayerHandler.getPlayerDuration().takeIf { d -> d > 0L } ?: _timeline.value.total
+                                        mediaPlayerHandler.getPlayerDuration().takeIf { d -> d > 0L } ?: currentTotal
                                     // Publish at most ~5x per second while only the position moves:
                                     // this branch fires on a 50 ms ticker and every publish recomposes
                                     // the player and mini-player screens. A total/loading change, a
                                     // seek (backwards jump) and the first publish still go through
                                     // immediately, so nothing the UI shows lags behind the player.
                                     val slowStateChanged =
-                                        newTotal != _timeline.value.total || hasLength == _timeline.value.loading
-                                    val progressDelta = mediaState.progress - lastPublishedProgressMs
-                                    if (slowStateChanged || lastPublishedProgressMs < 0L || progressDelta < 0L || progressDelta >= 200L) {
+                                        newTotal != currentTotal || hasLength == _timeline.value.loading
+                                    if (slowStateChanged || dueByTime) {
                                         lastPublishedProgressMs = mediaState.progress
                                         _timeline.update {
                                             it.copy(
@@ -866,7 +872,7 @@ class SharedViewModel(
         key: String,
         value: String,
     ) {
-        runBlocking { dataStoreManager.putString(key, value) }
+        viewModelScope.launch { dataStoreManager.putString(key, value) }
     }
 
     fun setSleepTimer(minutes: Int) {
@@ -1178,8 +1184,10 @@ class SharedViewModel(
     }
 
     fun getLocation() {
-        regionCode = runBlocking { dataStoreManager.location.first() }
-        language = runBlocking { dataStoreManager.getString(SELECTED_LANGUAGE).first() }
+        viewModelScope.launch {
+            regionCode = dataStoreManager.location.first()
+            language = dataStoreManager.getString(SELECTED_LANGUAGE).first()
+        }
     }
 
     private fun checkAllDownloadingLocalPlaylists() {
@@ -2217,6 +2225,14 @@ class SharedViewModel(
     }
 
     fun shouldCheckForUpdate(): Boolean = runBlocking { dataStoreManager.autoCheckForUpdates.first() == TRUE }
+
+    fun checkForUpdateIfEnabled() {
+        viewModelScope.launch {
+            if (dataStoreManager.autoCheckForUpdates.first() == TRUE) {
+                checkForUpdate()
+            }
+        }
+    }
 
     private var _downloadFileProgress = MutableStateFlow<DownloadProgress>(DownloadProgress.INIT)
     val downloadFileProgress: StateFlow<DownloadProgress> get() = _downloadFileProgress
