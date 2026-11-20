@@ -53,6 +53,9 @@ jobs:
       - name: Generate aboutLibraries.json
         run: ./gradlew exportLibraryDefinitions
 
+      - name: Run unit tests (lyrics, domain, data, composeApp)
+        run: ./gradlew :lyricsService:jvmTest :domain:jvmTest :data:jvmTest :composeApp:jvmTest --build-cache
+
       - name: Build release APK (unsigned)
         run: ./gradlew androidApp:assembleRelease --build-cache -x lintVitalAnalyzeRelease
 
