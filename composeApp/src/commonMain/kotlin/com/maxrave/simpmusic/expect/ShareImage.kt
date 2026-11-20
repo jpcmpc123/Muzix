@@ -29,3 +29,12 @@ expect suspend fun shareImage(
     chooserTitle: String,
     mimeType: String = "image/png",
 ): Boolean
+
+/**
+ * Writes [bytes] into the platform's Downloads folder under [fileName].
+ */
+expect suspend fun saveFileToDownloads(
+    bytes: ByteArray,
+    fileName: String,
+    mimeType: String = "text/plain",
+): Boolean

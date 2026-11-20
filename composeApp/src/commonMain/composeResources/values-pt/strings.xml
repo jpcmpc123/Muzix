@@ -580,4 +580,7 @@
     <string name="month_full_oct">Outubro</string>
     <string name="month_full_nov">Novembro</string>
     <string name="month_full_dec">Dezembro</string>
+    <string name="log_export_failed">Não foi possível exportar o log</string>
+    <string name="log_saved">Salvo na pasta Downloads</string>
+    <string name="log_save_permission_denied">Permissão de armazenamento necessária para salvar o log</string>
 </resources>

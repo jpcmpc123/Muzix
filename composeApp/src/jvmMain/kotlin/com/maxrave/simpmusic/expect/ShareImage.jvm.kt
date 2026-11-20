@@ -44,6 +44,21 @@ actual suspend fun shareImage(
         }
     }
 
+actual suspend fun saveFileToDownloads(
+    bytes: ByteArray,
+    fileName: String,
+    mimeType: String,
+): Boolean =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            writeToDownloads(bytes, fileName)
+            true
+        }.getOrElse { error ->
+            Logger.e(TAG, "Could not save $fileName to downloads: ${error.message}")
+            false
+        }
+    }
+
 private fun writeToDownloads(
     bytes: ByteArray,
     fileName: String,

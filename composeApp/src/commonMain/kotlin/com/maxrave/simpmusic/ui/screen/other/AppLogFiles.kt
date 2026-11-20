@@ -3,6 +3,7 @@ package com.maxrave.simpmusic.ui.screen.other
 import com.maxrave.domain.extension.epochMillisToLocalDateTime
 import com.maxrave.domain.extension.now
 import com.maxrave.logger.Logger
+import com.maxrave.simpmusic.expect.saveFileToDownloads
 import com.maxrave.simpmusic.expect.shareImage
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.utils.VersionManager
@@ -209,8 +210,7 @@ private val SECRETS =
 
 private fun redactSecrets(text: String): String = SECRETS.fold(text) { acc, (pattern, replacement) -> pattern.replace(acc, replacement) }
 
-/** Every log file, oldest first, as one redacted text file handed to [shareImage]. */
-internal suspend fun exportLog(chooserTitle: String): Boolean {
+private suspend fun buildLogExport(): Pair<ByteArray, String>? {
     val bytes =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -219,14 +219,30 @@ internal suspend fun exportLog(chooserTitle: String): Boolean {
                     for (name in listOf(Logger.APP_LOG, Logger.ERROR_LOG)) {
                         appendLine()
                         appendLine("===== $name.log =====")
-                        Logger.logFiles(name).map(::File).filter(File::exists).forEach { append(it.readText()) }
+                        Logger.logFiles(name).map(::File).forEach { file ->
+                            runCatching {
+                                if (file.exists()) append(file.readText())
+                            }
+                        }
                     }
                 }.let(::redactSecrets).encodeToByteArray()
             }.getOrNull()
-        } ?: return false
+        } ?: return null
     val stamp = now()
     val fileName =
         "simpmusic-log-${stamp.year}${stamp.month.number.pad()}${stamp.day.pad()}-" +
             "${stamp.hour.pad()}${stamp.minute.pad()}${stamp.second.pad()}.txt"
+    return bytes to fileName
+}
+
+/** Every log file, oldest first, as one redacted text file handed to [shareImage]. */
+internal suspend fun exportLog(chooserTitle: String): Boolean {
+    val (bytes, fileName) = buildLogExport() ?: return false
     return shareImage(bytes, fileName, chooserTitle, mimeType = "text/plain")
+}
+
+/** Every log file, oldest first, saved as one redacted text file in the Downloads folder. */
+internal suspend fun downloadLog(): Boolean {
+    val (bytes, fileName) = buildLogExport() ?: return false
+    return saveFileToDownloads(bytes, fileName, mimeType = "text/plain")
 }

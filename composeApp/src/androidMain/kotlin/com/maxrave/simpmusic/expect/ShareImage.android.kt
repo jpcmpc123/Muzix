@@ -94,3 +94,51 @@ actual suspend fun shareImage(
             false
         }
     }
+
+actual suspend fun saveFileToDownloads(
+    bytes: ByteArray,
+    fileName: String,
+    mimeType: String,
+): Boolean =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            val context: AppCompatActivity = getKoin().get()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val resolver = context.contentResolver
+                val values =
+                    ContentValues().apply {
+                        put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                        put(MediaStore.Downloads.MIME_TYPE, mimeType)
+                        put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                        put(MediaStore.Downloads.IS_PENDING, 1)
+                    }
+
+                val uri =
+                    resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                        ?: return@runCatching false
+
+                try {
+                    resolver.openOutputStream(uri)?.use { it.write(bytes) }
+                        ?: run {
+                            resolver.delete(uri, null, null)
+                            return@runCatching false
+                        }
+
+                    values.clear()
+                    values.put(MediaStore.Downloads.IS_PENDING, 0)
+                    resolver.update(uri, values, null, null)
+                    true
+                } catch (error: Throwable) {
+                    runCatching { resolver.delete(uri, null, null) }
+                    throw error
+                }
+            } else {
+                val folder = File(getDownloadFolderPath()).apply { if (!exists()) mkdirs() }
+                File(folder, fileName).writeBytes(bytes)
+                true
+            }
+        }.getOrElse { error ->
+            Logger.e(TAG, "Could not save $fileName to downloads: ${error.message}")
+            false
+        }
+    }

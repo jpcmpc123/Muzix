@@ -61,6 +61,7 @@ import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.copyToClipboard
 import com.maxrave.simpmusic.expect.ui.DesktopMiniPlayerClearance
 import com.maxrave.simpmusic.expect.ui.VerticalScrollBar
+import com.maxrave.simpmusic.expect.ui.rememberSaveImagePermission
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.Chip
 import com.maxrave.simpmusic.ui.component.EndOfPage
@@ -107,6 +108,8 @@ import simpmusic.composeapp.generated.resources.log_level_warn
 import simpmusic.composeapp.generated.resources.log_live
 import simpmusic.composeapp.generated.resources.log_no_stack_trace
 import simpmusic.composeapp.generated.resources.log_paused
+import simpmusic.composeapp.generated.resources.log_save_permission_denied
+import simpmusic.composeapp.generated.resources.log_saved
 import simpmusic.composeapp.generated.resources.log_search_hint
 import simpmusic.composeapp.generated.resources.log_stack_trace_lines
 import simpmusic.composeapp.generated.resources.share
@@ -216,7 +219,26 @@ fun AppLogScreen(
 
     val copied = stringResource(Res.string.copied_to_clipboard)
     val exportFailed = stringResource(Res.string.log_export_failed)
+    val logSaved = stringResource(Res.string.log_saved)
+    val permissionDenied = stringResource(Res.string.log_save_permission_denied)
     val shareTitle = stringResource(Res.string.share)
+    var exporting by remember { mutableStateOf(false) }
+    val savePermission =
+        rememberSaveImagePermission { granted ->
+            if (!granted) {
+                showToast(permissionDenied, ToastGravity.Bottom)
+                exporting = false
+                return@rememberSaveImagePermission
+            }
+            scope.launch {
+                try {
+                    val ok = downloadLog()
+                    showToast(if (ok) logSaved else exportFailed, ToastGravity.Bottom)
+                } finally {
+                    exporting = false
+                }
+            }
+        }
     val copy = { line: LogLine ->
         copyToClipboard("App log", line.render())
         showToast(copied, ToastGravity.Bottom)
@@ -224,12 +246,15 @@ fun AppLogScreen(
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 840.dp
+        val actionModifier = if (wide) Modifier else Modifier.size(40.dp)
         Column(Modifier.fillMaxSize()) {
             TopAppBar(
                 title = {
                     Text(
                         text = stringResource(Res.string.app_log),
                         style = typo().titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 },
                 navigationIcon = {
@@ -246,7 +271,7 @@ fun AppLogScreen(
                 },
                 actions = {
                     // Android Studio's Logcat toolbar, in its order: clear, pause, restart, stick.
-                    RippleIconButton(SimpIcons.Delete, tint = onSurface) {
+                    RippleIconButton(SimpIcons.Delete, actionModifier, tint = onSurface) {
                         scope.launch {
                             tailLock.withLock {
                                 withContext(Dispatchers.IO) {
@@ -259,10 +284,10 @@ fun AppLogScreen(
                             }
                         }
                     }
-                    RippleIconButton(if (paused) SimpIcons.PlayArrow else SimpIcons.Pause, tint = onSurface) {
+                    RippleIconButton(if (paused) SimpIcons.PlayArrow else SimpIcons.Pause, actionModifier, tint = onSurface) {
                         paused = !paused
                     }
-                    RippleIconButton(SimpIcons.RestartAlt, tint = onSurface) {
+                    RippleIconButton(SimpIcons.RestartAlt, actionModifier, tint = onSurface) {
                         paused = false
                         stickToBottom = true
                         restarts++
@@ -276,14 +301,30 @@ fun AppLogScreen(
                     ) {
                         RippleIconButton(
                             SimpIcons.KeyboardDoubleArrowDown,
+                            actionModifier,
                             tint = if (stickToBottom) MaterialTheme.colorScheme.primary else onSurface,
                         ) {
                             stickToBottom = !stickToBottom
                         }
                     }
-                    RippleIconButton(if (isDesktop) SimpIcons.Download else SimpIcons.Share, tint = onSurface) {
-                        scope.launch {
-                            if (!exportLog(shareTitle)) showToast(exportFailed, ToastGravity.Bottom)
+                    RippleIconButton(SimpIcons.Download, actionModifier, tint = onSurface) {
+                        if (!exporting) {
+                            exporting = true
+                            savePermission.requestIfNeeded()
+                        }
+                    }
+                    if (!isDesktop) {
+                        RippleIconButton(SimpIcons.Share, actionModifier, tint = onSurface) {
+                            if (!exporting) {
+                                exporting = true
+                                scope.launch {
+                                    try {
+                                        if (!exportLog(shareTitle)) showToast(exportFailed, ToastGravity.Bottom)
+                                    } finally {
+                                        exporting = false
+                                    }
+                                }
+                            }
                         }
                     }
                 },
