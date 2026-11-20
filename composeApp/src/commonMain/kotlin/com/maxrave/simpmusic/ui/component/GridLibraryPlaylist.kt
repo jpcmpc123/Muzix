@@ -33,6 +33,9 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -129,15 +132,40 @@ internal inline fun <reified T> GridLibraryPlaylist(
             .collect { onScrolling.invoke(it) }
     }
     val pullToRefreshState = rememberPullToRefreshState()
+    // Initial loading and a pull-to-refresh both arrive as LocalResource.Loading, so the type alone
+    // cannot tell them apart. The top spinner belongs to the gesture only; the first load is drawn
+    // by the centered indicator below. [userRefreshing] is raised by the gesture and dropped as soon
+    // as data leaves Loading (Success AND Error), so the spinner can never stay stuck after a failure.
+    var userRefreshing by remember { mutableStateOf(false) }
+    // Last list that loaded successfully: kept on screen while a manual refresh runs (the ViewModel
+    // replaces the data with Loading, which would otherwise blank the grid under the spinner).
+    var lastList by remember { mutableStateOf<List<T>>(emptyList()) }
+    LaunchedEffect(data) {
+        when (data) {
+            is LocalResource.Loading -> Unit
+            is LocalResource.Success -> {
+                userRefreshing = false
+                lastList = data.data ?: emptyList()
+            }
+            is LocalResource.Error -> {
+                userRefreshing = false
+                lastList = emptyList()
+            }
+        }
+    }
+    val showTopIndicator = userRefreshing && data is LocalResource.Loading
     PullToRefreshBox(
         modifier = Modifier.fillMaxSize(),
         state = pullToRefreshState,
-        onRefresh = onReload,
-        isRefreshing = data is LocalResource.Loading,
+        onRefresh = {
+            userRefreshing = true
+            onReload()
+        },
+        isRefreshing = showTopIndicator,
         indicator = {
             PullToRefreshDefaults.Indicator(
                 state = pullToRefreshState,
-                isRefreshing = data is LocalResource.Loading,
+                isRefreshing = showTopIndicator,
                 modifier =
                     Modifier
                         .align(Alignment.TopCenter)
@@ -151,10 +179,16 @@ internal inline fun <reified T> GridLibraryPlaylist(
         },
     ) {
         Crossfade(targetState = data) { data ->
-            val list = (data as? LocalResource.Success)?.data ?: emptyList()
+            // While a manual refresh loads, the previous list stays visible under the top spinner.
+            val list =
+                (data as? LocalResource.Success)?.data
+                    ?: if (data is LocalResource.Loading && userRefreshing) lastList else emptyList()
             // A header counts as content: a tab whose list is empty but whose header is the
             // point of the tab must not fall through to the empty text and hide it.
-            if ((data is LocalResource.Success && list.isNotEmpty()) || createNewPlaylist != null || header != null) {
+            if (((data is LocalResource.Success || data is LocalResource.Loading) && list.isNotEmpty()) ||
+                createNewPlaylist != null ||
+                header != null
+            ) {
                 LazyVerticalGrid(
                     columns = LibraryGridCells,
                     contentPadding = contentPadding,
