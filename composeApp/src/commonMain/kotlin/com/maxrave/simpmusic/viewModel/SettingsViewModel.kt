@@ -283,71 +283,77 @@ class SettingsViewModel(
 
     fun getAudioSessionId() = mediaPlayerHandler.player.audioSessionId
 
+    private var persistentDataCollectorsStarted = false
+    private var proxyDetailsJob: Job? = null
+
     fun getData() {
-        getLocation()
-        getLanguage()
-        getQuality()
+        if (!persistentDataCollectorsStarted) {
+            persistentDataCollectorsStarted = true
+            getLocation()
+            getLanguage()
+            getQuality()
+            getPlayerCacheLimit()
+            getLoggedIn()
+            getNormalizeVolume()
+            getSkipSilent()
+            getSavedPlaybackState()
+            getSendBackToGoogle()
+            getTranslationLanguage()
+            getYoutubeSubtitleLanguage()
+            getLyricsProvider()
+            getLyricsOffsetMs()
+            getUseTranslation()
+            getPlayVideoInsteadOfAudio()
+            getRadioAudioOnly()
+            getVideoQuality()
+            getSpotifyLogIn()
+            getSpotifyLyrics()
+            getSyncFollowToYouTube()
+            getSpotifyCanvas()
+            getAMAnimatedArtwork()
+            getUsingProxy()
+            getAutoCheckUpdate()
+            getAIProvider()
+            getAIApiKey()
+            getAITranslation()
+            getCustomModelId()
+            getCustomOpenAIBaseUrl()
+            getCustomOpenAIHeaders()
+            getKillServiceOnExit()
+            getCrossfadeEnabled()
+            getCrossfadeDuration()
+            getCrossfadeDjMode()
+            getCrossfadeSkipAlbum()
+            getAutoDownloadLikedSongs()
+            getSmartDownloads()
+            getContributorNameAndEmail()
+            getBackupDownloaded()
+            getUpdateChannel()
+            getEnableLiquidGlass()
+            getExplicitContentEnabled()
+            getDiscordLoggedIn()
+            getDiscordRichPresenceEnabled()
+            getLastfmSession()
+            getLastfmScrobbleEnabled()
+            getKeepYouTubePlaylistOffline()
+            getCombineLocalAndYouTubeLiked()
+            getDownloadQuality()
+            getVideoDownloadQuality()
+            getLocalTrackingEnabled()
+            getBlogNotificationEnabled()
+            getAutoBackupEnabled()
+            getAutoBackupFrequency()
+            getAutoBackupMaxFiles()
+            getAutoBackupLastTime()
+        }
         getPlayerCacheSize()
         getDownloadedCacheSize()
-        getPlayerCacheLimit()
-        getLoggedIn()
-        getNormalizeVolume()
-        getSkipSilent()
-        getSavedPlaybackState()
-        getSendBackToGoogle()
         getLastCheckForUpdate()
         getSponsorBlockEnabled()
         getSponsorBlockCategories()
-        getTranslationLanguage()
-        getYoutubeSubtitleLanguage()
-        getLyricsProvider()
-        getLyricsOffsetMs()
-        getUseTranslation()
-        getPlayVideoInsteadOfAudio()
-        getRadioAudioOnly()
-        getVideoQuality()
-        getSpotifyLogIn()
-        getSpotifyLyrics()
-        getSyncFollowToYouTube()
         getEqualizer()
         getAudioEffects()
-        getSpotifyCanvas()
-        getAMAnimatedArtwork()
-        getUsingProxy()
         getCanvasCache()
-        getAutoCheckUpdate()
-        getAIProvider()
-        getAIApiKey()
-        getAITranslation()
-        getCustomModelId()
-        getCustomOpenAIBaseUrl()
-        getCustomOpenAIHeaders()
-        getKillServiceOnExit()
-        getCrossfadeEnabled()
-        getCrossfadeDuration()
-        getCrossfadeDjMode()
-        getCrossfadeSkipAlbum()
-        getAutoDownloadLikedSongs()
-        getSmartDownloads()
-        getContributorNameAndEmail()
-        getBackupDownloaded()
-        getUpdateChannel()
-        getEnableLiquidGlass()
-        getExplicitContentEnabled()
-        getDiscordLoggedIn()
-        getDiscordRichPresenceEnabled()
-        getLastfmSession()
-        getLastfmScrobbleEnabled()
-        getKeepYouTubePlaylistOffline()
-        getCombineLocalAndYouTubeLiked()
-        getDownloadQuality()
-        getVideoDownloadQuality()
-        getLocalTrackingEnabled()
-        getBlogNotificationEnabled()
-        getAutoBackupEnabled()
-        getAutoBackupFrequency()
-        getAutoBackupMaxFiles()
-        getAutoBackupLastTime()
         viewModelScope.launch {
             calculateDataFraction(
                 cacheRepository,
@@ -368,7 +374,6 @@ class SettingsViewModel(
     fun setLocalTrackingEnabled(enabled: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setLocalTrackingEnabled(enabled)
-            getLocalTrackingEnabled()
         }
     }
 
@@ -383,7 +388,6 @@ class SettingsViewModel(
     fun setBlogNotificationEnabled(enabled: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setBlogNotificationEnabled(enabled)
-            getBlogNotificationEnabled()
         }
     }
 
@@ -398,7 +402,6 @@ class SettingsViewModel(
     fun setDownloadQuality(quality: String) {
         viewModelScope.launch {
             dataStoreManager.setDownloadQuality(quality)
-            getDownloadQuality()
         }
     }
 
@@ -419,7 +422,6 @@ class SettingsViewModel(
             if (VIDEO_QUALITY.items.contains(quality)) {
                 dataStoreManager.setVideoDownloadQuality(quality)
             }
-            getVideoDownloadQuality()
         }
     }
 
@@ -434,7 +436,6 @@ class SettingsViewModel(
     fun setKeepYouTubePlaylistOffline(keep: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setKeepYouTubePlaylistOffline(keep)
-            getKeepYouTubePlaylistOffline()
         }
     }
 
@@ -449,7 +450,6 @@ class SettingsViewModel(
     fun setCombineLocalAndYouTubeLiked(combine: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setCombineLocalAndYouTubeLiked(combine)
-            getCombineLocalAndYouTubeLiked()
         }
     }
 
@@ -464,7 +464,6 @@ class SettingsViewModel(
     fun setCrossfadeEnabled(enabled: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setCrossfadeEnabled(enabled)
-            getCrossfadeEnabled()
         }
     }
 
@@ -479,7 +478,6 @@ class SettingsViewModel(
     fun setCrossfadeDuration(duration: Int) {
         viewModelScope.launch {
             dataStoreManager.setCrossfadeDuration(duration)
-            getCrossfadeDuration()
         }
     }
 
@@ -494,7 +492,6 @@ class SettingsViewModel(
     fun setCrossfadeDjMode(enabled: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setCrossfadeDjMode(enabled)
-            getCrossfadeDjMode()
         }
     }
 
@@ -633,7 +630,6 @@ class SettingsViewModel(
             // a dead RPC alive (issue #2157). The existing richPresenceEnabled collector refreshes the UI.
             dataStoreManager.setRichPresenceEnabled(false)
             delay(100)
-            getDiscordLoggedIn()
         }
     }
 
@@ -648,8 +644,6 @@ class SettingsViewModel(
     fun setDiscordRichPresenceEnabled(enabled: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setRichPresenceEnabled(enabled)
-            delay(100)
-            getDiscordRichPresenceEnabled()
         }
     }
 
@@ -664,7 +658,6 @@ class SettingsViewModel(
     fun setExplicitContentEnabled(enabled: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setExplicitContentEnabled(enabled)
-            getExplicitContentEnabled()
         }
     }
 
@@ -679,7 +672,6 @@ class SettingsViewModel(
     fun setEnableLiquidGlass(enableLiquidGlass: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setEnableLiquidGlass(enableLiquidGlass)
-            getEnableLiquidGlass()
         }
     }
 
@@ -694,7 +686,6 @@ class SettingsViewModel(
     fun setUpdateChannel(channel: String) {
         viewModelScope.launch {
             dataStoreManager.setUpdateChannel(channel)
-            getUpdateChannel()
         }
     }
 
@@ -709,7 +700,6 @@ class SettingsViewModel(
     fun setBackupDownloaded(backupDownloaded: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setBackupDownloaded(backupDownloaded)
-            getBackupDownloaded()
         }
     }
 
@@ -725,7 +715,6 @@ class SettingsViewModel(
     fun setAutoBackupEnabled(enabled: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setAutoBackupEnabled(enabled)
-            getAutoBackupEnabled()
         }
     }
 
@@ -740,7 +729,6 @@ class SettingsViewModel(
     fun setAutoBackupFrequency(frequency: String) {
         viewModelScope.launch {
             dataStoreManager.setAutoBackupFrequency(frequency)
-            getAutoBackupFrequency()
         }
     }
 
@@ -755,7 +743,6 @@ class SettingsViewModel(
     fun setAutoBackupMaxFiles(max: Int) {
         viewModelScope.launch {
             dataStoreManager.setAutoBackupMaxFiles(max)
-            getAutoBackupMaxFiles()
         }
     }
 
@@ -780,14 +767,12 @@ class SettingsViewModel(
     fun setContributorName(name: String) {
         viewModelScope.launch {
             dataStoreManager.setContributorLyricsDatabase(name to contributor.value.second)
-            getContributorNameAndEmail()
         }
     }
 
     fun setContributorEmail(email: String) {
         viewModelScope.launch {
             dataStoreManager.setContributorLyricsDatabase(contributor.value.first to email)
-            getContributorNameAndEmail()
         }
     }
 
@@ -802,7 +787,6 @@ class SettingsViewModel(
     fun setCustomModelId(modelId: String) {
         viewModelScope.launch {
             dataStoreManager.setCustomModelId(modelId)
-            getCustomModelId()
         }
     }
 
@@ -817,7 +801,6 @@ class SettingsViewModel(
     fun setCustomOpenAIBaseUrl(baseUrl: String) {
         viewModelScope.launch {
             dataStoreManager.setCustomOpenAIBaseUrl(baseUrl)
-            getCustomOpenAIBaseUrl()
         }
     }
 
@@ -832,7 +815,6 @@ class SettingsViewModel(
     fun setCustomOpenAIHeaders(headers: String) {
         viewModelScope.launch {
             dataStoreManager.setCustomOpenAIHeaders(headers)
-            getCustomOpenAIHeaders()
         }
     }
 
@@ -847,7 +829,6 @@ class SettingsViewModel(
     fun setAIProvider(provider: String) {
         viewModelScope.launch {
             dataStoreManager.setAIProvider(provider)
-            getAIProvider()
         }
     }
 
@@ -862,7 +843,6 @@ class SettingsViewModel(
     fun setAITranslation(useAITranslation: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setUseAITranslation(useAITranslation)
-            getAITranslation()
         }
     }
 
@@ -886,7 +866,6 @@ class SettingsViewModel(
             if (apiKey.isEmpty()) {
                 dataStoreManager.setUseAITranslation(false)
             }
-            getAIApiKey()
         }
     }
 
@@ -901,7 +880,6 @@ class SettingsViewModel(
     fun setAutoCheckUpdate(autoCheckUpdate: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setAutoCheckForUpdates(autoCheckUpdate)
-            getAutoCheckUpdate()
         }
     }
 
@@ -960,50 +938,50 @@ class SettingsViewModel(
     fun setUsingProxy(usingProxy: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setUsingProxy(usingProxy)
-            getUsingProxy()
-            getProxy()
         }
     }
 
     private fun getProxy() {
-        viewModelScope.launch {
-            val host =
-                launch {
-                    dataStoreManager.proxyHost.collect {
-                        _proxyHost.value = it
+        if (proxyDetailsJob?.isActive == true) return
+        proxyDetailsJob =
+            viewModelScope.launch {
+                val host =
+                    launch {
+                        dataStoreManager.proxyHost.collect {
+                            _proxyHost.value = it
+                        }
                     }
-                }
-            val port =
-                launch {
-                    dataStoreManager.proxyPort.collect {
-                        _proxyPort.value = it
+                val port =
+                    launch {
+                        dataStoreManager.proxyPort.collect {
+                            _proxyPort.value = it
+                        }
                     }
-                }
-            val type =
-                launch {
-                    dataStoreManager.proxyType.collect {
-                        _proxyType.value = it
-                        log("getProxy: $it")
+                val type =
+                    launch {
+                        dataStoreManager.proxyType.collect {
+                            _proxyType.value = it
+                            log("getProxy: $it")
+                        }
                     }
-                }
-            val username =
-                launch {
-                    dataStoreManager.proxyUsername.collect {
-                        _proxyUsername.value = it
+                val username =
+                    launch {
+                        dataStoreManager.proxyUsername.collect {
+                            _proxyUsername.value = it
+                        }
                     }
-                }
-            val password =
-                launch {
-                    dataStoreManager.proxyPassword.collect {
-                        _proxyPassword.value = it
+                val password =
+                    launch {
+                        dataStoreManager.proxyPassword.collect {
+                            _proxyPassword.value = it
+                        }
                     }
-                }
-            host.join()
-            port.join()
-            type.join()
-            username.join()
-            password.join()
-        }
+                host.join()
+                port.join()
+                type.join()
+                username.join()
+                password.join()
+            }
     }
 
     fun setProxy(
@@ -1060,7 +1038,6 @@ class SettingsViewModel(
     fun setTranslationLanguage(language: String) {
         viewModelScope.launch {
             dataStoreManager.setTranslationLanguage(language)
-            getTranslationLanguage()
         }
     }
 
@@ -1092,7 +1069,6 @@ class SettingsViewModel(
     fun setUseTranslation(useTranslation: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setEnableTranslateLyric(useTranslation)
-            getUseTranslation()
         }
     }
 
@@ -1107,7 +1083,6 @@ class SettingsViewModel(
     fun setLyricsProvider(provider: String) {
         viewModelScope.launch {
             dataStoreManager.setLyricsProvider(provider)
-            getLyricsProvider()
         }
     }
 
@@ -1166,7 +1141,6 @@ class SettingsViewModel(
     fun changeLocation(location: String) {
         viewModelScope.launch {
             dataStoreManager.setLocation(location)
-            getLocation()
         }
     }
 
@@ -1204,7 +1178,6 @@ class SettingsViewModel(
     fun setPlayVideoInsteadOfAudio(playVideoInsteadOfAudio: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setWatchVideoInsteadOfPlayingAudio(playVideoInsteadOfAudio)
-            getPlayVideoInsteadOfAudio()
         }
     }
 
@@ -1262,7 +1235,6 @@ class SettingsViewModel(
             if (VIDEO_QUALITY.items.contains(item)) {
                 dataStoreManager.setVideoQuality(item)
             }
-            getVideoQuality()
         }
     }
 
@@ -1270,7 +1242,6 @@ class SettingsViewModel(
         viewModelScope.launch {
             log("changeQuality: $qualityItem")
             dataStoreManager.setQuality(qualityItem ?: QUALITY.items.first().toString())
-            getQuality()
         }
     }
 
@@ -1425,7 +1396,6 @@ class SettingsViewModel(
         viewModelScope.launch {
             dataStoreManager.putString(SELECTED_LANGUAGE, code)
             Logger.w("SettingsViewModel", "changeLanguage: $code")
-            getLanguage()
             changeLanguageNative(code)
         }
     }
@@ -1441,7 +1411,6 @@ class SettingsViewModel(
     fun setNormalizeVolume(normalizeVolume: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setNormalizeVolume(normalizeVolume)
-            getNormalizeVolume()
         }
     }
 
@@ -1456,7 +1425,6 @@ class SettingsViewModel(
     fun setSendBackToGoogle(sendBackToGoogle: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setSendBackToGoogle(sendBackToGoogle)
-            getSendBackToGoogle()
         }
     }
 
@@ -1471,7 +1439,6 @@ class SettingsViewModel(
     fun setSkipSilent(skip: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setSkipSilent(skip)
-            getSkipSilent()
         }
     }
 
@@ -1486,7 +1453,6 @@ class SettingsViewModel(
     fun setSavedPlaybackState(savedPlaybackState: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setSaveStateOfPlayback(savedPlaybackState)
-            getSavedPlaybackState()
         }
     }
 
@@ -1501,7 +1467,6 @@ class SettingsViewModel(
     fun setPlayerCacheLimit(size: Int) {
         viewModelScope.launch {
             dataStoreManager.setMaxSongCacheSize(size)
-            getPlayerCacheLimit()
         }
     }
 
@@ -1728,7 +1693,6 @@ class SettingsViewModel(
             dataStoreManager.setSyncFollowToYouTube(false)
             delay(500)
             getAllGoogleAccount()
-            getLoggedIn()
         }
     }
 
@@ -1772,7 +1736,6 @@ class SettingsViewModel(
                 dataStoreManager.setSpotifyPersonalTokenExpires(0)
                 delay(500)
             }
-            getSpotifyLogIn()
         }
     }
 
@@ -2066,7 +2029,6 @@ class SettingsViewModel(
     fun setSpotifyLyrics(loggedIn: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setSpotifyLyrics(loggedIn)
-            getSpotifyLyrics()
         }
     }
 
@@ -2085,7 +2047,6 @@ class SettingsViewModel(
     fun setSpotifyCanvas(loggedIn: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setSpotifyCanvas(loggedIn)
-            getSpotifyCanvas()
         }
     }
 
@@ -2100,7 +2061,6 @@ class SettingsViewModel(
     fun setAMAnimatedArtwork(enabled: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setAMAnimatedArtwork(enabled)
-            getAMAnimatedArtwork()
         }
     }
 
@@ -2117,7 +2077,6 @@ class SettingsViewModel(
     fun setKillServiceOnExit(kill: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setKillServiceOnExit(kill)
-            getKillServiceOnExit()
         }
     }
 
@@ -2132,7 +2091,6 @@ class SettingsViewModel(
     fun setYoutubeSubtitleLanguage(language: String) {
         viewModelScope.launch {
             dataStoreManager.setYoutubeSubtitleLanguage(language)
-            getYoutubeSubtitleLanguage()
         }
     }
 
@@ -2163,7 +2121,6 @@ class SettingsViewModel(
     fun setHelpBuildLyricsDatabase(help: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setHelpBuildLyricsDatabase(help)
-            getHelpBuildLyricsDatabase()
         }
     }
 }

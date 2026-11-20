@@ -1163,30 +1163,26 @@ class SharedViewModel(
 
     private fun checkAllDownloadingLocalPlaylists() {
         viewModelScope.launch {
-            localPlaylistRepository.getAllDownloadingLocalPlaylists().collectLatest { playlists ->
-                playlists.forEach { playlist ->
-                    localPlaylistRepository.updateDownloadState(playlist.id, 0, successMessage = getString(Res.string.updated)).lastOrNull()
-                }
+            localPlaylistRepository.getAllDownloadingLocalPlaylists().firstOrNull()?.forEach { playlist ->
+                localPlaylistRepository.updateDownloadState(playlist.id, 0, successMessage = getString(Res.string.updated)).lastOrNull()
             }
         }
     }
 
     private fun checkAllDownloadingPlaylists() {
         viewModelScope.launch {
-            playlistRepository.getAllDownloadingPlaylist().collectLatest { list ->
-                list.forEach { data ->
-                    when (data) {
-                        is AlbumEntity -> {
-                            albumRepository.updateAlbumDownloadState(data.browseId, 0)
-                        }
+            playlistRepository.getAllDownloadingPlaylist().firstOrNull()?.forEach { data ->
+                when (data) {
+                    is AlbumEntity -> {
+                        albumRepository.updateAlbumDownloadState(data.browseId, 0)
+                    }
 
-                        is PlaylistEntity -> {
-                            playlistRepository.updatePlaylistDownloadState(data.id, 0)
-                        }
+                    is PlaylistEntity -> {
+                        playlistRepository.updatePlaylistDownloadState(data.id, 0)
+                    }
 
-                        else -> {
-                            // Skip
-                        }
+                    else -> {
+                        // Skip
                     }
                 }
             }
@@ -1195,21 +1191,17 @@ class SharedViewModel(
 
     private fun checkAllDownloadingSongs() {
         viewModelScope.launch {
-            songRepository.getDownloadingSongs().collect { songs ->
-                songs?.forEach { song ->
-                    songRepository.updateDownloadState(
-                        song.videoId,
-                        DownloadState.STATE_NOT_DOWNLOADED,
-                    )
-                }
+            songRepository.getDownloadingSongs().firstOrNull()?.forEach { song ->
+                songRepository.updateDownloadState(
+                    song.videoId,
+                    DownloadState.STATE_NOT_DOWNLOADED,
+                )
             }
-            songRepository.getPreparingSongs().collect { songs ->
-                songs.forEach { song ->
-                    songRepository.updateDownloadState(
-                        song.videoId,
-                        DownloadState.STATE_NOT_DOWNLOADED,
-                    )
-                }
+            songRepository.getPreparingSongs().firstOrNull()?.forEach { song ->
+                songRepository.updateDownloadState(
+                    song.videoId,
+                    DownloadState.STATE_NOT_DOWNLOADED,
+                )
             }
         }
     }

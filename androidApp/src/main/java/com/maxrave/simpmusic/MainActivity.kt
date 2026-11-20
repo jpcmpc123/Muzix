@@ -105,7 +105,9 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         if (shouldUnbind) {
-            unbindService(serviceConnection)
+            runCatching { unbindService(serviceConnection) }
+            shouldUnbind = false
+            mBound = false
         }
     }
 
@@ -284,8 +286,15 @@ class MainActivity : AppCompatActivity() {
         val shouldStopMusicService = viewModel.shouldStopMusicService()
         Logger.w("MainActivity", "onDestroy: Should stop service $shouldStopMusicService")
 
-        // Always unbind service if it was bound to prevent MusicBinder leak
-        if (shouldStopMusicService && shouldUnbind && isFinishing) {
+        mediaPlayerHandler.pushPlayerError = {}
+        mediaPlayerHandler.showToast = {}
+        if (shouldUnbind) {
+            runCatching { unbindService(serviceConnection) }
+            shouldUnbind = false
+            mBound = false
+        }
+
+        if (shouldStopMusicService && isFinishing) {
             viewModel.isServiceRunning = false
         }
         if (isFinishing) {
@@ -301,32 +310,35 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startMusicService() {
-//        mediaPlayerHandler.startMediaService(this, serviceConnection)
-        com.maxrave.media3.di
-            .startService(this@MainActivity, serviceConnection)
         mediaPlayerHandler.pushPlayerError = { it ->
             pushPlayerError(it)
         }
         mediaPlayerHandler.showToast = { type ->
-            viewModel.makeToast(
-                when (type) {
-                    is ToastType.ExplicitContent -> {
-                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.EXPLICIT_CONTENT_BLOCKED) }
-                    }
+            lifecycleScope.launch {
+                val message =
+                    when (type) {
+                        is ToastType.ExplicitContent -> {
+                            ComposeResUtils.getResString(ComposeResUtils.StringType.EXPLICIT_CONTENT_BLOCKED)
+                        }
 
-                    is ToastType.PlayerError -> {
-                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.TIME_OUT_ERROR, type.error) }
-                    }
+                        is ToastType.PlayerError -> {
+                            ComposeResUtils.getResString(ComposeResUtils.StringType.TIME_OUT_ERROR, type.error)
+                        }
 
-                    is ToastType.SponsorBlockSkip -> {
-                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.SPONSOR_BLOCK_SKIP, type.category) }
+                        is ToastType.SponsorBlockSkip -> {
+                            ComposeResUtils.getResString(ComposeResUtils.StringType.SPONSOR_BLOCK_SKIP, type.category)
+                        }
                     }
-                },
-            )
+                viewModel.makeToast(message)
+            }
+        }
+        if (!shouldUnbind) {
+            com.maxrave.media3.di
+                .startService(this@MainActivity, serviceConnection)
+            shouldUnbind = true
+            Logger.d("Service", "Service started")
         }
         viewModel.isServiceRunning = true
-        shouldUnbind = true
-        Logger.d("Service", "Service started")
     }
 
     private fun checkForUpdate() {
