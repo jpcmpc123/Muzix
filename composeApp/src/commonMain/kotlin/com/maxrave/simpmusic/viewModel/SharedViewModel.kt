@@ -83,6 +83,7 @@ import com.maxrave.simpmusic.expect.getDownloadFolderPath
 import com.maxrave.simpmusic.expect.isOnUnmeteredNetwork
 import com.maxrave.simpmusic.expect.ui.toByteArray
 import com.maxrave.simpmusic.getPlatform
+import com.maxrave.simpmusic.ui.component.LyricsUiPrep
 import com.maxrave.simpmusic.utils.LyricsPromo
 import com.maxrave.simpmusic.utils.VersionManager
 import com.maxrave.simpmusic.utils.decodeLyricsPromos
@@ -1486,12 +1487,12 @@ class SharedViewModel(
         }
 
         val lyrics =
-            if (alreadyDecoded) {
-                inputLyrics
-            } else {
-                withContext(Dispatchers.Default) {
-                    decodeLyricsEntities(inputLyrics)
+            withContext(Dispatchers.Default) {
+                val decoded = if (alreadyDecoded) inputLyrics else decodeLyricsEntities(inputLyrics)
+                if (!isTranslatedLyrics) {
+                    LyricsUiPrep.warmUp(decoded)
                 }
+                decoded
             }
 
         // Re-check active track after switching dispatchers in case playback moved on mid-decode.

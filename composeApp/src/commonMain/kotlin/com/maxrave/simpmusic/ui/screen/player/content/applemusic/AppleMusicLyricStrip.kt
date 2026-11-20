@@ -47,7 +47,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import com.maxrave.domain.data.model.metadata.Line
 import com.maxrave.simpmusic.extension.ParsedRichSyncLine
-import com.maxrave.simpmusic.extension.parseRichSyncWords
+import com.maxrave.simpmusic.ui.component.LyricsUiPrep
 import com.maxrave.simpmusic.ui.component.rememberLyricLayoutDirection
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentState
 import com.maxrave.simpmusic.ui.screen.player.content.stripRichSyncTimestamps
@@ -130,7 +130,15 @@ internal fun AppleMusicLyricStrip(
                     is StripContent.Sung -> {
                         val parsed =
                             remember(shown.line, richSynced) {
-                                if (richSynced) parseRichSyncWords(shown.line.words, shown.line.startTimeMs, shown.line.endTimeMs) else null
+                                if (richSynced) {
+                                    LyricsUiPrep.parseRichSyncLineCached(
+                                        shown.line.words,
+                                        shown.line.startTimeMs,
+                                        shown.line.endTimeMs,
+                                    )
+                                } else {
+                                    null
+                                }
                             }
                         if (parsed != null) {
                             SweptLine(parsed = parsed, playhead = playhead, typography = typography)

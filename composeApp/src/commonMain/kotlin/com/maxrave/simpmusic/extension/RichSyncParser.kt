@@ -19,6 +19,22 @@ data class ParsedRichSyncLine(
     val lineEndTimeMs: Long,
 )
 
+private val RICH_WORD_TIMESTAMP_REGEX = Regex("""<(\d{1,3}):(\d{2})[.:](\d{1,3})>""")
+
+private fun parseRichTimestampMs(match: MatchResult): Long {
+    val (minutes, seconds, fraction) = match.destructured
+    val fractionMs = fraction.toLongOrNull() ?: 0L
+    val scaledMs =
+        when (fraction.length) {
+            1 -> fractionMs * 100L
+            2 -> fractionMs * 10L
+            else -> fractionMs
+        }
+    return (minutes.toLongOrNull() ?: 0L) * 60000L +
+        (seconds.toLongOrNull() ?: 0L) * 1000L +
+        scaledMs
+}
+
 /**
  * Parses rich sync lyrics format into word-level timing data
  *
@@ -36,59 +52,43 @@ fun parseRichSyncWords(
     lineEndTimeMs: String,
 ): ParsedRichSyncLine? {
     // Handle edge cases
-    if (words.isBlank()) {
-        println("[parseRichSyncWords] Input is blank")
+    if (words.isBlank() || '<' !in words) {
         return null
     }
 
-    println("[parseRichSyncWords] Input preview: ${words.take(100)}")
-
-    // Strategy: Find all timestamps first, then extract text between them
-    // Regex to match timestamp only: <MM:SS.mm> or <MM:SS.mmm>
-    val timestampRegex = Regex("""<(\d{2}):(\d{2})\.(\d{2,3})>""")
-
     val wordTimings = mutableListOf<WordTiming>()
-
-    // Find all timestamp matches with their positions
-    val timestamps = timestampRegex.findAll(words).toList()
-
-    timestamps.forEachIndexed { index, match ->
-        val (minutes, seconds, fraction) = match.destructured
-
-        // Convert time to milliseconds
-        // If 2 digits (centiseconds): multiply by 10 to get ms (e.g., 62 -> 620ms)
-        // If 3 digits (milliseconds): use as-is (e.g., 620 -> 620ms)
-        val fractionMs = fraction.toLongOrNull() ?: 0L
-        val timeMs =
-            (minutes.toLongOrNull() ?: 0L) * 60000L +
-                (seconds.toLongOrNull() ?: 0L) * 1000L +
-                if (fraction.length == 2) fractionMs * 10L else fractionMs
-
-        // Extract text after this timestamp until the next timestamp (or end of string)
-        val startPos = match.range.last + 1
-        val endPos =
-            if (index < timestamps.size - 1) {
-                timestamps[index + 1].range.first
-            } else {
-                words.length
+    var currentMatch: MatchResult? = null
+    for (nextMatch in RICH_WORD_TIMESTAMP_REGEX.findAll(words)) {
+        val prev = currentMatch
+        if (prev != null) {
+            val textBetween = words.substring(prev.range.last + 1, nextMatch.range.first).trim()
+            if (textBetween.isNotEmpty()) {
+                wordTimings.add(
+                    WordTiming(
+                        text = decodeHtmlEntities(textBetween),
+                        startTimeMs = parseRichTimestampMs(prev),
+                    ),
+                )
             }
-
-        // Get the text between timestamps and trim it
-        val textBetween = words.substring(startPos, endPos).trim()
-
-        // Only add if there's actual text (not just whitespace or empty)
-        if (textBetween.isNotBlank()) {
-            wordTimings.add(WordTiming(text = decodeHtmlEntities(textBetween), startTimeMs = timeMs))
         }
+        currentMatch = nextMatch
+    }
+
+    val lastMatch = currentMatch ?: return null
+    val trailingText = words.substring(lastMatch.range.last + 1, words.length).trim()
+    if (trailingText.isNotEmpty()) {
+        wordTimings.add(
+            WordTiming(
+                text = decodeHtmlEntities(trailingText),
+                startTimeMs = parseRichTimestampMs(lastMatch),
+            ),
+        )
     }
 
     // If no valid words were parsed, return null (fallback to LINE_SYNCED)
     if (wordTimings.isEmpty()) {
-        println("[parseRichSyncWords] No words matched the regex")
         return null
     }
-
-    println("[parseRichSyncWords] Successfully parsed ${wordTimings.size} words")
 
     // Parse line timing
     val lineStart = lineStartTimeMs.toLongOrNull() ?: 0L

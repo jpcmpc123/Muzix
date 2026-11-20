@@ -44,6 +44,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
@@ -73,7 +74,6 @@ import com.maxrave.simpmusic.expect.ui.isLyricsBlurSupported
 import com.maxrave.domain.data.model.metadata.Line
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentActions
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentState
-import com.maxrave.simpmusic.ui.screen.player.content.stripRichSyncTimestamps
 import org.koin.compose.koinInject
 import androidx.navigation.NavController
 import com.maxrave.domain.data.model.streams.TimeLine
@@ -82,13 +82,14 @@ import com.maxrave.simpmusic.extension.ParsedRichSyncLine
 import com.maxrave.simpmusic.extension.animateScrollAndAnchorItemTop
 import com.maxrave.simpmusic.extension.animateScrollAndCentralizeItem
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
-import com.maxrave.simpmusic.extension.parseRichSyncWords
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.NowPlayingScreenData
 import com.maxrave.simpmusic.viewModel.SharedViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
 import java.text.Bidi
 import kotlin.math.abs
@@ -98,22 +99,11 @@ import kotlin.math.max
 
 private const val TAG = "LyricsView"
 
-// The interval the player publishes its position on, on BOTH platforms (MediaServiceHandlerImpl
-// and JvmMediaPlayerHandlerImpl both tick on `tickIntervalMs`). It is the ceiling on how far the interpolated
-// playhead below is allowed to run ahead of the last real tick, so a stalled tick — paused
-// playback, a wedged player — can never drift further than the granularity we already live with.
-private const val PLAYHEAD_TICK_MS = 50L
-
-// A rich-synced line followed by a silence at least this long gets a row of dots standing in for
-// the instrumental, the way Apple Music marks one. Rich sync only: it is the one format that knows
-// where a line actually STOPS, so it is the one format that can tell a real pause from a line whose
-// end time was never written down.
-private const val INTERLUDE_MIN_GAP_MS = 3_000L
-
-// Three dots, each owning an equal third of the silence: the first fills over the first third, and
-// the row is full exactly as the next line begins.
-private const val INTERLUDE_DOT_COUNT = 3
-private const val INTERLUDE_DOT = "\u2022"
+// The interval the player publishes its position on (MediaServiceHandlerImpl ticks on up to 100ms,
+// JvmMediaPlayerHandlerImpl ticks on 50ms). It is the ceiling on how far the interpolated playhead
+// below is allowed to run ahead of the last real tick, so a stalled tick — paused playback, a
+// wedged player — can never drift further than the granularity we already live with.
+private const val PLAYHEAD_TICK_MS = 100L
 
 // Emphasis maths ported from AMLL (applemusic-like-lyrics),
 // packages/core/src/lyric-player/dom/lyric-line.ts -> initEmphasizeAnimation. Kept to its exact
@@ -222,98 +212,6 @@ private val DimTranslatedColor = Color(0xFF97971A).copy(alpha = 0.3f)
 private val DimRomanizedCurrentColor = Color.White.copy(alpha = 0.7f)
 private val DimRomanizedColor = Color.LightGray.copy(alpha = 0.3f)
 private val DimRichPendingColor = Color.LightGray.copy(alpha = 0.6f)
-
-/**
- * The sheet's lines as they are RENDERED, plus the indices of the dots lines that were inserted
- * into them.
- *
- * One list, one index space. The sung line, the blur distance, the scroll target and the
- * translation lookup are all line INDICES, so a display-only list running alongside the real one
- * would leave four call sites quietly disagreeing about which line is which.
- */
-private data class DisplayLines(
-    val lines: List<Line>,
-    val interludeIndices: Set<Int>,
-)
-
-/**
- * Inserts a dots line into every silence of at least [INTERLUDE_MIN_GAP_MS] between two lines.
- *
- * The inserted line is an ordinary rich-synced [Line] carrying three dots, one timestamp each,
- * dividing the silence into equal thirds. Written as real markup rather than handled by a special
- * case in the renderer: it then goes through the same parser, the same wipe and the same layout as
- * a sung line, which is the only way its dots land on the same baseline and left edge as the words
- * above them.
- *
- * Rich sync only. It is the one format that records where a line STOPS, so it is the one format
- * that can tell a real pause from a line whose end was simply never written down.
- */
-private fun buildDisplayLines(
-    lines: List<Line>?,
-    syncType: String?,
-): DisplayLines {
-    val source = lines.orEmpty()
-    if (syncType != "RICH_SYNCED" || source.size < 2) return DisplayLines(source, emptySet())
-
-    val out = ArrayList<Line>(source.size)
-    val inserted = mutableSetOf<Int>()
-    source.forEachIndexed { index, line ->
-        out += line
-        val nextStartMs = source.getOrNull(index + 1)?.startTimeMs?.toLongOrNull() ?: return@forEachIndexed
-        // The rule, literally: once the line's LAST WORD has been lit for INTERLUDE_MIN_GAP_MS and
-        // the next line still has not begun, the dots take over from there.
-        //
-        // Measured from where that word STARTS, not where it ends, and the dots begin three seconds
-        // later rather than at the end of the line. Both of those matter for the same reason: the
-        // dots become the sung line the moment they start, so starting them any earlier drags the
-        // sheet away from a word the listener is still watching light up. For those three seconds
-        // the last lyric stays the sung line, which is what it still is.
-        val lastWordStartMs =
-            parseRichSyncWords(line.words, line.startTimeMs, line.endTimeMs)
-                ?.words
-                ?.lastOrNull()
-                ?.startTimeMs
-                ?: return@forEachIndexed
-        val dotsStartMs = lastWordStartMs + INTERLUDE_MIN_GAP_MS
-        if (nextStartMs <= dotsStartMs) return@forEachIndexed
-        val interlude = interludeLine(dotsStartMs, nextStartMs) ?: return@forEachIndexed
-        inserted += out.size
-        out += interlude
-    }
-    return DisplayLines(out, inserted)
-}
-
-/** Null when a timestamp will not fit the `MM:SS.cc` shape the rich-sync parser reads. */
-private fun interludeLine(
-    startMs: Long,
-    endMs: Long,
-): Line? {
-    val stepMs = (endMs - startMs) / INTERLUDE_DOT_COUNT
-    val words =
-        buildString {
-            repeat(INTERLUDE_DOT_COUNT) { dot ->
-                append(richSyncTimestamp(startMs + stepMs * dot) ?: return null)
-                append(INTERLUDE_DOT)
-            }
-        }
-    return Line(
-        startTimeMs = startMs.toString(),
-        endTimeMs = endMs.toString(),
-        syllables = null,
-        words = words,
-    )
-}
-
-private fun richSyncTimestamp(ms: Long): String? {
-    val centis = ms / 10
-    val minutes = centis / 6000
-    // The parser's regex reads exactly two digits of minutes, so anything past 99:59 has no
-    // spelling here. Only reachable on a track over an hour and a half long.
-    if (minutes > 99) return null
-    return "<${twoDigits(minutes)}:${twoDigits((centis / 100) % 60)}.${twoDigits(centis % 100)}>"
-}
-
-private fun twoDigits(value: Long): String = if (value < 10) "0$value" else value.toString()
 
 internal data class TimedLineIndex(
     val index: Int,
@@ -506,10 +404,50 @@ fun LyricsView(
     // long silence. Everything below counts indices against THIS list — the sung line, the blur
     // distance, the scroll target and the translation lookup — so the dots line is a line like any
     // other rather than something drawn on top of one.
-    val displayLines =
-        remember(lyricsData.lyrics.lines, lyricsData.lyrics.syncType) {
-            buildDisplayLines(lyricsData.lyrics.lines, lyricsData.lyrics.syncType)
-        }
+    val displayLines by produceState(
+        initialValue =
+            LyricsUiPrep.peekDisplayLines(lyricsData.lyrics.lines, lyricsData.lyrics.syncType)
+                ?: DisplayLines(lyricsData.lyrics.lines.orEmpty(), emptySet()),
+        key1 = lyricsData.lyrics.lines,
+        key2 = lyricsData.lyrics.syncType,
+    ) {
+        val cached = LyricsUiPrep.peekDisplayLines(lyricsData.lyrics.lines, lyricsData.lyrics.syncType)
+        value =
+            cached
+                ?: withContext(Dispatchers.Default) {
+                    LyricsUiPrep.getOrBuildDisplayLines(lyricsData.lyrics.lines, lyricsData.lyrics.syncType)
+                }
+    }
+
+    val romanizedByLineIndex by produceState<Map<Int, String>>(
+        initialValue =
+            LyricsUiPrep.peekRomanizedLines(
+                lines = displayLines.lines,
+                interludeIndices = displayLines.interludeIndices,
+                syncType = lyricsData.lyrics.syncType,
+                languages = romanizationLanguages,
+                japaneseReady = japaneseDictionaryReady,
+            ) ?: emptyMap(),
+        key1 = displayLines,
+        key2 = romanizationLanguages to lyricsData.lyrics.syncType,
+        key3 = japaneseDictionaryReady,
+    ) {
+        value =
+            if (romanizationLanguages.isEmpty()) {
+                emptyMap()
+            } else {
+                withContext(Dispatchers.Default) {
+                    LyricsUiPrep.getOrComputeRomanizedLines(
+                        lines = displayLines.lines,
+                        interludeIndices = displayLines.interludeIndices,
+                        syncType = lyricsData.lyrics.syncType,
+                        languages = romanizationLanguages,
+                        japaneseReady = japaneseDictionaryReady,
+                        romanizer = romanizer,
+                    )
+                }
+            }
+    }
 
     val timedLineIndexes =
         remember(displayLines) {
@@ -654,11 +592,7 @@ fun LyricsView(
                         if (isInterlude || romanizationLanguages.isEmpty()) {
                             null
                         } else {
-                            remember(words, romanizationLanguages, japaneseDictionaryReady) {
-                                val source =
-                                    if (lyricsData.lyrics.syncType == "RICH_SYNCED") words.stripRichSyncTimestamps() else words
-                                romanizer.romanize(source, romanizationLanguages)
-                            }
+                            romanizedByLineIndex[index]
                         }
 
                     val renderLine: @Composable () -> Unit = {
@@ -667,8 +601,7 @@ fun LyricsView(
                             lyricsData.lyrics.syncType == "RICH_SYNCED" -> {
                                 val parsedLine =
                                     remember(words, line.startTimeMs, line.endTimeMs) {
-                                        val result = parseRichSyncWords(words, line.startTimeMs, line.endTimeMs)
-                                        result
+                                        LyricsUiPrep.parseRichSyncLineCached(words, line.startTimeMs, line.endTimeMs)
                                     }
 
                                 if (parsedLine != null) {
