@@ -264,7 +264,8 @@ internal inline fun <reified T> GridLibraryPlaylist(
                                 is LocalPlaylistEntity -> "local_${item.id}"
                                 is PlaylistsResult -> "ytpl_${item.browseId}_$idx"
                                 is AlbumEntity -> "album_${item.browseId}_$idx"
-                                is PodcastsEntity -> "podcast_${item.browseId}_$idx"
+                                is PlaylistEntity -> "pl_${item.id}_$idx"
+                                is PodcastsEntity -> "podcast_${item.podcastId}_$idx"
                                 is MonthlyRecapItem -> "recap_${item.year}_${item.month}"
                                 else -> "grid_${item.hashCode()}_$idx"
                             }
