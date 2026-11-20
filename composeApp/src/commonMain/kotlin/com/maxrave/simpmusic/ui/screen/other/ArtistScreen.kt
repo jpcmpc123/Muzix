@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,7 +54,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -205,7 +205,7 @@ fun ArtistScreen(
 
     val playingTrack by remember {
         sharedViewModel.nowPlayingState.map { it?.track?.videoId }
-    }.collectAsState(null)
+    }.collectAsStateWithLifecycle(initialValue = null)
 
     // Choosing song to show Bottom sheet
     var choosingTrack by remember {
@@ -1017,7 +1017,7 @@ private fun ArtistSections(
                     item {
                         Spacer(Modifier.size(10.dp))
                     }
-                    items(state.data.singles?.results ?: emptyList()) { single ->
+                    itemsIndexed(state.data.singles?.results ?: emptyList(), key = { idx, single -> "single_${single.browseId}_$idx" }) { _, single ->
                         HomeItemContentPlaylist(
                             forceDark = true,                            onClick = {
                                 navController.navigate(
@@ -1087,7 +1087,7 @@ private fun ArtistSections(
                     item {
                         Spacer(Modifier.size(10.dp))
                     }
-                    items(state.data.albums?.results ?: emptyList()) { album ->
+                    itemsIndexed(state.data.albums?.results ?: emptyList(), key = { idx, album -> "album_${album.browseId}_$idx" }) { _, album ->
                         HomeItemContentPlaylist(
                             forceDark = true,                            onClick = {
                                 navController.navigate(
@@ -1156,7 +1156,7 @@ private fun ArtistSections(
                     item {
                         Spacer(Modifier.size(10.dp))
                     }
-                    items(state.data.video?.video ?: emptyList()) { video ->
+                    itemsIndexed(state.data.video?.video ?: emptyList(), key = { idx, video -> "video_${video.videoId}_$idx" }) { _, video ->
                         HomeItemVideo(
                             forceDark = true,                            onClick = {
                                 val firstQueue: Track = video
@@ -1226,7 +1226,7 @@ private fun ArtistSections(
                     item {
                         Spacer(Modifier.size(10.dp))
                     }
-                    items(state.data.featuredOn) { feature ->
+                    itemsIndexed(state.data.featuredOn, key = { idx, feature -> "feature_${feature.id}_$idx" }) { _, feature ->
                         HomeItemContentPlaylist(
                             forceDark = true,                            onClick = {
                                 navController.navigate(
@@ -1276,7 +1276,7 @@ private fun ArtistSections(
                     item {
                         Spacer(Modifier.size(10.dp))
                     }
-                    items(state.data.related?.results ?: emptyList()) { related ->
+                    itemsIndexed(state.data.related?.results ?: emptyList(), key = { idx, related -> "related_${related.browseId}_$idx" }) { _, related ->
                         HomeItemArtist(
                             forceDark = true,                            onClick = {
                                 navController.navigate(

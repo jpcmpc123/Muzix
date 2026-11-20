@@ -78,7 +78,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -192,7 +191,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import multiplatform.network.cmptoast.ToastGravity
 import multiplatform.network.cmptoast.showToast
 import org.jetbrains.compose.resources.StringResource
@@ -270,6 +268,7 @@ import simpmusic.composeapp.generated.resources.playback_speed_pitch_disabled
 import simpmusic.composeapp.generated.resources.playlist_name_cannot_be_empty
 import simpmusic.composeapp.generated.resources.plays
 import simpmusic.composeapp.generated.resources.processing
+import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.queue
 import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.remove_download
@@ -331,9 +330,9 @@ fun InfoPlayerBottomSheet(
         )
 
     val screenDataState by sharedViewModel.nowPlayingScreenData.collectAsStateWithLifecycle()
-    val songEntity by sharedViewModel.nowPlayingState.map { it?.songEntity }.collectAsState(null)
-    val format by sharedViewModel.format.collectAsState(null)
-    val extractSource by sharedViewModel.extractSource.collectAsState()
+    val songEntity by sharedViewModel.nowPlayingState.map { it?.songEntity }.collectAsStateWithLifecycle(initialValue = null)
+    val format by sharedViewModel.format.collectAsStateWithLifecycle(initialValue = null)
+    val extractSource by sharedViewModel.extractSource.collectAsStateWithLifecycle()
     val downloadProgress by sharedViewModel.downloadFileProgress.collectAsStateWithLifecycle()
 
     ModalBottomSheet(
@@ -988,7 +987,7 @@ fun QueueBottomSheet(
     // The row whose ⋯ was tapped, as its queue position and the track that was there.
     var moreFor by remember { mutableStateOf<Pair<Int, Track>?>(null) }
     val screenDataState by sharedViewModel.nowPlayingScreenData.collectAsStateWithLifecycle()
-    val songEntity by sharedViewModel.nowPlayingState.map { it?.songEntity }.collectAsState(null)
+    val songEntity by sharedViewModel.nowPlayingState.map { it?.songEntity }.collectAsStateWithLifecycle(initialValue = null)
     val queueData by musicServiceHandler.queueData.collectAsStateWithLifecycle()
     val queue by remember {
         derivedStateOf {
@@ -1008,7 +1007,7 @@ fun QueueBottomSheet(
             queueData?.queueState ?: QueueData.StateSource.STATE_CREATED
         }
     }
-    val endlessQueueEnable by dataStoreManager.endlessQueue.map { it == DataStoreManager.TRUE }.collectAsState(false)
+    val endlessQueueEnable by dataStoreManager.endlessQueue.map { it == DataStoreManager.TRUE }.collectAsStateWithLifecycle(initialValue = false)
 
     val shouldLoadMore =
         remember {
@@ -1419,7 +1418,7 @@ fun NowPlayingBottomSheet(
     var sleepTimerWarning by remember { mutableStateOf(false) }
     var isBottomSheetVisible by rememberSaveable { mutableStateOf(false) }
     var changePlaybackSpeedPitch by remember { mutableStateOf(false) }
-    val crossfadeEnabled by dataStoreManager.crossfadeEnabled.collectAsState(DataStoreManager.FALSE)
+    val crossfadeEnabled by dataStoreManager.crossfadeEnabled.collectAsStateWithLifecycle(initialValue = DataStoreManager.FALSE)
 
     LaunchedEffect(uiState) {
         if (uiState.songUIState.videoId.isNotEmpty() && !isBottomSheetVisible) {
@@ -1432,8 +1431,8 @@ fun NowPlayingBottomSheet(
     }
 
     if (changePlaybackSpeedPitch) {
-        val playbackSpeed by dataStoreManager.playbackSpeed.collectAsState(1f)
-        val pitch by dataStoreManager.pitch.collectAsState(0)
+        val playbackSpeed by dataStoreManager.playbackSpeed.collectAsStateWithLifecycle(initialValue = 1f)
+        val pitch by dataStoreManager.pitch.collectAsStateWithLifecycle(initialValue = 0)
         PlaybackSpeedPitchBottomSheet(
             onDismiss = { changePlaybackSpeedPitch = false },
             playbackSpeed = playbackSpeed,
@@ -1872,6 +1871,7 @@ fun NowPlayingBottomSheet(
                             navController.navigate(AlbumDestination(browseId = id))
                         }
                     }
+                    val radioSuffix = stringResource(Res.string.radio)
                     ActionButton(
                         icon = SimpIcons.Sensors,
                         text = Res.string.start_radio,
@@ -1879,7 +1879,7 @@ fun NowPlayingBottomSheet(
                         viewModel.onUIEvent(
                             NowPlayingBottomSheetUIEvent.StartRadio(
                                 videoId = uiState.songUIState.videoId,
-                                name = "\"${uiState.songUIState.title}\" ${runBlocking { getString(Res.string.radio) }}",
+                                name = "\"${uiState.songUIState.title}\" $radioSuffix",
                             ),
                         )
                         hideModalBottomSheet()
@@ -1974,12 +1974,12 @@ fun NowPlayingBottomSheet(
 fun rememberAddToQueueBlock(): AddToQueueBlock? {
     val handler = koinInject<MediaPlayerHandler>()
     val dataStoreManager = koinInject<DataStoreManager>()
-    val queueData by handler.queueData.collectAsState()
+    val queueData by handler.queueData.collectAsStateWithLifecycle()
     val endlessQueueFlow =
         remember(dataStoreManager) {
             dataStoreManager.endlessQueue.map { it == DataStoreManager.TRUE }
         }
-    val endlessQueue by endlessQueueFlow.collectAsState(false)
+    val endlessQueue by endlessQueueFlow.collectAsStateWithLifecycle(initialValue = false)
     return queueData.addToQueueBlock(endlessQueue)
 }
 
@@ -1989,7 +1989,7 @@ fun rememberAddToQueueBlock(): AddToQueueBlock? {
  */
 @Composable
 fun AddToQueueBlock?.addToQueueLabel(): StringResource {
-    val queueData by koinInject<MediaPlayerHandler>().queueData.collectAsState()
+    val queueData by koinInject<MediaPlayerHandler>().queueData.collectAsStateWithLifecycle()
     return when (this) {
         null -> if (queueData?.data?.listTracks.isNullOrEmpty()) Res.string.create_new_queue_and_play else Res.string.add_to_queue
         AddToQueueBlock.RADIO -> Res.string.add_to_queue_disabled_radio
@@ -2540,10 +2540,9 @@ fun SleepTimerBottomSheet(
                                         onDismiss()
                                     }
                                 } else {
-                                    showToast(
-                                        runBlocking { getString(Res.string.sleep_timer_set_error) },
-                                        ToastGravity.Bottom,
-                                    )
+                                    coroutineScope.launch {
+                                        showToast(getString(Res.string.sleep_timer_set_error), ToastGravity.Bottom)
+                                    }
                                 }
                             }
                             selectedPreset > 0 -> {
@@ -2554,10 +2553,9 @@ fun SleepTimerBottomSheet(
                                 }
                             }
                             else -> {
-                                showToast(
-                                    runBlocking { getString(Res.string.sleep_timer_set_error) },
-                                    ToastGravity.Bottom,
-                                )
+                                coroutineScope.launch {
+                                    showToast(getString(Res.string.sleep_timer_set_error), ToastGravity.Bottom)
+                                }
                             }
                         }
                     },
@@ -3373,6 +3371,14 @@ fun DevLogInBottomSheet(
         rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var value by rememberSaveable { mutableStateOf("") }
+    val devTitle =
+        when (type) {
+            DevLogInType.Spotify -> stringResource(Res.string.your_sp_dc_param_of_spotify_cookie)
+            DevLogInType.YouTube -> stringResource(Res.string.your_youtube_cookie)
+            DevLogInType.Discord -> stringResource(Res.string.your_discord_token)
+        }
+    val processingLabel = stringResource(Res.string.processing)
+    val emptyLabel = stringResource(Res.string.can_not_be_empty)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -3396,7 +3402,7 @@ fun DevLogInBottomSheet(
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(10.dp))
-                Text(text = runBlocking { type.getTitle() }, style = typo().labelSmall)
+                Text(text = devTitle, style = typo().labelSmall)
                 Spacer(modifier = Modifier.height(5.dp))
                 OutlinedTextField(
                     value = value,
@@ -3408,11 +3414,11 @@ fun DevLogInBottomSheet(
                 TextButton(
                     onClick = {
                         if (value.isNotEmpty() && value.isNotBlank()) {
-                            showToast(runBlocking { getString(Res.string.processing) }, ToastGravity.Bottom)
+                            showToast(processingLabel, ToastGravity.Bottom)
                             onDismiss()
                             onDone(value)
                         } else {
-                            showToast(runBlocking { getString(Res.string.can_not_be_empty) }, ToastGravity.Bottom)
+                            showToast(emptyLabel, ToastGravity.Bottom)
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),

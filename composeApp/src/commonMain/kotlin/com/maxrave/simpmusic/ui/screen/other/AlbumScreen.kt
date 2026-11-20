@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -951,7 +952,7 @@ fun AlbumScreen(
                                     modifier = Modifier.padding(horizontal = 12.dp).mouseDragScroll(otherVersionRowState),
                                     state = otherVersionRowState,
                                 ) {
-                                    items(uiState.otherVersion) { album ->
+                                    itemsIndexed(uiState.otherVersion, key = { idx, album -> "other_${album.browseId}_$idx" }) { _, album ->
                                         HomeItemContentPlaylist(
                                             forceDark = true,
                                             onClick = {

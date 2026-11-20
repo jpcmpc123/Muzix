@@ -64,6 +64,7 @@ internal class LogTail(
 
     /** True when [lines] changed. */
     fun poll(): Boolean {
+        Logger.flushLogFiles()
         val files = Logger.logFiles(name).map(::File)
         val live = files.lastOrNull() ?: return false
         val size = live.length()
@@ -211,6 +212,7 @@ private val SECRETS =
 private fun redactSecrets(text: String): String = SECRETS.fold(text) { acc, (pattern, replacement) -> pattern.replace(acc, replacement) }
 
 private suspend fun buildLogExport(): Pair<ByteArray, String>? {
+    withContext(Dispatchers.IO) { Logger.flushLogFiles() }
     val bytes =
         withContext(Dispatchers.IO) {
             runCatching {

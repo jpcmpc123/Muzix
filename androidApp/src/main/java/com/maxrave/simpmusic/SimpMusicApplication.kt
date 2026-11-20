@@ -14,6 +14,7 @@ import coil3.SingletonImageLoader
 import coil3.annotation.ExperimentalCoilApi
 import coil3.compose.preferEndFirstIntrinsicSize
 import coil3.disk.DiskCache
+import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.CachePolicy
 import coil3.request.crossfade
@@ -32,6 +33,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import multiplatform.network.cmptoast.AppContext
 import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import okio.FileSystem
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
@@ -55,7 +57,13 @@ class SimpMusicApplication :
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val dataStoreManager: DataStoreManager by inject()
     private lateinit var autoBackupScheduler: AutoBackupScheduler
-    private val imageHttpClient: OkHttpClient by lazy { OkHttpClient() }
+    private val imageHttpClient: OkHttpClient by lazy {
+        OkHttpClient
+            .Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .build()
+    }
 
     override fun onCreate() {
         super.onCreate()

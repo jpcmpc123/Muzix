@@ -37,7 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -149,7 +149,7 @@ fun SongFullWidthItems(
         } else {
             songRepository.getSongAsFlow(lookupVideoId)
         }
-    }.collectAsState(initial = null)
+    }.collectAsStateWithLifecycle(initialValue = null)
     val storedSong = if (hasLocalSongOverride) localSongOverride else queriedSong
     val downloadState = storedSong?.downloadState ?: DownloadState.STATE_NOT_DOWNLOADED
     // The list's own model says what its source said; the stored row adds what playback learned

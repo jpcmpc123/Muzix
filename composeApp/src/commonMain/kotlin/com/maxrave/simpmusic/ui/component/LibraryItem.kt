@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -66,7 +67,6 @@ import com.maxrave.simpmusic.ui.theme.ArtworkShape
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.LibraryViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
-import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -143,6 +143,7 @@ fun LibraryItem(
                             ).focusable(),
                 )
             }
+            val radioSuffix = stringResource(Res.string.radio)
             Crossfade(targetState = state.isLoading, label = "Loading") { isLoading ->
                 if (!isLoading) {
                     if (state.type is LibraryItemType.RecentlyAdded) {
@@ -166,7 +167,7 @@ fun LibraryItem(
                                                         listTracks = arrayListOf(item.toTrack()),
                                                         firstPlayedTrack = item.toTrack(),
                                                         playlistId = "RDAMVM${item.videoId}",
-                                                        playlistName = "\"${item.title}\" ${runBlocking { getString(Res.string.radio) }}",
+                                                        playlistName = "\"${item.title}\" $radioSuffix",
                                                         playlistType = DomainPlaylistType.RADIO,
                                                         continuation = null,
                                                     ),
@@ -250,8 +251,11 @@ fun LibraryItem(
                                 ).mouseDragScroll(canvasRowState),
                             state = canvasRowState,
                         ) {
-                            items(state.data) { item ->
-                                val song = item as? SongEntity ?: return@items
+                            itemsIndexed(
+                                items = state.data,
+                                key = { idx, item -> (item as? SongEntity)?.videoId?.let { "${it}_$idx" } ?: "canvas_$idx" },
+                            ) { _, item ->
+                                val song = item as? SongEntity ?: return@itemsIndexed
                                 Box(
                                     Modifier
                                         .padding(horizontal = 10.dp)
@@ -264,7 +268,7 @@ fun LibraryItem(
                                                     listTracks = arrayListOf(firstQueue),
                                                     firstPlayedTrack = firstQueue,
                                                     playlistId = "RDAMVM${firstQueue.videoId}",
-                                                    playlistName = "\"${song.title}\" ${runBlocking { getString(Res.string.radio) }}",
+                                                    playlistName = "\"${song.title}\" $radioSuffix",
                                                     playlistType = DomainPlaylistType.RADIO,
                                                     continuation = null,
                                                 ),

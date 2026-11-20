@@ -53,7 +53,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -291,8 +290,8 @@ fun PlaylistScreen(
     val playingTrack by sharedViewModel.nowPlayingState
         .mapLatest {
             it?.songEntity
-        }.collectAsState(initial = null)
-    val isPlaying by sharedViewModel.controllerState.map { it.isPlaying }.collectAsState(initial = false)
+        }.collectAsStateWithLifecycle(initialValue = null)
+    val isPlaying by sharedViewModel.controllerState.map { it.isPlaying }.collectAsStateWithLifecycle(initialValue = false)
 
     var currentItem by remember {
         mutableStateOf<Track?>(null)

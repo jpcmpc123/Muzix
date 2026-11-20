@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -256,9 +256,22 @@ internal inline fun <reified T> GridLibraryPlaylist(
                             }
                         }
                     }
-                    items(list) { item ->
+                    itemsIndexed(
+                        items = list,
+                        key = { idx, item ->
+                            when (item) {
+                                is ChartItem -> "chart_${item.ytPlaylistId}_$idx"
+                                is LocalPlaylistEntity -> "local_${item.id}"
+                                is PlaylistsResult -> "ytpl_${item.browseId}_$idx"
+                                is AlbumEntity -> "album_${item.browseId}_$idx"
+                                is PodcastsEntity -> "podcast_${item.browseId}_$idx"
+                                is MonthlyRecapItem -> "recap_${item.year}_${item.month}"
+                                else -> "grid_${item.hashCode()}_$idx"
+                            }
+                        },
+                    ) { _, item ->
                         if (item !is PlaylistType) {
-                            return@items
+                            return@itemsIndexed
                         }
                         HomeItemContentPlaylist(
                             onClick = {

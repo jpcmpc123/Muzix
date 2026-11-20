@@ -208,7 +208,7 @@ fun Modifier.appleMusicLyricFocus(
     return this
         .alpha(lineAlpha)
         .then(
-            if (blurRadius > 0.dp) {
+            if (blurRadius > 0.5.dp) {
                 // Unbounded, NOT the default, on Android. blur(radius) alone uses
                 // BlurredEdgeTreatment.Rectangle, which clips the blur to the line's own bounds —
                 // so the softened glyphs get sliced off square at the edges and the line reads as a
