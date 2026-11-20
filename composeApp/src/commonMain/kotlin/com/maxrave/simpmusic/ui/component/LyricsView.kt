@@ -1157,10 +1157,11 @@ private fun AnimatedWord(
             Bidi(word, fallback)
         }
     val wordDirection = if (wordBidi.baseIsLeftToRight()) TextDirection.Ltr else TextDirection.Rtl
+    val baseHeadline = typo().headlineLarge
     val style =
-        remember(customFontSize, wordDirection, typo().headlineLarge) {
-            typo().headlineLarge.copy(
-                fontSize = customFontSize ?: typo().headlineLarge.fontSize,
+        remember(customFontSize, wordDirection, baseHeadline) {
+            baseHeadline.copy(
+                fontSize = customFontSize ?: baseHeadline.fontSize,
                 textDirection = wordDirection,
             )
         }

@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,11 +68,11 @@ fun MoodScreen(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
             ) {
-                items(
+                itemsIndexed(
                     items = moodData?.items ?: emptyList(),
-                    key = { item -> "${item.header}_${item.items.firstOrNull()?.playlistBrowseId ?: item.hashCode()}" },
-                    contentType = { "mood_section" },
-                ) { item ->
+                    key = { index, item -> "${item.header}_$index" },
+                    contentType = { _, _ -> "mood_section" },
+                ) { _, item ->
                     MoodAndGenresContentItem(
                         data = item,
                         navController = navController,

@@ -529,7 +529,7 @@ class SharedViewModel(
                                     val dueByTime =
                                         lastPublishedProgressMs < 0L || progressDelta < 0L || progressDelta >= 200L
                                     if (!dueByTime && currentTotal > 0L && hasLength != _timeline.value.loading) {
-                                        continue@collect
+                                        return@collect
                                     }
                                     val newTotal =
                                         mediaPlayerHandler.getPlayerDuration().takeIf { d -> d > 0L } ?: currentTotal

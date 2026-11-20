@@ -37,6 +37,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -505,29 +506,38 @@ fun SearchScreen(
         ) {
             when (it) {
                 SearchUIType.SEARCH_SUGGESTIONS -> {
+                    val suggestKeys =
+                        remember(searchScreenState.suggestYTItems) {
+                            val seen = HashMap<String, Int>(searchScreenState.suggestYTItems.size)
+                            searchScreenState.suggestYTItems.map { s ->
+                                val base =
+                                    when (s) {
+                                        is SongsResult -> "song_${s.videoId}"
+                                        is VideosResult -> "video_${s.videoId}"
+                                        is ArtistsResult -> "artist_${s.browseId}"
+                                        is AlbumsResult -> "album_${s.browseId}"
+                                        is PlaylistsResult -> "playlist_${s.browseId}"
+                                        else -> "other_${s.hashCode()}"
+                                    }
+                                val count = seen[base] ?: 0
+                                seen[base] = count + 1
+                                if (count == 0) base else "$base#$count"
+                            }
+                        }
+                    val suggestQueryKeys =
+                        remember(searchScreenState.suggestQueries) {
+                            val seen = HashMap<String, Int>(searchScreenState.suggestQueries.size)
+                            searchScreenState.suggestQueries.map { q ->
+                                val count = seen[q] ?: 0
+                                seen[q] = count + 1
+                                if (count == 0) "q_$q" else "q_$q#$count"
+                            }
+                        }
                     LazyColumn(
                         Modifier.padding(horizontal = 16.dp),
                         state = suggestionsState,
                         contentPadding = PaddingValues(top = searchBarHeight, bottom = 10.dp),
                     ) {
-                        val suggestKeys =
-                            remember(searchScreenState.suggestYTItems) {
-                                val seen = HashMap<String, Int>(searchScreenState.suggestYTItems.size)
-                                searchScreenState.suggestYTItems.map { s ->
-                                    val base =
-                                        when (s) {
-                                            is SongsResult -> "song_${s.videoId}"
-                                            is VideosResult -> "video_${s.videoId}"
-                                            is ArtistsResult -> "artist_${s.browseId}"
-                                            is AlbumsResult -> "album_${s.browseId}"
-                                            is PlaylistsResult -> "playlist_${s.browseId}"
-                                            else -> "other_${s.hashCode()}"
-                                        }
-                                    val count = seen[base] ?: 0
-                                    seen[base] = count + 1
-                                    if (count == 0) base else "$base#$count"
-                                }
-                            }
                         itemsIndexed(
                             items = searchScreenState.suggestYTItems,
                             key = { index, _ -> suggestKeys[index] },
@@ -576,15 +586,6 @@ fun SearchScreen(
                                 },
                             )
                         }
-                        val suggestQueryKeys =
-                            remember(searchScreenState.suggestQueries) {
-                                val seen = HashMap<String, Int>(searchScreenState.suggestQueries.size)
-                                searchScreenState.suggestQueries.map { q ->
-                                    val count = seen[q] ?: 0
-                                    seen[q] = count + 1
-                                    if (count == 0) "q_$q" else "q_$q#$count"
-                                }
-                            }
                         itemsIndexed(
                             items = searchScreenState.suggestQueries,
                             key = { index, _ -> suggestQueryKeys[index] },
@@ -943,6 +944,24 @@ fun SearchScreen(
                                             val localSongById = remember(localSongs) { localSongs.associateBy { it.videoId } }
                                             Crossfade(targetState = currentResults.isNotEmpty()) {
                                                 if (it) {
+                                                    val resultKeys =
+                                                        remember(currentResults) {
+                                                            val seen = HashMap<String, Int>(currentResults.size)
+                                                            currentResults.map { entry ->
+                                                                val base =
+                                                                    when (entry) {
+                                                                        is SongsResult -> "song_${entry.videoId}"
+                                                                        is VideosResult -> "video_${entry.videoId}"
+                                                                        is AlbumsResult -> "album_${entry.browseId}"
+                                                                        is ArtistsResult -> "artist_${entry.browseId}"
+                                                                        is PlaylistsResult -> "playlist_${entry.browseId}"
+                                                                        else -> "res_${entry.hashCode()}"
+                                                                    }
+                                                                val count = seen[base] ?: 0
+                                                                seen[base] = count + 1
+                                                                if (count == 0) base else "$base#$count"
+                                                            }
+                                                        }
                                                     LazyColumn(
                                                         contentPadding =
                                                             PaddingValues(
@@ -953,24 +972,6 @@ fun SearchScreen(
                                                             ),
                                                         state = resultsState,
                                                     ) {
-                                                        val resultKeys =
-                                                            remember(currentResults) {
-                                                                val seen = HashMap<String, Int>(currentResults.size)
-                                                                currentResults.map { entry ->
-                                                                    val base =
-                                                                        when (entry) {
-                                                                            is SongsResult -> "song_${entry.videoId}"
-                                                                            is VideosResult -> "video_${entry.videoId}"
-                                                                            is AlbumsResult -> "album_${entry.browseId}"
-                                                                            is ArtistsResult -> "artist_${entry.browseId}"
-                                                                            is PlaylistsResult -> "playlist_${entry.browseId}"
-                                                                            else -> "res_${entry.hashCode()}"
-                                                                        }
-                                                                    val count = seen[base] ?: 0
-                                                                    seen[base] = count + 1
-                                                                    if (count == 0) base else "$base#$count"
-                                                                }
-                                                            }
                                                         itemsIndexed(
                                                             items = currentResults,
                                                             key = { index, _ -> resultKeys[index] },

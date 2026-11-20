@@ -9,25 +9,25 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ErrorResult
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
-import com.kmpalette.loader.NetworkLoader
+import com.kmpalette.loader.ImageBitmapLoader
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
 import com.maxrave.simpmusic.expect.ui.toReadableBitmap
 import io.ktor.http.Url
 
 /**
- * Shared [NetworkLoader] for `kmpalette` thumbnail colour extraction backed by Coil's
+ * Shared [ImageBitmapLoader] for `kmpalette` thumbnail colour extraction backed by Coil's
  * [SingletonImageLoader]. Reuses Coil's disk/RAM cache and connection pool instead of opening a
  * separate `HttpClient(CIO)` and decoding full-size bitmaps for palette sampling.
  */
 private class CoilPaletteNetworkLoader(
     private val context: PlatformContext,
-) : NetworkLoader {
-    override suspend fun load(url: Url): ImageBitmap {
+) : ImageBitmapLoader<Url> {
+    override suspend fun load(input: Url): ImageBitmap {
         val imageLoader = SingletonImageLoader.get(context)
         val request =
             ImageRequest
                 .Builder(context)
-                .data(url.toString())
+                .data(input.toString())
                 .size(128, 128)
                 .build()
         return when (val result = imageLoader.execute(request)) {
@@ -38,7 +38,7 @@ private class CoilPaletteNetworkLoader(
 }
 
 @Composable
-fun rememberSharedPaletteNetworkLoader(): NetworkLoader {
+fun rememberSharedPaletteNetworkLoader(): ImageBitmapLoader<Url> {
     val context = LocalPlatformContext.current
     return remember(context) { CoilPaletteNetworkLoader(context) }
 }

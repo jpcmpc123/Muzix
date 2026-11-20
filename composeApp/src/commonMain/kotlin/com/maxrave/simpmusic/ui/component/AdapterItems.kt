@@ -1741,6 +1741,29 @@ fun MoodAndGenresContentItem(
                     ).fillMaxWidth(),
         )
         val rowState = rememberLazyListState()
+        val itemList =
+            when (data) {
+                is ItemsPlaylist -> (data).contents
+                is Item -> (data).contents
+                else -> listOf()
+            }
+        val itemKeys =
+            remember(itemList) {
+                val seen = HashMap<String, Int>(itemList.size)
+                itemList.map { entry ->
+                    val base =
+                        when (entry) {
+                            is com.maxrave.domain.data.model.mood.moodmoments.Content ->
+                                entry.videoId ?: entry.playlistBrowseId ?: entry.title
+                            is com.maxrave.domain.data.model.mood.genre.Content ->
+                                entry.playlistBrowseId ?: entry.title.toString()
+                            else -> entry.hashCode().toString()
+                        }
+                    val count = seen[base] ?: 0
+                    seen[base] = count + 1
+                    if (count == 0) base else "$base#$count"
+                }
+            }
         LazyRow(
             modifier =
                 Modifier
@@ -1749,29 +1772,6 @@ fun MoodAndGenresContentItem(
                     ).mouseDragScroll(rowState),
             state = rowState,
         ) {
-            val itemList =
-                when (data) {
-                    is ItemsPlaylist -> (data).contents
-                    is Item -> (data).contents
-                    else -> listOf()
-                }
-            val itemKeys =
-                remember(itemList) {
-                    val seen = HashMap<String, Int>(itemList.size)
-                    itemList.map { entry ->
-                        val base =
-                            when (entry) {
-                                is com.maxrave.domain.data.model.mood.moodmoments.Content ->
-                                    entry.videoId ?: entry.playlistBrowseId ?: entry.title
-                                is com.maxrave.domain.data.model.mood.genre.Content ->
-                                    entry.playlistBrowseId ?: entry.title.toString()
-                                else -> entry.hashCode().toString()
-                            }
-                        val count = seen[base] ?: 0
-                        seen[base] = count + 1
-                        if (count == 0) base else "$base#$count"
-                    }
-                }
             itemsIndexed(
                 items = itemList,
                 key = { index, _ -> itemKeys[index] },

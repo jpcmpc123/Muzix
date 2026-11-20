@@ -127,6 +127,7 @@ import simpmusic.composeapp.generated.resources.no_favorite_playlists
 import simpmusic.composeapp.generated.resources.no_favorite_podcasts
 import simpmusic.composeapp.generated.resources.no_playlists_added
 import simpmusic.composeapp.generated.resources.no_playlists_downloaded
+import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.simpmusic_charts
 import simpmusic.composeapp.generated.resources.wrapped
 import simpmusic.composeapp.generated.resources.your_library
@@ -277,6 +278,44 @@ fun LibraryScreen(
                         } else {
                             0.dp
                         }
+                    val recentItems =
+                        remember(recentlyAdded) {
+                            if (recentlyAdded is LocalResource.Loading) {
+                                emptyList()
+                            } else {
+                                (recentlyAdded.data ?: emptyList()).filterIsInstance<RecentlyType>()
+                            }
+                        }
+                    val recentKeys =
+                        remember(recentItems) {
+                            val seen = HashMap<String, Int>(recentItems.size)
+                            recentItems.map { entry ->
+                                val base =
+                                    when (entry) {
+                                        is SongEntity -> "song_${entry.videoId}"
+                                        is ArtistEntity -> "artist_${entry.channelId}"
+                                        is AlbumEntity -> "album_${entry.browseId}"
+                                        is PlaylistEntity -> "playlist_${entry.id}"
+                                        is PodcastsEntity -> "podcast_${entry.podcastId}"
+                                        else -> "recent_${entry.hashCode()}"
+                                    }
+                                val count = seen[base] ?: 0
+                                seen[base] = count + 1
+                                if (count == 0) base else "$base#$count"
+                            }
+                        }
+                    val radioSuffix = stringResource(Res.string.radio)
+                    var recentSheetSong by remember { mutableStateOf<SongEntity?>(null) }
+                    if (recentSheetSong != null) {
+                        NowPlayingBottomSheet(
+                            onDismiss = { recentSheetSong = null },
+                            navController = navController,
+                            song = recentSheetSong!!,
+                            onLibraryDelete = {
+                                recentSheetSong?.videoId?.let { viewModel.deleteSong(it) }
+                            },
+                        )
+                    }
                     LazyColumn(
                         contentPadding =
                             innerPadding.copy(
@@ -337,43 +376,12 @@ fun LibraryScreen(
                                 selectionState = selectionState,
                             )
                         }
-                        if (recentlyAdded !is LocalResource.Loading) {
-                            val recentItems = (recentlyAdded.data ?: emptyList()).filterIsInstance<RecentlyType>()
-                            val recentKeys =
-                                remember(recentItems) {
-                                    val seen = HashMap<String, Int>(recentItems.size)
-                                    recentItems.map { entry ->
-                                        val base =
-                                            when (entry) {
-                                                is SongEntity -> "song_${entry.videoId}"
-                                                is ArtistEntity -> "artist_${entry.channelId}"
-                                                is AlbumEntity -> "album_${entry.browseId}"
-                                                is PlaylistEntity -> "playlist_${entry.id}"
-                                                is PodcastsEntity -> "podcast_${entry.podcastId}"
-                                                else -> "recent_${entry.hashCode()}"
-                                            }
-                                        val count = seen[base] ?: 0
-                                        seen[base] = count + 1
-                                        if (count == 0) base else "$base#$count"
-                                    }
-                                }
+                        if (recentItems.isNotEmpty()) {
                             itemsIndexed(
                                 items = recentItems,
                                 key = { index, _ -> recentKeys[index] },
                                 contentType = { _, entry -> entry.objectType().name },
                             ) { _, entry ->
-                                val radioSuffix = org.jetbrains.compose.resources.stringResource(simpmusic.composeapp.generated.resources.Res.string.radio)
-                                var sheetSong by remember { mutableStateOf<SongEntity?>(null) }
-                                if (sheetSong != null) {
-                                    NowPlayingBottomSheet(
-                                        onDismiss = { sheetSong = null },
-                                        navController = navController,
-                                        song = sheetSong!!,
-                                        onLibraryDelete = {
-                                            sheetSong?.videoId?.let { viewModel.deleteSong(it) }
-                                        },
-                                    )
-                                }
                                 RecentlyAddedRow(
                                     item = entry,
                                     playingVideoId = nowPlaying,
@@ -382,7 +390,7 @@ fun LibraryScreen(
                                     viewModel = viewModel,
                                     sharedViewModel = sharedViewModel,
                                     selectionState = selectionState,
-                                    onShowBottomSheet = { clicked -> sheetSong = clicked },
+                                    onShowBottomSheet = { clicked -> recentSheetSong = clicked },
                                 )
                             }
                         }
