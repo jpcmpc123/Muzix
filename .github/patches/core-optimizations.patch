@@ -199,15 +199,6 @@ index 5abb112..7e8b780 100644
 diff --git a/media/media3/src/main/java/com/maxrave/media3/exoplayer/CrossfadeExoPlayerAdapter.kt b/media/media3/src/main/java/com/maxrave/media3/exoplayer/CrossfadeExoPlayerAdapter.kt
 --- a/media/media3/src/main/java/com/maxrave/media3/exoplayer/CrossfadeExoPlayerAdapter.kt
 +++ b/media/media3/src/main/java/com/maxrave/media3/exoplayer/CrossfadeExoPlayerAdapter.kt
-@@ -374,7 +374,7 @@
-         }
-     }
-     private var precacheEnabled = true
--    private val maxPrecacheCount = 2
-+    private val maxPrecacheCount = 1
-     private var precacheJob: Job? = null
- 
-     // ========== Crossfade System ==========
 @@ -677,8 +677,8 @@
                      DefaultLoadControl
                          .Builder()
