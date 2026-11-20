@@ -37,7 +37,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -142,8 +141,6 @@ fun AppLogScreen(
     var minLevel by rememberSaveable { mutableStateOf('I') }
     var query by rememberSaveable { mutableStateOf("") }
     var paused by rememberSaveable { mutableStateOf(false) }
-    // Clearing hides what came before instead of deleting it: the writer keeps the file open.
-    var clearedAt by rememberSaveable { mutableLongStateOf(0L) }
     // Android Studio's "Scroll to the End": a mode that keeps the newest line in view as lines
     // arrive, not a one-off jump. A person scrolling up turns it off, scrolling back to the bottom
     // turns it on again, and the toolbar button does either at will.
@@ -167,31 +164,31 @@ fun AppLogScreen(
         }
         while (true) {
             if (!isPaused) {
-                val (app, errors) =
-                    tailLock.withLock {
+                tailLock.withLock {
+                    val (app, errors) =
                         withContext(Dispatchers.IO) {
                             (if (appTail.poll()) appTail.lines else null) to
                                 (if (errorTail.poll()) errorTail.lines else null)
                         }
-                    }
-                app?.let { appLines = it }
-                errors?.let { errorLines = it }
+                    app?.let { appLines = it }
+                    errors?.let { errorLines = it }
+                }
             }
             delay(POLL_INTERVAL)
         }
     }
 
     val shownLines =
-        remember(appLines, minLevel, query, clearedAt) {
+        remember(appLines, minLevel, query) {
             val floor = levelRank(minLevel)
-            appLines.filter { it.epochMillis > clearedAt && levelRank(it.level) >= floor && it.matches(query) }
+            appLines.filter { levelRank(it.level) >= floor && it.matches(query) }
         }
     // Newest first: an error is read from the top, unlike the running log.
     val shownErrors =
-        remember(errorLines, query, clearedAt) {
-            errorLines.filter { it.epochMillis > clearedAt && it.matches(query) }.asReversed()
+        remember(errorLines, query) {
+            errorLines.filter { it.matches(query) }.asReversed()
         }
-    val errorCount = remember(errorLines, clearedAt) { errorLines.count { it.epochMillis > clearedAt } }
+    val errorCount = errorLines.size
 
     val logListState = rememberLazyListState()
     // Only a person scrolling reaches onPostScroll; scrollToItem below is not a nested scroll, so
@@ -250,13 +247,22 @@ fun AppLogScreen(
                 actions = {
                     // Android Studio's Logcat toolbar, in its order: clear, pause, restart, stick.
                     RippleIconButton(SimpIcons.Delete, tint = onSurface) {
-                        clearedAt = nowEpochMillis()
+                        scope.launch {
+                            tailLock.withLock {
+                                withContext(Dispatchers.IO) {
+                                    Logger.clearLogFiles()
+                                }
+                                appTail.reset()
+                                errorTail.reset()
+                                appLines = emptyList()
+                                errorLines = emptyList()
+                            }
+                        }
                     }
                     RippleIconButton(if (paused) SimpIcons.PlayArrow else SimpIcons.Pause, tint = onSurface) {
                         paused = !paused
                     }
                     RippleIconButton(SimpIcons.RestartAlt, tint = onSurface) {
-                        clearedAt = 0L
                         paused = false
                         stickToBottom = true
                         restarts++

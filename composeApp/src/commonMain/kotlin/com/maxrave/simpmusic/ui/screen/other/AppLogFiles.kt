@@ -67,8 +67,8 @@ internal class LogTail(
         val live = files.lastOrNull() ?: return false
         val size = live.length()
         return when {
-            // First read, or the live file rolled over and started again from empty.
-            liveOffset < 0 || size < liveOffset -> {
+            // First read, live file rolled/truncated, or log files were deleted.
+            liveOffset < 0 || size < liveOffset || (files.none(File::exists) && lines.isNotEmpty()) -> {
                 reload(files)
                 true
             }
