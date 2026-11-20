@@ -509,9 +509,14 @@ fun AlbumScreen(
                                                         Spacer(modifier = Modifier.height(20.dp))
                                                         // Apple Music-style action row:
                                                         // [Shuffle][Play pill][Download] (cluster centered, all 48dp matching size)
-                                                        val isThisPlaying =
-                                                            playingVideoId.isNotEmpty() &&
-                                                                playingPlaylistId == browseId.replaceFirst("VL", "")
+                                                        val normalizedQueueId = playingPlaylistId?.removePrefix("VL")
+                                                        val isThisAlbum =
+                                                            normalizedQueueId != null &&
+                                                                (
+                                                                    normalizedQueueId == browseId.removePrefix("VL") ||
+                                                                        normalizedQueueId == uiState.audioPlaylistId?.removePrefix("VL")
+                                                                )
+                                                        val isThisPlaying = playingVideoId.isNotEmpty() && isThisAlbum
                                                         Row(
                                                             modifier =
                                                                 Modifier
@@ -544,7 +549,7 @@ fun AlbumScreen(
                                                                         .clip(CircleShape)
                                                                         .background(Color.White)
                                                                         .clickable {
-                                                                            if (isThisPlaying) {
+                                                                            if (isThisAlbum) {
                                                                                 sharedViewModel.onUIEvent(UIEvent.PlayPause)
                                                                             } else {
                                                                                 uiState.listTrack.firstOrNull()?.let {
@@ -713,9 +718,14 @@ fun AlbumScreen(
                                             // The landscape header carries its own copy of this cluster beside the
                                             // artwork, so it only belongs here in portrait.
                                             if (isPortrait) {
-                                                val isThisPlaying =
-                                                    playingVideoId.isNotEmpty() &&
-                                                        playingPlaylistId == browseId.replaceFirst("VL", "")
+                                                val normalizedQueueId = playingPlaylistId?.removePrefix("VL")
+                                                val isThisAlbum =
+                                                    normalizedQueueId != null &&
+                                                        (
+                                                            normalizedQueueId == browseId.removePrefix("VL") ||
+                                                                normalizedQueueId == uiState.audioPlaylistId?.removePrefix("VL")
+                                                        )
+                                                val isThisPlaying = playingVideoId.isNotEmpty() && isThisAlbum
                                                 Row(
                                                     modifier =
                                                         Modifier
@@ -748,7 +758,7 @@ fun AlbumScreen(
                                                                 .clip(CircleShape)
                                                                 .background(Color.White)
                                                                 .clickable {
-                                                                    if (isThisPlaying) {
+                                                                    if (isThisAlbum) {
                                                                         sharedViewModel.onUIEvent(UIEvent.PlayPause)
                                                                     } else {
                                                                         uiState.listTrack.firstOrNull()?.let {

@@ -670,10 +670,18 @@ fun PlaylistScreen(
                                                             Spacer(modifier = Modifier.height(20.dp))
                                                             // Apple Music-style action row:
                                                             // [Shuffle][Play pill][Download/More] (cluster centered, all 48dp matching size)
-                                                            val isThisPlaying = isPlaying && playingPlaylistId == data.id
-                                                            // The queue can belong to this playlist while paused; the tap must
-                                                            // resume it then, not restart the playlist from the first song.
-                                                            val isThisPlaylist = playingPlaylistId == data.id
+                                                            val normalizedQueueId = playingPlaylistId?.removePrefix("VL")
+                                                            val normalizedDataId = data.id.removePrefix("VL")
+                                                            val shuffleId = data.shuffleEndpoint?.playlistId?.removePrefix("VL")
+                                                            // The queue can belong to this playlist while paused (or started via
+                                                            // shuffle / Home VL-prefixed endpoint); resume instead of restarting.
+                                                            val isThisPlaylist =
+                                                                normalizedQueueId != null &&
+                                                                    (
+                                                                        normalizedQueueId == normalizedDataId ||
+                                                                            (shuffleId != null && normalizedQueueId == shuffleId)
+                                                                    )
+                                                            val isThisPlaying = isPlaying && isThisPlaylist
                                                             Row(
                                                                 modifier =
                                                                     Modifier
@@ -888,10 +896,18 @@ fun PlaylistScreen(
                                                 if (isPortrait) {
                                                     // Apple Music-style action row:
                                                     // [Shuffle][Play pill][Download/More] (cluster centered, all 48dp matching size)
-                                                    val isThisPlaying = isPlaying && playingPlaylistId == data.id
-                                                    // The queue can belong to this playlist while paused; the tap must
-                                                    // resume it then, not restart the playlist from the first song.
-                                                    val isThisPlaylist = playingPlaylistId == data.id
+                                                    val normalizedQueueId = playingPlaylistId?.removePrefix("VL")
+                                                    val normalizedDataId = data.id.removePrefix("VL")
+                                                    val shuffleId = data.shuffleEndpoint?.playlistId?.removePrefix("VL")
+                                                    // The queue can belong to this playlist while paused (or started via
+                                                    // shuffle / Home VL-prefixed endpoint); resume instead of restarting.
+                                                    val isThisPlaylist =
+                                                        normalizedQueueId != null &&
+                                                            (
+                                                                normalizedQueueId == normalizedDataId ||
+                                                                    (shuffleId != null && normalizedQueueId == shuffleId)
+                                                            )
+                                                    val isThisPlaying = isPlaying && isThisPlaylist
                                                     Row(
                                                         modifier =
                                                             Modifier
