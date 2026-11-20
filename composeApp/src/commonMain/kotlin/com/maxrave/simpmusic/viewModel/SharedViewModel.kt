@@ -12,6 +12,7 @@ import com.maxrave.common.Config.SHARE
 import com.maxrave.common.Config.SONG_CLICK
 import com.maxrave.common.Config.VIDEO_CLICK
 import com.maxrave.common.LibraryChipType
+import com.maxrave.common.MERGING_DATA_TYPE
 import com.maxrave.common.SELECTED_LANGUAGE
 import com.maxrave.common.STATUS_DONE
 import com.maxrave.domain.data.entities.AlbumEntity
@@ -187,6 +188,12 @@ class SharedViewModel(
 
     private var canvasJob: Job? = null
 
+    // Track ids whose canvas / lyrics were already requested. ExoPlayer refines a track's duration
+    // after the container is parsed (131000 -> 130981 ms), which re-ran the timeline job and
+    // fetched the same canvas/lyrics again while the first request was still in flight.
+    private var canvasRequestedFor: String? = null
+    private var lyricsRequestedFor: String? = null
+
     private val _intent: MutableStateFlow<GenericIntent?> = MutableStateFlow(null)
     val intent: StateFlow<GenericIntent?> = _intent
 
@@ -327,13 +334,25 @@ class SharedViewModel(
                             if (timeline.isLive) return@collectLatest
                             log("Timeline job ${timeline.total} ${nowPlaying.songEntity?.videoId}")
                             if (timeline.total > 0 && nowPlaying.songEntity != null) {
-                                if (nowPlaying.mediaItem.isSong() && nowPlayingScreenData.value.canvasData == null) {
+                                val currentMediaId = nowPlaying.mediaItem.mediaId.removePrefix(MERGING_DATA_TYPE.VIDEO)
+                                // A songEntity that does not belong to the mediaItem is a transition
+                                // caught half-way: acting on it fetched the OLD song's lyrics.
+                                if (nowPlaying.songEntity?.videoId != currentMediaId) {
+                                    Logger.w(tag, "Skipping canvas/lyrics: songEntity ${nowPlaying.songEntity?.videoId} != media $currentMediaId")
+                                    return@collectLatest
+                                }
+                                if (nowPlaying.mediaItem.isSong() &&
+                                    nowPlayingScreenData.value.canvasData == null &&
+                                    canvasRequestedFor != currentMediaId
+                                ) {
+                                    canvasRequestedFor = currentMediaId
                                     Logger.w(tag, "Duration is ${timeline.total}")
                                     Logger.w(tag, "MediaId is ${nowPlaying.mediaItem.mediaId}")
                                     getCanvas(nowPlaying.mediaItem.mediaId, (timeline.total / 1000).toInt())
                                 }
                                 nowPlaying.songEntity?.let { song ->
-                                    if (nowPlayingScreenData.value.lyricsData == null) {
+                                    if (nowPlayingScreenData.value.lyricsData == null && lyricsRequestedFor != song.videoId) {
+                                        lyricsRequestedFor = song.videoId
                                         Logger.w(tag, "Get lyrics from format")
                                         getLyricsFromFormat(nowPlaying.mediaItem.isVideo(), song, (timeline.total / 1000).toInt())
                                     }
@@ -393,6 +412,8 @@ class SharedViewModel(
                     it.songEntity?.videoId
                 }.collectLatest { state ->
                     canvasJob?.cancel()
+                    canvasRequestedFor = null
+                    lyricsRequestedFor = null
                     _nowPlayingState.value = state
 
                     // Seed the timeline from METADATA as soon as the track is known, instead of
