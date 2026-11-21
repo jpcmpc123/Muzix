@@ -70,11 +70,12 @@ APK_OUTPUT_DIR="./$MODULE/build/outputs/apk/$BUILD_TYPE"
 SIGNED_APK_OUTPUT_DIR="./$MODULE/build/outputs/apk/$BUILD_TYPE"
 
 # Android build-tools path
-BUILD_TOOLS_PATH="$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort | tail -n 1)"
+BUILD_TOOLS_PATH="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)"
 APKSIGNER="$BUILD_TOOLS_PATH/apksigner"
 ZIPALIGN="$BUILD_TOOLS_PATH/zipalign"
 
-# Create output directory for signed APKs
+# Clean previous APK outputs only (keep Gradle build cache intact)
+rm -rf "$APK_OUTPUT_DIR"
 mkdir -p "$SIGNED_APK_OUTPUT_DIR"
 
 # Log the start of the process
@@ -84,17 +85,16 @@ echo "===================="
 echo "Build Type: $BUILD_TYPE"
 echo "===================="
 
-# Step 1: Clean the project
-echo "[Step 1] Cleaning the project..."
-./gradlew clean --no-configuration-cache
-echo "Project cleaned successfully."
-
-# Step 2: Build the APK
-echo "[Step 2] Building APK..."
-./gradlew "$MODULE":assemble"$BUILD_TYPE"
+# Step 1: Build the APK
+echo "[Step 1] Building APK..."
+if [ "$BUILD_TYPE" = "release" ]; then
+  ./gradlew "$MODULE":assembleRelease --build-cache -x lintVitalAnalyzeRelease
+else
+  ./gradlew "$MODULE":assemble"$BUILD_TYPE" --build-cache
+fi
 echo "APK built successfully."
 
-# Step 3: Locate the built APKs
+# Step 2: Locate the built APKs
 APK_PATHS=$(find "$APK_OUTPUT_DIR" -name "*.apk")
 if [ -z "$APK_PATHS" ]; then
   echo "Error: APKs not found in $APK_OUTPUT_DIR"
@@ -102,7 +102,7 @@ if [ -z "$APK_PATHS" ]; then
 fi
 echo "Built APKs located: $APK_PATHS"
 
-# Step 4: Align and sign each APK
+# Step 3: Align and sign each APK
 for APK_PATH in $APK_PATHS; do
   ALIGNED_APK_PATH="$SIGNED_APK_OUTPUT_DIR/aligned-$(basename "${APK_PATH/-unsigned/}")"
   RELEASE_NAME=$(basename "${APK_PATH/-unsigned/}")
@@ -130,7 +130,7 @@ for APK_PATH in $APK_PATHS; do
   echo "APK signed successfully: $SIGNED_APK_PATH"
 
   echo "[Step 6] Verifying the signed APK: $SIGNED_APK_PATH..."
-  "$APKSIGNER" verify --verbose "$SIGNED_APK_PATH"
+  "$APKSIGNER" verify --verbose --print-certs "$SIGNED_APK_PATH"
   echo "Signed APK verified successfully: $SIGNED_APK_PATH"
 done
 
