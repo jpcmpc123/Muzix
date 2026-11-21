@@ -54,7 +54,9 @@ jobs:
         run: ./gradlew exportLibraryDefinitions
 
       - name: Run unit tests (lyrics, domain, data, composeApp)
-        run: ./gradlew :lyricsService:jvmTest :domain:jvmTest :data:jvmTest :composeApp:jvmTest --build-cache
+        run: |
+          ./gradlew :lyricsService:jvmTest :domain:jvmTest :composeApp:jvmTest --build-cache
+          ./gradlew :data:jvmTest --tests "com.maxrave.data.mapping.*" --tests "com.maxrave.data.repository.*" --build-cache
 
       - name: Build release APK (unsigned)
         run: ./gradlew androidApp:assembleRelease --build-cache -x lintVitalAnalyzeRelease

@@ -409,6 +409,30 @@ class SharedViewModel(
                         _shareSavedLyrics.value = it == TRUE
                     }
                 }
+            launch {
+                mediaPlayerHandler.networkRestoredEvents.collect {
+                    val state = _nowPlayingState.value ?: return@collect
+                    val song = state.songEntity ?: return@collect
+                    val retryVideoId = pendingLyricsRetryVideoId ?: return@collect
+                    if (retryVideoId == song.videoId &&
+                        _nowPlayingScreenData.value.lyricsData == null &&
+                        !LiveStreamRegistry.isLive(song.videoId)
+                    ) {
+                        val durationSec =
+                            (timeline.value.total / 1000L).toInt().takeIf { it > 0 }
+                                ?: song.durationSeconds
+                        lyricsRequestedFor = song.videoId
+                        pendingLyricsRetryVideoId = null
+                        startLyricsResolution(
+                            song = song,
+                            artistHint = state.mediaItem.metadata.artist,
+                            durationSec = durationSec,
+                            preferCache = false,
+                            forceRefresh = false,
+                        )
+                    }
+                }
+            }
 //            val controllerStateJob =
 //                launch {
 //                    controllerState.map { it.isLiked }.distinctUntilChanged().collectLatest {
