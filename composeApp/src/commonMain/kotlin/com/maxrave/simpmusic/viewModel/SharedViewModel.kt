@@ -91,6 +91,13 @@ import com.maxrave.simpmusic.utils.decodePromos
 import com.maxrave.simpmusic.utils.shownPromoIds
 import com.maxrave.simpmusic.utils.withShownPromo
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
+import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -103,6 +110,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.cancellable
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -902,18 +914,10 @@ class SharedViewModel(
      * the whole settings file (the playback position is saved every few seconds), so only a change
      * to this block's own text gets through.
      */
-    fun cachedPromos(): Flow<List<Promo>> =
-        dataStoreManager
-            .getString(Promo.cacheKey(appIdentity.isDevBuild))
-            .distinctUntilChanged()
-            .map(::decodePromos)
+    fun cachedPromos(): Flow<List<Promo>> = flowOf(emptyList())
 
     /** The same block's entries placed under the lyrics, as it changes. */
-    fun cachedLyricsPromos(): Flow<List<LyricsPromo>> =
-        dataStoreManager
-            .getString(Promo.cacheKey(appIdentity.isDevBuild))
-            .distinctUntilChanged()
-            .map(::decodeLyricsPromos)
+    fun cachedLyricsPromos(): Flow<List<LyricsPromo>> = flowOf(emptyList())
 
     /** The ids of the launch banners this app version has already shown. */
     suspend fun shownPromos(): Set<String> = shownPromosFlow().first()
@@ -1402,45 +1406,45 @@ class SharedViewModel(
         // startup, can never miss a check that is already under way but not yet marked.
         _isCheckingUpdate.value = true
         viewModelScope.launch {
-            val updateChannel = dataStoreManager.updateChannel.first()
             dataStoreManager.putString(
                 "CheckForUpdateAt",
                 System.currentTimeMillis().toString(),
             )
-            if (updateChannel == DataStoreManager.GITHUB) {
-                updateRepository.checkForGithubReleaseUpdate().collectLatest { response ->
-                    val data = response.data
-                    when (response) {
-                        is Resource.Success if (data != null) -> {
-                            _updateResponse.value = data
-                            showedUpdateDialog = true
-                        }
-
-                        else -> {
-                            log("Check for update error: ${response.message}", LogLevel.WARN)
-                        }
-                    }
-                    _isCheckingUpdate.value = false
-                }
-            } else if (updateChannel == DataStoreManager.FDROID) {
-                updateRepository.checkForFdroidUpdate().collectLatest { response ->
-                    val data = response.data
-                    when (response) {
-                        is Resource.Success if (data != null) -> {
-                            _updateResponse.value = data
-                            showedUpdateDialog = true
-                        }
-
-                        else -> {
-                            log("Check for update error: ${response.message}", LogLevel.WARN)
+            try {
+                val update =
+                    withContext(Dispatchers.IO) {
+                        HttpClient(CIO).use { client ->
+                            val httpResponse =
+                                client.get("https://api.github.com/repos/jpcmpc123/Muzix/releases/latest") {
+                                    header(HttpHeaders.Accept, "application/vnd.github+json")
+                                    header(HttpHeaders.UserAgent, "Muzix")
+                                }
+                            if (!httpResponse.status.isSuccess()) {
+                                error("GitHub release check failed: HTTP ${httpResponse.status.value}")
+                            }
+                            val obj = Json.parseToJsonElement(httpResponse.bodyAsText()).jsonObject
+                            val tagName = obj["tag_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@use null
+                            UpdateData(
+                                tagName = tagName,
+                                releaseTime = obj["published_at"]?.jsonPrimitive?.contentOrNull,
+                                body = obj["body"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                            )
                         }
                     }
-                    _isCheckingUpdate.value = false
+                if (update != null) {
+                    _updateResponse.value = update
+                    showedUpdateDialog = true
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log("Check for update error: ${e.message}", LogLevel.WARN)
+            } finally {
+                _isCheckingUpdate.value = false
             }
         }.invokeOnCompletion {
-            // Also for a channel neither branch handles, and for a check that throws: the launch
-            // banner waits for this flag, so it must never stay raised.
+            // Also for a check that cancels or throws: the launch banner waits for this flag, so it
+            // must never stay raised.
             _isCheckingUpdate.value = false
         }
     }
