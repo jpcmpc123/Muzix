@@ -1,18 +1,19 @@
-# Muzix 1.0.0
+Primeira release pública do **Muzix**, cliente de YouTube Music para Android mantido por **jpcmpc123**.
 
-Primeira release pública do **Muzix**, cliente de YouTube Music para Android mantido por `jpcmpc123`.
+### Principais destaques desta versão
+- **Playback:** reprodução estabilizada com recuperação automática em falhas de rede e carregamento rápido.
+- **Letras:** resolução de letras sincronizadas com cache e melhoria progressiva de qualidade.
+- **Home, Busca e Biblioteca:** carregamento e rolagem otimizados, com estabilidade corrigida nas listas e paradas.
+- **Reconhecimento de música:** detecção progressiva otimizada e reprodução direta.
 
-## Destaques desta versão
-- Identidade própria do **Muzix** (`com.jpcmpc123.muzix`), instalando ao lado do SimpMusic oficial sem conflito.
-- Reprodução otimizada com recuperação de falhas de rede e carregamento rápido.
-- Letras sincronizadas com resolução em cache e atualização progressiva de qualidade.
-- Tela Início (Home), Paradas, Busca e Biblioteca estabilizadas para rolagem fluida.
-- Reconhecimento de música otimizado com detecção progressiva e reprodução direta.
+### Aviso importante
+- O **Muzix** é um aplicativo separado (`com.jpcmpc123.muzix`) e instala **ao lado** do SimpMusic oficial, sem conflito — será necessário fazer login novamente.
+- Por usar a **assinatura definitiva do Muzix**, caso você tenha instalado um APK de teste anterior, desinstale-o antes de instalar esta release.
+- **Qual APK baixar?** Na maioria dos celulares Android modernos, baixe **`Muzix-full-arm64-v8a-release.apk`**. Em caso de dúvida, baixe **`Muzix-full-universal-release.apk`**.
 
-## Aviso
-- Por ser um aplicativo novo com assinatura própria, o Muzix instala separadamente e solicita um novo login.
+### Créditos e código-fonte
+**Baseado no SimpMusic, de maxrave-dev, licenciado sob a GPLv3.**
 
-## Créditos
-Baseado no SimpMusic, de maxrave-dev, licenciado sob a GPLv3.
-- Repositório original: https://github.com/maxrave-dev/SimpMusic
 - Código-fonte do Muzix: https://github.com/jpcmpc123/Muzix
+- Repositório original: https://github.com/maxrave-dev/SimpMusic
+- Licença: https://github.com/jpcmpc123/Muzix/blob/v1.0.0/LICENSE
