@@ -1881,64 +1881,6 @@ fun SettingScreen(
                         )
                     },
                 )
-                SettingItem(
-                    title = stringResource(Res.string.help_build_lyrics_database),
-                    subtitle = stringResource(Res.string.help_build_lyrics_database_description),
-                    switch = (helpBuildLyricsDatabase to { viewModel.setHelpBuildLyricsDatabase(it) }),
-                )
-                SettingItem(
-                    title = stringResource(Res.string.contributor_name),
-                    subtitle = contributor.first.ifEmpty { stringResource(Res.string.anonymous) },
-                    isEnable = helpBuildLyricsDatabase,
-                    onClick = {
-                        viewModel.setAlertData(
-                            SettingAlertState(
-                                title = runBlocking { getString(Res.string.contributor_name) },
-                                textField =
-                                    SettingAlertState.TextFieldData(
-                                        label = runBlocking { getString(Res.string.contributor_name) },
-                                        value = "",
-                                    ),
-                                message = "",
-                                confirm =
-                                    runBlocking { getString(Res.string.set) } to { state ->
-                                        viewModel.setContributorName(state.textField?.value ?: "")
-                                    },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
-                            ),
-                        )
-                    },
-                )
-                SettingItem(
-                    title = stringResource(Res.string.contributor_email),
-                    subtitle = contributor.second.ifEmpty { stringResource(Res.string.anonymous) },
-                    isEnable = helpBuildLyricsDatabase,
-                    onClick = {
-                        viewModel.setAlertData(
-                            SettingAlertState(
-                                title = runBlocking { getString(Res.string.contributor_email) },
-                                textField =
-                                    SettingAlertState.TextFieldData(
-                                        label = runBlocking { getString(Res.string.contributor_email) },
-                                        value = "",
-                                        verifyCodeBlock = {
-                                            if (it.isNotEmpty()) {
-                                                (it.contains("@")) to runBlocking { getString(Res.string.invalid) }
-                                            } else {
-                                                true to ""
-                                            }
-                                        },
-                                    ),
-                                message = "",
-                                confirm =
-                                    runBlocking { getString(Res.string.set) } to { state ->
-                                        viewModel.setContributorEmail(state.textField?.value ?: "")
-                                    },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
-                            ),
-                        )
-                    },
-                )
             }
         }
         item(key = "AI") {
@@ -2829,34 +2771,6 @@ fun SettingScreen(
                     subtitle = stringResource(Res.string.based_on_simpmusic),
                     onClick = {
                         uriHandler.openUri("https://github.com/maxrave-dev/SimpMusic")
-                    },
-                )
-                SettingItem(
-                    title = stringResource(Res.string.follow_me_on_x),
-                    subtitle = "@maxrave_dev",
-                    onClick = {
-                        uriHandler.openUri("https://x.com/maxrave_dev")
-                    },
-                )
-                SettingItem(
-                    title = stringResource(Res.string.developer_blog),
-                    subtitle = stringResource(Res.string.developer_blog_tagline),
-                    onClick = {
-                        uriHandler.openUri("https://www.simpmusic.org/blogs")
-                    },
-                )
-                if (getPlatform() == Platform.Android) {
-                    SettingItem(
-                        title = stringResource(Res.string.blog_notification_title),
-                        subtitle = stringResource(Res.string.blog_notification_description),
-                        switch = (blogNotificationEnabled to { viewModel.setBlogNotificationEnabled(it) }),
-                    )
-                }
-                SettingItem(
-                    title = stringResource(Res.string.buy_me_a_coffee),
-                    subtitle = stringResource(Res.string.donation),
-                    onClick = {
-                        uriHandler.openUri("https://github.com/sponsors/maxrave-dev")
                     },
                 )
                 SettingItem(

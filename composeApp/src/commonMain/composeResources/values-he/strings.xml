@@ -599,7 +599,7 @@ SimpMusic תמיד בחינם וללא פרסומות \n\nנבנה ב-❤️ מ�
     <string name="backup_downloaded">גבה מידע שהורד</string>
     <string name="backup_downloaded_description">גבה מידע על כל השירים שהורדו</string>
     <string name="auto_backup">גיבוי אוטומטי</string>
-    <string name="auto_backup_description">גבה אוטומטית את הנתונים שלך לתיקיית הורדות/SimpMusic</string>
+    <string name="auto_backup_description">גבה אוטומטית את הנתונים שלך לתיקיית הורדות/Muzix</string>
     <string name="backup_frequency">תדירות גיבוי</string>
     <string name="daily">יומי</string>
     <string name="weekly">שבועי</string>

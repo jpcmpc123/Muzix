@@ -465,7 +465,7 @@
     <string name="backup_downloaded">Fer una còpia de seguretat de les dades descarregades</string>
     <string name="backup_downloaded_description">Fer una còpia de seguretat de les dades de les cançons descarregades</string>
     <string name="auto_backup">Còpia de seguretat automàtica</string>
-    <string name="auto_backup_description">Fer una còpia de seguretat de les dades automàticament a la carpeta Downloads/SimpMusic</string>
+    <string name="auto_backup_description">Fer una còpia de seguretat de les dades automàticament a la carpeta Downloads/Muzix</string>
     <string name="backup_frequency">Freqüència de la còpia de seguretat</string>
     <string name="daily">Diàriament</string>
     <string name="weekly">Setmanalment</string>

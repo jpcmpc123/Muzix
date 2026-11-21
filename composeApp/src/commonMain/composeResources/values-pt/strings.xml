@@ -479,7 +479,7 @@
     <string name="backup_downloaded">Recuperação dos dados baixados</string>
     <string name="backup_downloaded_description">Faça backup de todos os dados das músicas baixadas</string>
     <string name="auto_backup">Backup automático</string>
-    <string name="auto_backup_description">Backup automático dos seus dados para a pasta Downloads/SimpMusic</string>
+    <string name="auto_backup_description">Backup automático dos seus dados para a pasta Downloads/Muzix</string>
     <string name="backup_frequency">Frequência de backup</string>
     <string name="daily">Diariamente</string>
     <string name="weekly">Semanalmente</string>

@@ -591,7 +591,7 @@
     <string name="backup_downloaded">Sao lưu dữ liệu đã tải xuống</string>
     <string name="backup_downloaded_description">Sao lưu tất cả các bài hát đã tải xuống</string>
     <string name="auto_backup">Tự động sao lưu</string>
-    <string name="auto_backup_description">Tự động sao lưu dữ liệu vào thư mục Downloads/SimpMusic</string>
+    <string name="auto_backup_description">Tự động sao lưu dữ liệu vào thư mục Downloads/Muzix</string>
     <string name="backup_frequency">Tần suất sao lưu</string>
     <string name="daily">Hàng ngày</string>
     <string name="weekly">Hàng tuần</string>

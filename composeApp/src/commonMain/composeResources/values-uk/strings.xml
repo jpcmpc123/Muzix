@@ -578,7 +578,7 @@
     <string name="backup_downloaded">Резервне копіювання завантажених даних</string>
     <string name="backup_downloaded_description">Резервне копіювання всіх завантажених даних композицій</string>
     <string name="auto_backup">Автоматичне резервне копіювання</string>
-    <string name="auto_backup_description">Автоматичне резервне копіювання даних у папку Downloads/SimpMusic</string>
+    <string name="auto_backup_description">Автоматичне резервне копіювання даних у папку Downloads/Muzix</string>
     <string name="backup_frequency">Частота резервного копіювання</string>
     <string name="daily">Щодня</string>
     <string name="weekly">Щотижня</string>

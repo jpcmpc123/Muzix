@@ -563,7 +563,7 @@
     <string name="backup_downloaded">Respaldar datos descargados</string>
     <string name="backup_downloaded_description">Respaldar todos los datos de canciones descargadas</string>
     <string name="auto_backup">Copia de seguridad automática</string>
-    <string name="auto_backup_description">Realiza una copia de seguridad automática de tus datos en la carpeta Descargas/SimpMusic</string>
+    <string name="auto_backup_description">Realiza una copia de seguridad automática de tus datos en la carpeta Descargas/Muzix</string>
     <string name="backup_frequency">Frecuencia de copias de seguridad</string>
     <string name="daily">Diariamente</string>
     <string name="weekly">Semanalmente</string>

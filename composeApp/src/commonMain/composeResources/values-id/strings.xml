@@ -478,7 +478,7 @@
     <string name="backup_downloaded">Cadangkan data yang diunduh</string>
     <string name="backup_downloaded_description">Cadangkan semua data lagu yang diunduh</string>
     <string name="auto_backup">Pencadangan otomatis</string>
-    <string name="auto_backup_description">Cadangkan data Anda secara otomatis ke folder Unduhan/SimpMusic</string>
+    <string name="auto_backup_description">Cadangkan data Anda secara otomatis ke folder Unduhan/Muzix</string>
     <string name="backup_frequency">Frekuensi pencadangan</string>
     <string name="daily">Harian</string>
     <string name="weekly">Mingguan</string>

@@ -594,7 +594,7 @@
     <string name="backup_downloaded">Backup der heruntergeladenen Daten</string>
     <string name="backup_downloaded_description">Backup aller heruntergeladenen Songs</string>
     <string name="auto_backup">Automatisches Backup</string>
-    <string name="auto_backup_description">Sichere deine Daten automatisch in den Downloads/SimpMusic Ordner</string>
+    <string name="auto_backup_description">Sichere deine Daten automatisch in den Downloads/Muzix Ordner</string>
     <string name="backup_frequency">Backup-Häufigkeit</string>
     <string name="daily">Täglich</string>
     <string name="weekly">Wöchentlich</string>

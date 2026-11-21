@@ -232,7 +232,7 @@ private suspend fun buildLogExport(): Pair<ByteArray, String>? {
         } ?: return null
     val stamp = now()
     val fileName =
-        "simpmusic-log-${stamp.year}${stamp.month.number.pad()}${stamp.day.pad()}-" +
+        "muzix-log-${stamp.year}${stamp.month.number.pad()}${stamp.day.pad()}-" +
             "${stamp.hour.pad()}${stamp.minute.pad()}${stamp.second.pad()}.txt"
     return bytes to fileName
 }

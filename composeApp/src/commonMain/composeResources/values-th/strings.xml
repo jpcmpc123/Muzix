@@ -491,7 +491,7 @@
     <string name="backup_downloaded">สำรองข้อมูลที่ดาวน์โหลด</string>
     <string name="backup_downloaded_description">สำรองข้อมูลเพลงที่ดาวน์โหลดทั้งหมด</string>
     <string name="auto_backup">สำรองข้อมูลอัตโนมัติ</string>
-    <string name="auto_backup_description">สำรองข้อมูลของคุณไปยังโฟลเดอร์ Downloads/SimpMusic โดยอัตโนมัติ</string>
+    <string name="auto_backup_description">สำรองข้อมูลของคุณไปยังโฟลเดอร์ Downloads/Muzix โดยอัตโนมัติ</string>
     <string name="backup_frequency">ความถี่ในการสำรองข้อมูล</string>
     <string name="daily">รายวัน</string>
     <string name="weekly">รายสัปดาห์</string>

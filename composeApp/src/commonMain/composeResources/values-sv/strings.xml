@@ -594,7 +594,7 @@
     <string name="backup_downloaded">Säkerhetskopiera hämtade data</string>
     <string name="backup_downloaded_description">Säkerhetskopiera data för alla hämtade låtar</string>
     <string name="auto_backup">Automatisk säkerhetskopiering</string>
-    <string name="auto_backup_description">Säkerhetskopiera dina data automatiskt till mappen Downloads/SimpMusic</string>
+    <string name="auto_backup_description">Säkerhetskopiera dina data automatiskt till mappen Downloads/Muzix</string>
     <string name="backup_frequency">Intervall för säkerhetskopiering</string>
     <string name="daily">Dagligen</string>
     <string name="weekly">Varje vecka</string>
