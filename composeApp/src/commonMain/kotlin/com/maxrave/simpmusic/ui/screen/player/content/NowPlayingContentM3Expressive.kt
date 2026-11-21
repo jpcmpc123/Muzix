@@ -874,30 +874,49 @@ internal fun ColumnScope.ExpressivePlaybackControls(
             ).padding(horizontal = 20.dp)
             .then(sliderModifier),
     ) {
-        WavySeekBar(
-            progressFraction = sliderPosition / 100f,
-            isPlaying = state.controllerState.isPlaying,
-            // Classic swaps the slider color to the rainbow while
-            // crossfading (state.sliderTrackColor); tonal primary
-            // otherwise.
-            activeColor =
-                if (liveTimeline.isCrossfading) {
-                    state.sliderTrackColor
-                } else {
-                    colorScheme.primary
+        if (liveTimeline.isLive) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(40.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(percent = 50))
+                            .background(Color.White),
+                )
+            }
+        } else {
+            WavySeekBar(
+                progressFraction = sliderPosition / 100f,
+                isPlaying = state.controllerState.isPlaying,
+                // Classic swaps the slider color to the rainbow while
+                // crossfading (state.sliderTrackColor); tonal primary
+                // otherwise.
+                activeColor =
+                    if (liveTimeline.isCrossfading) {
+                        state.sliderTrackColor
+                    } else {
+                        colorScheme.primary
+                    },
+                trackColor = colorScheme.secondaryContainer,
+                thumbColor = colorScheme.primary,
+                onSliderChange = { newValue ->
+                    sliding = true
+                    sliderPosition = newValue
+                    actions.onSliderChange(newValue)
                 },
-            trackColor = colorScheme.secondaryContainer,
-            thumbColor = colorScheme.primary,
-            onSliderChange = { newValue ->
-                sliding = true
-                sliderPosition = newValue
-                actions.onSliderChange(newValue)
-            },
-            onSliderChangeFinished = {
-                sliding = false
-                actions.onSliderChangeFinished()
-            },
-        )
+                onSliderChangeFinished = {
+                    sliding = false
+                    actions.onSliderChangeFinished()
+                },
+            )
+        }
     }
     // Time row — same math and negative guard as Classic
     // (formatDuration renders any negative as NA:NA).

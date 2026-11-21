@@ -272,17 +272,35 @@ actual fun SongRecognitionSheet(
                     }
 
                     state is Recognition.Found -> {
+                        val matched = uiState.matchedTrack
+                        val displayCover =
+                            matched?.thumbnails?.lastOrNull()?.url?.let { url ->
+                                if (url.contains("w120") || url.contains("h120")) {
+                                    url.replace(Regex("([wh])120"), "$1544")
+                                } else {
+                                    url
+                                }
+                            } ?: state.coverArt
+                        val displayTitle = matched?.title?.takeIf { it.isNotBlank() } ?: state.title
+                        val displayArtist =
+                            matched?.artists
+                                ?.mapNotNull { it.name.takeIf(String::isNotBlank) }
+                                ?.joinToString(", ")
+                                ?.takeIf { it.isNotBlank() }
+                                ?: state.artist
+                        val displayAlbum = matched?.album?.name?.takeIf { it.isNotBlank() } ?: state.album
+                        val displayYear = (matched?.year as? String)?.takeIf { it.isNotBlank() } ?: state.year
+
                         val openMatchedSong: () -> Unit = {
-                            val matched = uiState.matchedTrack
                             if (matched != null) {
                                 viewModel.playTrack(matched)
                                 close { onOpenPlayer() }
                             } else {
-                                val query = "${state.title} ${state.artist}".trim()
+                                val query = "$displayTitle $displayArtist".trim()
                                 close { onFind(query) }
                             }
                         }
-                        val hasPlayableTrack = uiState.matchedTrack != null
+                        val hasPlayableTrack = matched != null
 
                         Column(
                             modifier =
@@ -303,8 +321,8 @@ actual fun SongRecognitionSheet(
                                 horizontalAlignment = Alignment.Start,
                             ) {
                                 AsyncImage(
-                                    model = state.coverArt,
-                                    contentDescription = state.title,
+                                    model = displayCover,
+                                    contentDescription = displayTitle,
                                     contentScale = ContentScale.Crop,
                                     modifier =
                                         Modifier
@@ -325,20 +343,20 @@ actual fun SongRecognitionSheet(
                                     verticalArrangement = Arrangement.spacedBy(3.dp),
                                 ) {
                                     Text(
-                                        text = state.title,
+                                        text = displayTitle,
                                         style = typo().titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp),
                                         color = colors.content,
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                     Text(
-                                        text = state.artist,
+                                        text = displayArtist,
                                         style = typo().bodyMedium.copy(fontSize = 15.sp),
                                         color = colors.subtitle,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
-                                    val metaLine = listOfNotNull(state.album, state.year).joinToString(" • ")
+                                    val metaLine = listOfNotNull(displayAlbum, displayYear).joinToString(" • ")
                                     if (metaLine.isNotEmpty()) {
                                         Text(
                                             text = metaLine,

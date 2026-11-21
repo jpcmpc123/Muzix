@@ -21,14 +21,17 @@ import com.maxrave.simpmusic.expect.PlatformSongRecognizer
 import com.maxrave.simpmusic.recognition.Recognition
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.compose.resources.getString
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_to_playlist
@@ -119,39 +122,54 @@ internal class SongRecognitionViewModel(
                             _uiState.update { it.copy(recognition = progress) }
                         },
                     )
-                _uiState.update {
-                    it.copy(
-                        recognition = result,
-                        amplitude = 0f,
-                        lowAudio = false,
-                    )
-                }
                 if (result is Recognition.Found) {
-                    resolveMatchedTrack(result)
-                }
-            }
-    }
-
-    private fun resolveMatchedTrack(found: Recognition.Found) {
-        val query = "${found.title} ${found.artist}".trim()
-        if (query.isEmpty()) return
-        resolveJob?.cancel()
-        likeObserverJob?.cancel()
-        _uiState.update { it.copy(isResolvingTrack = true, matchedTrack = null, isLiked = false) }
-        resolveJob =
-            viewModelScope.launch {
-                searchRepository.getSearchDataSong(query).collect { res ->
-                    when (res) {
-                        is Resource.Success -> {
-                            val best = pickBestSongMatch(found, res.data.orEmpty())
-                            _uiState.update { it.copy(matchedTrack = best, isResolvingTrack = false) }
-                            if (best != null) {
-                                observeLikedState(best.videoId)
+                    val resolveDeferred =
+                        viewModelScope.async {
+                            val query = "${result.title} ${result.artist}".trim()
+                            if (query.isEmpty()) return@async null
+                            val res = searchRepository.getSearchDataSong(query).firstOrNull()
+                            when (res) {
+                                is Resource.Success -> pickBestSongMatch(result, res.data.orEmpty())
+                                else -> null
                             }
                         }
-                        is Resource.Error -> {
-                            _uiState.update { it.copy(isResolvingTrack = false) }
+                    resolveJob = resolveDeferred
+                    val best = withTimeoutOrNull(5_000L) { resolveDeferred.await() }
+                    val stillResolving = best == null && resolveDeferred.isActive
+                    _uiState.update {
+                        it.copy(
+                            recognition = result,
+                            amplitude = 0f,
+                            lowAudio = false,
+                            matchedTrack = best,
+                            isResolvingTrack = stillResolving,
+                            isLiked = false,
+                        )
+                    }
+                    if (best != null) {
+                        observeLikedState(best.videoId)
+                    } else if (stillResolving) {
+                        viewModelScope.launch {
+                            val lateBest = runCatching { resolveDeferred.await() }.getOrNull()
+                            _uiState.update { state ->
+                                if (state.recognition == result) {
+                                    state.copy(matchedTrack = lateBest, isResolvingTrack = false)
+                                } else {
+                                    state
+                                }
+                            }
+                            if (lateBest != null && _uiState.value.recognition == result) {
+                                observeLikedState(lateBest.videoId)
+                            }
                         }
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            recognition = result,
+                            amplitude = 0f,
+                            lowAudio = false,
+                        )
                     }
                 }
             }

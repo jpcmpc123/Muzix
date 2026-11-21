@@ -579,10 +579,11 @@ fun MiniPlayer(
         LaunchedEffect(key1 = timelineState, key2 = isSliding) {
             if (!isSliding) {
                 sliderValue =
-                    if (timelineState.total > 0L) {
-                        timelineState.current.toFloat() * 100 / timelineState.total.toFloat()
-                    } else {
-                        0f
+                    when {
+                        timelineState.isLive -> 100f
+                        timelineState.total > 0L ->
+                            timelineState.current.toFloat() * 100 / timelineState.total.toFloat()
+                        else -> 0f
                     }
             }
         }
@@ -1308,10 +1309,10 @@ private fun MiniPlayerLinearProgress(
 ) {
     val rawProgress by remember(timelineFlow) {
         timelineFlow.map { tl ->
-            if (tl.total > 0L && tl.current >= 0L) {
-                (tl.current.toFloat() / tl.total).coerceIn(0f, 1f)
-            } else {
-                0f
+            when {
+                tl.isLive -> 1f
+                tl.total > 0L && tl.current >= 0L -> (tl.current.toFloat() / tl.total).coerceIn(0f, 1f)
+                else -> 0f
             }
         }
     }.collectAsStateWithLifecycle(0f)

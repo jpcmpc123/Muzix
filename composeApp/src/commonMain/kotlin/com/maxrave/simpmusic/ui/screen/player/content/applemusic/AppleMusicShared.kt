@@ -1028,20 +1028,31 @@ internal fun ColumnScope.AppleMusicPlaybackControls(
     // otherwise the growing slider re-measures this whole column and the artwork above
     // it visibly jumps. It also gives the bar a real 18dp touch target instead of 8.4dp.
     Box(modifier = Modifier.fillMaxWidth().height(18.dp), contentAlignment = Alignment.Center) {
-        AppleMusicThinSlider(
-            value = sliderPosition / 100f,
-            activeColor = if (liveTimeline.isCrossfading) state.sliderTrackColor else AppleMusicTrackActive,
-            onValueChange = {
-                sliding = true
-                sliderPosition = it * 100f
-                actions.onSliderChange(it * 100f)
-            },
-            onValueChangeFinished = {
-                sliding = false
-                actions.onSliderChangeFinished()
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (liveTimeline.isLive) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(Color.White),
+            )
+        } else {
+            AppleMusicThinSlider(
+                value = sliderPosition / 100f,
+                activeColor = if (liveTimeline.isCrossfading) state.sliderTrackColor else AppleMusicTrackActive,
+                onValueChange = {
+                    sliding = true
+                    sliderPosition = it * 100f
+                    actions.onSliderChange(it * 100f)
+                },
+                onValueChangeFinished = {
+                    sliding = false
+                    actions.onSliderChangeFinished()
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
     AppleMusicTimesRow(typography = typography, sliderPosition = sliderPosition, liveTimeline = liveTimeline, audioQualityLabel = state.audioQualityLabel, modifier = Modifier.padding(top = 8.dp))
     Spacer(modifier = Modifier.height(22.dp))

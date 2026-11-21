@@ -1991,126 +1991,146 @@ internal fun ColumnScope.SpotifyPlaybackControls(
             ).padding(horizontal = 20.dp)
             .then(sliderModifier),
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(24.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Crossfade(liveTimeline.loading) {
-                if (it) {
-                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                        LinearProgressIndicator(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(4.dp)
-                                    .padding(
-                                        horizontal = 3.dp,
-                                    ).clip(
-                                        RoundedCornerShape(8.dp),
-                                    ),
-                            color = Color.Gray,
-                            trackColor = Color.DarkGray,
-                            strokeCap = StrokeCap.Round,
-                        )
-                    }
-                } else {
-                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                        LinearProgressIndicator(
-                            progress = { liveTimeline.bufferedPercent.toFloat() / 100 },
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(4.dp)
-                                    .padding(
-                                        horizontal = 3.dp,
-                                    ).clip(
-                                        RoundedCornerShape(8.dp),
-                                    ),
-                            color = Color.Gray,
-                            trackColor =
-                                Color.Gray.copy(
-                                    alpha = 0.6f,
-                                ),
-                            strokeCap = StrokeCap.Round,
-                            drawStopIndicator = {},
-                        )
-                    }
-                }
-            }
-        }
-        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-            Slider(
-                // material3 1.5.0-alpha25 keeps a
-                // binary-compatibility overload of Slider that
-                // accepts valueRange and then forwards without
-                // it, so the slider silently runs on the
-                // default 0f..1f and anything larger is clamped
-                // to a full track. Hand it a fraction instead;
-                // sliderValue stays on the 0..100 scale that
-                // UIEvent.UpdateProgress and the time labels
-                // are built around.
-                value = sliderPosition / 100f,
-                onValueChangeFinished = {
-                    sliding = false
-                    actions.onSliderChangeFinished()
-                },
-                onValueChange = {
-                    sliding = true
-                    sliderPosition = it * 100f
-                    actions.onSliderChange(it * 100f)
-                },
+        if (liveTimeline.isLive) {
+            Box(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .padding(top = 3.dp)
-                        .align(
-                            Alignment.TopCenter,
-                        ),
-                track = { sliderState ->
-                    SliderDefaults.Track(
-                        modifier =
-                            Modifier
-                                .height(5.dp),
-                        enabled = true,
-                        sliderState = sliderState,
-                        colors =
-                            SliderDefaults.colors().copy(
-                                thumbColor = state.sliderTrackColor,
-                                activeTrackColor = state.sliderTrackColor,
-                                inactiveTrackColor = Color.Transparent,
+                        .height(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .padding(horizontal = 3.dp)
+                            .clip(RoundedCornerShape(percent = 50))
+                            .background(Color.White),
+                )
+            }
+        } else {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Crossfade(liveTimeline.loading) {
+                    if (it) {
+                        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                            LinearProgressIndicator(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp)
+                                        .padding(
+                                            horizontal = 3.dp,
+                                        ).clip(
+                                            RoundedCornerShape(8.dp),
+                                        ),
+                                color = Color.Gray,
+                                trackColor = Color.DarkGray,
+                                strokeCap = StrokeCap.Round,
+                            )
+                        }
+                    } else {
+                        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                            LinearProgressIndicator(
+                                progress = { liveTimeline.bufferedPercent.toFloat() / 100 },
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp)
+                                        .padding(
+                                            horizontal = 3.dp,
+                                        ).clip(
+                                            RoundedCornerShape(8.dp),
+                                        ),
+                                color = Color.Gray,
+                                trackColor =
+                                    Color.Gray.copy(
+                                        alpha = 0.6f,
+                                    ),
+                                strokeCap = StrokeCap.Round,
+                                drawStopIndicator = {},
+                            )
+                        }
+                    }
+                }
+            }
+            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                Slider(
+                    // material3 1.5.0-alpha25 keeps a
+                    // binary-compatibility overload of Slider that
+                    // accepts valueRange and then forwards without
+                    // it, so the slider silently runs on the
+                    // default 0f..1f and anything larger is clamped
+                    // to a full track. Hand it a fraction instead;
+                    // sliderValue stays on the 0..100 scale that
+                    // UIEvent.UpdateProgress and the time labels
+                    // are built around.
+                    value = sliderPosition / 100f,
+                    onValueChangeFinished = {
+                        sliding = false
+                        actions.onSliderChangeFinished()
+                    },
+                    onValueChange = {
+                        sliding = true
+                        sliderPosition = it * 100f
+                        actions.onSliderChange(it * 100f)
+                    },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 3.dp)
+                            .align(
+                                Alignment.TopCenter,
                             ),
-                        thumbTrackGapSize = 0.dp,
-                        drawTick = { _, _ -> },
-                        drawStopIndicator = null,
-                    )
-                },
-                thumb = {
-                    SliderDefaults.Thumb(
-                        modifier =
-                            Modifier
-                                .height(18.dp)
-                                .width(8.dp)
-                                .padding(
-                                    vertical = 4.dp,
+                    track = { sliderState ->
+                        SliderDefaults.Track(
+                            modifier =
+                                Modifier
+                                    .height(5.dp),
+                            enabled = true,
+                            sliderState = sliderState,
+                            colors =
+                                SliderDefaults.colors().copy(
+                                    thumbColor = state.sliderTrackColor,
+                                    activeTrackColor = state.sliderTrackColor,
+                                    inactiveTrackColor = Color.Transparent,
                                 ),
-                        thumbSize = DpSize(8.dp, 8.dp),
-                        interactionSource =
-                            remember {
-                                MutableInteractionSource()
-                            },
-                        colors =
-                            SliderDefaults.colors().copy(
-                                thumbColor = state.sliderTrackColor,
-                                activeTrackColor = state.sliderTrackColor,
-                                inactiveTrackColor = Color.Transparent,
-                            ),
-                        enabled = true,
-                    )
-                },
-            )
+                            thumbTrackGapSize = 0.dp,
+                            drawTick = { _, _ -> },
+                            drawStopIndicator = null,
+                        )
+                    },
+                    thumb = {
+                        SliderDefaults.Thumb(
+                            modifier =
+                                Modifier
+                                    .height(18.dp)
+                                    .width(8.dp)
+                                    .padding(
+                                        vertical = 4.dp,
+                                    ),
+                            thumbSize = DpSize(8.dp, 8.dp),
+                            interactionSource =
+                                remember {
+                                    MutableInteractionSource()
+                                },
+                            colors =
+                                SliderDefaults.colors().copy(
+                                    thumbColor = state.sliderTrackColor,
+                                    activeTrackColor = state.sliderTrackColor,
+                                    inactiveTrackColor = Color.Transparent,
+                                ),
+                            enabled = true,
+                        )
+                    },
+                )
+            }
         }
     }
     // Time Layout
@@ -2169,7 +2189,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
             )
         }
         Text(
-            text = state.timelineState.lengthLabel(),
+            text = liveTimeline.lengthLabel(),
             style = typo().bodyMedium,
             color = state.secondaryTextColor(),
             modifier = Modifier.weight(1f),
