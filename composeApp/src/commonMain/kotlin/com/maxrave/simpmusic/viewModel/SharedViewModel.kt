@@ -318,6 +318,16 @@ class SharedViewModel(
     private val _shareSavedLyrics: MutableStateFlow<Boolean> = MutableStateFlow(true)
     val shareSavedLyrics: StateFlow<Boolean> get() = _shareSavedLyrics
 
+    private var songInfoJob: Job? = null
+
+    // Vote state for translated lyrics
+    private val _translatedVoteState = MutableStateFlow<VoteData?>(null)
+    val translatedVoteState: StateFlow<VoteData?> = _translatedVoteState.asStateFlow()
+
+    // Vote state for original lyrics
+    private val _lyricsVoteState = MutableStateFlow<VoteData?>(null)
+    val lyricsVoteState: StateFlow<VoteData?> = _lyricsVoteState.asStateFlow()
+
     init {
         viewModelScope.launch {
             log("SharedViewModel init")
@@ -1368,8 +1378,6 @@ class SharedViewModel(
         }
     }
 
-    private var songInfoJob: Job? = null
-
     fun getSongInfo(mediaId: String?) {
         songInfoJob?.cancel()
         songInfoJob =
@@ -2304,14 +2312,6 @@ class SharedViewModel(
             it.copy(bitmap = bitmap)
         }
     }
-
-    // Vote state for translated lyrics
-    private val _translatedVoteState = MutableStateFlow<VoteData?>(null)
-    val translatedVoteState: StateFlow<VoteData?> = _translatedVoteState.asStateFlow()
-
-    // Vote state for original lyrics
-    private val _lyricsVoteState = MutableStateFlow<VoteData?>(null)
-    val lyricsVoteState: StateFlow<VoteData?> = _lyricsVoteState.asStateFlow()
 
     /**
      * Vote for SimpMusic original lyrics (upvote or downvote)
