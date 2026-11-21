@@ -1,1 +1,1 @@
-A simple music app using YouTube Music for backend
+YouTube Music client for Android, based on SimpMusic

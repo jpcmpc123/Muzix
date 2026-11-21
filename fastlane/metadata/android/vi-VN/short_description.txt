@@ -1,1 +1,1 @@
-Ứng dụng nghe nhạc đơn giản sử dụng dữ liệu từ YouTube Music
+Ứng dụng nghe nhạc YouTube Music cho Android, phát triển dựa trên SimpMusic
