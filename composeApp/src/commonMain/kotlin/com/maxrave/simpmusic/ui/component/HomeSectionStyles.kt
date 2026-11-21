@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -173,20 +174,25 @@ fun HomeDiscoverSection(
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            Text(
-                                text =
-                                    listOfNotNull(
-                                        song.artists
-                                            .toListName()
-                                            .connectArtists()
-                                            .takeIf { it.isNotBlank() },
-                                        song.album?.name?.takeIf { it.isNotBlank() },
-                                    ).joinToString(" • "),
-                                style = typo().bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (song.isLive) {
+                                    LiveBadge(modifier = Modifier.padding(end = 6.dp))
+                                }
+                                Text(
+                                    text =
+                                        listOfNotNull(
+                                            song.artists
+                                                .toListName()
+                                                .connectArtists()
+                                                .takeIf { it.isNotBlank() },
+                                            song.album?.name?.takeIf { it.isNotBlank() },
+                                        ).joinToString(" • "),
+                                    style = typo().bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                     HoverPlayButton(visible = hovered && info.isHero(), onClick = play)

@@ -297,20 +297,23 @@ class SearchViewModel(
             job7.join()
 
             try {
+                val (liveVideos, regularVideos) = video.partition { it.resultType == com.maxrave.domain.utils.LIVE_RESULT_TYPE }
                 if (artist.size >= 3) {
                     for (i in 0..2) {
                         temp += artist[i]
                     }
+                    temp.addAll(liveVideos)
                     temp.addAll(song)
-                    temp.addAll(video)
+                    temp.addAll(regularVideos)
                     temp.addAll(album)
                     temp.addAll(playlist)
                     temp.addAll(featuredPlaylist)
                     temp.addAll(podcast)
                 } else {
                     temp.addAll(artist)
+                    temp.addAll(liveVideos)
                     temp.addAll(song)
-                    temp.addAll(video)
+                    temp.addAll(regularVideos)
                     temp.addAll(album)
                     temp.addAll(playlist)
                     temp.addAll(featuredPlaylist)

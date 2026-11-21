@@ -505,16 +505,15 @@ fun HomeScreen(
     val shouldStartPaginate =
         remember {
             derivedStateOf {
+                val totalItems = scrollState.layoutInfo.totalItemsCount
+                val lastVisible = scrollState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -9
                 homeListState != ListState.PAGINATION_EXHAUST &&
-                    (
-                        scrollState.layoutInfo.visibleItemsInfo
-                            .lastOrNull()
-                            ?.index ?: -9
-                    ) >= (scrollState.layoutInfo.totalItemsCount - 1)
+                    totalItems > 0 &&
+                    lastVisible >= (totalItems - 2)
             }
         }
 
-    LaunchedEffect(key1 = shouldStartPaginate.value) {
+    LaunchedEffect(shouldStartPaginate.value, homeListState, continuation) {
         Logger.d("HomeScreen", "shouldStartPaginate: ${shouldStartPaginate.value}")
         Logger.d("HomeScreen", "homeListState: $homeListState")
         Logger.d("HomeScreen", "Continuation: $continuation")

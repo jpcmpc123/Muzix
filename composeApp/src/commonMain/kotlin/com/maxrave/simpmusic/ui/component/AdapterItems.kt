@@ -809,95 +809,104 @@ fun HomeItemContentPlaylist(
                         .wrapContentHeight(align = Alignment.CenterVertically)
                         .padding(top = 8.dp),
             )
-            Text(
-                text =
-                    when (data) {
-                        is Content -> {
-                            data.description
-                                ?: if (data.playlistId == null) {
-                                    (
-                                        if (!data.artists.isNullOrEmpty()) {
-                                            data.artists
-                                                .toListName()
-                                                .connectArtists()
-                                        } else {
-                                            stringResource(Res.string.album)
-                                        }
-                                    )
-                                } else {
-                                    stringResource(Res.string.playlist)
-                                }
-                        }
+            Row(
+                modifier = textWidth,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (data is Content && data.isLive) {
+                    LiveBadge(modifier = Modifier.padding(end = 6.dp))
+                }
+                Text(
+                    text =
+                        when (data) {
+                            is Content -> {
+                                data.description
+                                    ?: if (data.playlistId == null) {
+                                        (
+                                            if (!data.artists.isNullOrEmpty()) {
+                                                data.artists
+                                                    .toListName()
+                                                    .connectArtists()
+                                            } else {
+                                                stringResource(Res.string.album)
+                                            }
+                                        )
+                                    } else {
+                                        stringResource(Res.string.playlist)
+                                    }
+                            }
 
-                        is com.maxrave.domain.data.model.mood.genre.Content -> {
-                            data.title.subtitle
-                        }
+                            is com.maxrave.domain.data.model.mood.genre.Content -> {
+                                data.title.subtitle
+                            }
 
-                        is com.maxrave.domain.data.model.mood.moodmoments.Content -> {
-                            data.subtitle
-                        }
+                            is com.maxrave.domain.data.model.mood.moodmoments.Content -> {
+                                data.subtitle
+                            }
 
-                        is LocalPlaylistEntity -> {
-                            stringResource(Res.string.you)
-                        }
+                            is LocalPlaylistEntity -> {
+                                stringResource(Res.string.you)
+                            }
 
-                        is ChartItem -> {
-                            stringResource(Res.string.app_name)
-                        }
+                            is ChartItem -> {
+                                stringResource(Res.string.app_name)
+                            }
 
-                        is PlaylistsResult -> {
-                            data.author
-                        }
+                            is PlaylistsResult -> {
+                                data.author
+                            }
 
-                        is AlbumEntity -> {
-                            data.artistName?.connectArtists() ?: stringResource(Res.string.album)
-                        }
+                            is AlbumEntity -> {
+                                data.artistName?.connectArtists() ?: stringResource(Res.string.album)
+                            }
 
-                        is PlaylistEntity -> {
-                            data.author ?: stringResource(Res.string.playlist)
-                        }
+                            is PlaylistEntity -> {
+                                data.author ?: stringResource(Res.string.playlist)
+                            }
 
-                        is ResultSingle -> {
-                            data.year
-                        }
+                            is ResultSingle -> {
+                                data.year
+                            }
 
-                        is ResultAlbum -> {
-                            data.year
-                        }
+                            is ResultAlbum -> {
+                                data.year
+                            }
 
-                        is ResultPlaylist -> {
-                            data.author
-                        }
+                            is ResultPlaylist -> {
+                                data.author
+                            }
 
-                        is PodcastsEntity -> {
-                            data.authorName
-                        }
+                            is PodcastsEntity -> {
+                                data.authorName
+                            }
 
-                        is MonthlyRecapItem -> {
-                            stringResource(Res.string.wrapped_recap_subtitle)
-                        }
+                            is MonthlyRecapItem -> {
+                                stringResource(Res.string.wrapped_recap_subtitle)
+                            }
 
-                        is AlbumsResult -> {
-                            data.year
-                        }
+                            is AlbumsResult -> {
+                                data.year
+                            }
 
-                        else -> {
-                            ""
-                        }
-                    },
-                style = typo().bodySmall,
-                minLines = 1,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier =
-                    textWidth
-                        .wrapContentHeight(align = Alignment.CenterVertically)
-                        .basicMarquee(
-                            initialDelayMillis = 2000,
-                            repeatDelayMillis = 2000,
-                            velocity = 25.dp,
-                        ),
-            )
+                            else -> {
+                                ""
+                            }
+                        },
+                    style = typo().bodySmall,
+                    minLines = 1,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .wrapContentHeight(align = Alignment.CenterVertically)
+                            .basicMarquee(
+                                initialDelayMillis = 2000,
+                                repeatDelayMillis = 2000,
+                                velocity = 25.dp,
+                            ),
+                )
+            }
         }
     }
 }
@@ -1111,15 +1120,20 @@ fun HomeItemSong(
                         .wrapContentHeight(align = Alignment.CenterVertically)
                         .padding(top = 8.dp),
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = textWidth,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 AnimatedVisibility(visible = data.isExplicit == true) {
                     ExplicitBadge(
                         modifier =
                             Modifier
                                 .size(20.dp)
-                                .padding(end = 4.dp)
-                                .weight(1f),
+                                .padding(end = 4.dp),
                     )
+                }
+                if (data.isLive) {
+                    LiveBadge(modifier = Modifier.padding(end = 6.dp))
                 }
                 Text(
                     text =
@@ -1135,7 +1149,8 @@ fun HomeItemSong(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier =
-                        textWidth
+                        Modifier
+                            .weight(1f)
                             .wrapContentHeight(align = Alignment.CenterVertically)
                             .basicMarquee(
                                 initialDelayMillis = 2000,

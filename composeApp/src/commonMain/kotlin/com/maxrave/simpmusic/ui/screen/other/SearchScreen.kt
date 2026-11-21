@@ -1508,14 +1508,24 @@ fun SuggestItemRow(
                     else -> null
                 } ?: "Unknown"
 
-            if (subtitle.isNotEmpty()) {
-                Text(
-                    text = subtitle,
-                    style = typo().bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            val isLiveSuggestion =
+                (searchResult as? SongsResult)?.resultType == com.maxrave.domain.utils.LIVE_RESULT_TYPE ||
+                    (searchResult as? VideosResult)?.resultType == com.maxrave.domain.utils.LIVE_RESULT_TYPE
+            if (isLiveSuggestion || subtitle.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isLiveSuggestion) {
+                        com.maxrave.simpmusic.ui.component.LiveBadge(modifier = Modifier.padding(end = 6.dp))
+                    }
+                    if (subtitle.isNotEmpty()) {
+                        Text(
+                            text = subtitle,
+                            style = typo().bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
         }
     }
