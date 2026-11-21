@@ -217,7 +217,7 @@ private suspend fun buildLogExport(): Pair<ByteArray, String>? {
         withContext(Dispatchers.IO) {
             runCatching {
                 buildString {
-                    appendLine("SimpMusic ${VersionManager.getVersionName()} · ${getPlatform().osName()}")
+                    appendLine("Muzix ${VersionManager.getVersionName()} · ${getPlatform().osName()}")
                     for (name in listOf(Logger.APP_LOG, Logger.ERROR_LOG)) {
                         appendLine()
                         appendLine("===== $name.log =====")
