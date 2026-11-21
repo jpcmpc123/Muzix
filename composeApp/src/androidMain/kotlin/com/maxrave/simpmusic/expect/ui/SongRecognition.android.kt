@@ -10,14 +10,17 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -35,12 +39,10 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,15 +63,18 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.maxrave.simpmusic.extension.findActivity
 import com.maxrave.simpmusic.recognition.Recognition
+import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
 import com.maxrave.simpmusic.ui.component.SurfaceDarkColors
 import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
 import com.maxrave.simpmusic.ui.icon.Close
@@ -78,12 +83,11 @@ import com.maxrave.simpmusic.ui.icon.GraphicEq
 import com.maxrave.simpmusic.ui.icon.MicOff
 import com.maxrave.simpmusic.ui.icon.MusicNote
 import com.maxrave.simpmusic.ui.icon.MusicOff
-import com.maxrave.simpmusic.ui.icon.PlayArrow
+import com.maxrave.simpmusic.ui.icon.PlaylistAdd
 import com.maxrave.simpmusic.ui.icon.Refresh
-import com.maxrave.simpmusic.ui.icon.Replay
-import com.maxrave.simpmusic.ui.icon.Search
 import com.maxrave.simpmusic.ui.icon.SimpIcons
-import com.maxrave.simpmusic.ui.theme.ArtworkShape
+import com.maxrave.simpmusic.ui.icon.ThumbUp
+import com.maxrave.simpmusic.ui.icon.ThumbUpOutline
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.SongRecognitionViewModel
 import kotlinx.coroutines.launch
@@ -94,10 +98,9 @@ import simpmusic.composeapp.generated.resources.login_sync_open_settings
 import simpmusic.composeapp.generated.resources.recognize_allow_mic
 import simpmusic.composeapp.generated.resources.recognize_failed
 import simpmusic.composeapp.generated.resources.recognize_failed_hint
-import simpmusic.composeapp.generated.resources.recognize_find
 import simpmusic.composeapp.generated.resources.recognize_identifying
 import simpmusic.composeapp.generated.resources.recognize_identifying_more
-import simpmusic.composeapp.generated.resources.recognize_listen_again
+import simpmusic.composeapp.generated.resources.recognize_like
 import simpmusic.composeapp.generated.resources.recognize_listening
 import simpmusic.composeapp.generated.resources.recognize_listening_hint
 import simpmusic.composeapp.generated.resources.recognize_low_audio_hint
@@ -105,9 +108,10 @@ import simpmusic.composeapp.generated.resources.recognize_mic_hint
 import simpmusic.composeapp.generated.resources.recognize_mic_needed
 import simpmusic.composeapp.generated.resources.recognize_no_match
 import simpmusic.composeapp.generated.resources.recognize_no_match_hint
-import simpmusic.composeapp.generated.resources.recognize_play_now
+import simpmusic.composeapp.generated.resources.recognize_search_another
 import simpmusic.composeapp.generated.resources.recognize_song
 import simpmusic.composeapp.generated.resources.recognize_try_again
+import simpmusic.composeapp.generated.resources.save
 
 private val OrbSize = 236.dp
 private val CoreSize = 118.dp
@@ -116,6 +120,7 @@ private val CoreSize = 118.dp
 @Composable
 actual fun SongRecognitionSheet(
     onFind: (String) -> Unit,
+    onOpenPlayer: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -131,6 +136,7 @@ actual fun SongRecognitionSheet(
 
     var micGranted by remember { mutableStateOf(hasMic()) }
     var micBlocked by remember { mutableStateOf(false) }
+    var showSavePlaylistSheet by remember { mutableStateOf(false) }
 
     val micLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -164,10 +170,26 @@ actual fun SongRecognitionSheet(
     fun close(then: () -> Unit = {}) {
         viewModel.cancelListening()
         scope.launch { sheetState.hide() }.invokeOnCompletion {
-            viewModel.resetSession()
             then()
+            viewModel.resetSession()
             onDismiss()
         }
+    }
+
+    if (showSavePlaylistSheet) {
+        AddToPlaylistModalBottomSheet(
+            isBottomSheetVisible = true,
+            listLocalPlaylist = uiState.listLocalPlaylist,
+            listYouTubePlaylist = uiState.listYouTubePlaylist,
+            videoId = uiState.matchedTrack?.videoId,
+            onClick = { playlist ->
+                viewModel.addToLocalPlaylist(playlist.id)
+            },
+            onYTPlaylistClick = { ytPlaylist ->
+                viewModel.addToYouTubePlaylist(ytPlaylist.browseId)
+            },
+            onDismiss = { showSavePlaylistSheet = false },
+        )
     }
 
     ModalBottomSheet(
@@ -191,9 +213,10 @@ actual fun SongRecognitionSheet(
         ) {
             Card(
                 modifier = Modifier.fillMaxSize(),
-                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                 colors = CardDefaults.cardColors().copy(containerColor = colors.container),
             ) {
+                val state = uiState.recognition
                 Spacer(modifier = Modifier.height(8.dp))
                 Card(
                     modifier =
@@ -209,29 +232,33 @@ actual fun SongRecognitionSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp),
                 ) {
-                    Text(
-                        text = stringResource(Res.string.recognize_song),
-                        style = typo().titleMedium,
-                        color = colors.content,
-                        modifier = Modifier.weight(1f),
-                    )
+                    if (state !is Recognition.Found) {
+                        Text(
+                            text = stringResource(Res.string.recognize_song),
+                            style = typo().titleMedium,
+                            color = colors.content,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                     IconButton(onClick = { close() }) {
                         Icon(imageVector = SimpIcons.Close, contentDescription = null, tint = colors.content)
                     }
                 }
-                Column(
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(start = 28.dp, end = 28.dp, bottom = 48.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
-                ) {
-                    val state = uiState.recognition
-                    when {
-                        !micGranted -> {
+
+                when {
+                    !micGranted -> {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .navigationBarsPadding()
+                                    .padding(start = 28.dp, end = 28.dp, bottom = 48.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
+                        ) {
                             RecognitionOrb(SimpIcons.MicOff, muted = true)
                             Message(stringResource(Res.string.recognize_mic_needed), stringResource(Res.string.recognize_mic_hint), colors)
                             if (micBlocked) {
@@ -242,92 +269,202 @@ actual fun SongRecognitionSheet(
                                 }
                             }
                         }
+                    }
 
-                        state is Recognition.Found -> {
-                            AsyncImage(
-                                model = state.coverArt,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
+                    state is Recognition.Found -> {
+                        val openMatchedSong: () -> Unit = {
+                            val matched = uiState.matchedTrack
+                            if (matched != null) {
+                                viewModel.playTrack(matched)
+                                close { onOpenPlayer() }
+                            } else {
+                                val query = "${state.title} ${state.artist}".trim()
+                                close { onFind(query) }
+                            }
+                        }
+                        val hasPlayableTrack = uiState.matchedTrack != null
+
+                        Column(
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .navigationBarsPadding()
+                                    .padding(horizontal = 32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Spacer(modifier = Modifier.weight(0.55f))
+
+                            Column(
                                 modifier =
                                     Modifier
-                                        .size(OrbSize)
-                                        .clip(ArtworkShape)
-                                        .background(colors.handle),
-                            )
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        .fillMaxWidth()
+                                        .widthIn(max = 360.dp),
+                                horizontalAlignment = Alignment.Start,
                             ) {
-                                Text(
-                                    text = state.title,
-                                    style = typo().titleMedium,
-                                    color = colors.content,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
+                                AsyncImage(
+                                    model = state.coverArt,
+                                    contentDescription = state.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .aspectRatio(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(colors.handle)
+                                            .clickable(onClick = openMatchedSong),
                                 )
-                                Text(
-                                    text = state.artist,
-                                    style = typo().bodyMedium,
-                                    color = colors.subtitle,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                val metaLine = listOfNotNull(state.album, state.year).joinToString(" · ")
-                                if (metaLine.isNotEmpty()) {
+
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                Column(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .clickable(onClick = openMatchedSong),
+                                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                                ) {
                                     Text(
-                                        text = metaLine,
-                                        style = typo().bodySmall,
-                                        color = colors.subtitle.copy(alpha = 0.8f),
-                                        textAlign = TextAlign.Center,
+                                        text = state.title,
+                                        style = typo().titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp),
+                                        color = colors.content,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        text = state.artist,
+                                        style = typo().bodyMedium.copy(fontSize = 15.sp),
+                                        color = colors.subtitle,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
+                                    val metaLine = listOfNotNull(state.album, state.year).joinToString(" • ")
+                                    if (metaLine.isNotEmpty()) {
+                                        Text(
+                                            text = metaLine,
+                                            style = typo().bodySmall.copy(fontSize = 14.sp),
+                                            color = colors.subtitle.copy(alpha = 0.85f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(20.dp))
+
+                                // Primary white pill: Gostei / Like
+                                Button(
+                                    onClick = { viewModel.toggleLike() },
+                                    enabled = hasPlayableTrack,
+                                    shape = RoundedCornerShape(24.dp),
+                                    colors =
+                                        ButtonDefaults.buttonColors(
+                                            containerColor = Color.White,
+                                            contentColor = Color(0xFF0F0F0F),
+                                            disabledContainerColor = Color.White.copy(alpha = 0.45f),
+                                            disabledContentColor = Color(0xFF0F0F0F).copy(alpha = 0.6f),
+                                        ),
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(44.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = if (uiState.isLiked) SimpIcons.ThumbUp else SimpIcons.ThumbUpOutline,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = stringResource(Res.string.recognize_like),
+                                        style = typo().labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                // Secondary outlined dark pill: Salvar / Save
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.loadPlaylistsForSave()
+                                        showSavePlaylistSheet = true
+                                    },
+                                    enabled = hasPlayableTrack,
+                                    shape = RoundedCornerShape(24.dp),
+                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
+                                    colors =
+                                        ButtonDefaults.outlinedButtonColors(
+                                            containerColor = Color.Transparent,
+                                            contentColor = colors.content,
+                                            disabledContentColor = colors.content.copy(alpha = 0.45f),
+                                        ),
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(44.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = SimpIcons.PlaylistAdd,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = stringResource(Res.string.save),
+                                        style = typo().labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                                    )
                                 }
                             }
+
+                            Spacer(modifier = Modifier.weight(1f))
+
+                            // Bottom circular wave button + "Pesquisar outra música"
                             Column(
-                                modifier = Modifier.padding(top = 6.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp),
+                                modifier =
+                                    Modifier
+                                        .padding(bottom = 28.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .clickable { viewModel.retry() }
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
                             ) {
-                                val hasPlayableTrack = uiState.matchedTrack != null
-                                SheetButton(
-                                    text = stringResource(if (hasPlayableTrack) Res.string.recognize_play_now else Res.string.recognize_find),
-                                    icon = if (hasPlayableTrack) SimpIcons.PlayArrow else SimpIcons.Search,
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .size(60.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.08f)),
+                                    contentAlignment = Alignment.Center,
                                 ) {
-                                    if (hasPlayableTrack) {
-                                        close { viewModel.playMatchedTrack() }
-                                    } else {
-                                        val query = "${state.title} ${state.artist}".trim()
-                                        close { onFind(query) }
-                                    }
+                                    Icon(
+                                        imageVector = SimpIcons.GraphicEq,
+                                        contentDescription = stringResource(Res.string.recognize_search_another),
+                                        tint = colors.content,
+                                        modifier = Modifier.size(26.dp),
+                                    )
                                 }
-                                if (hasPlayableTrack) {
-                                    OutlinedButton(
-                                        onClick = {
-                                            val query = "${state.title} ${state.artist}".trim()
-                                            close { onFind(query) }
-                                        },
-                                        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                                    ) {
-                                        Icon(imageVector = SimpIcons.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(text = stringResource(Res.string.recognize_find), color = colors.content)
-                                    }
-                                }
-                                TextButton(
-                                    onClick = { viewModel.retry() },
-                                    contentPadding = ButtonDefaults.TextButtonWithIconContentPadding,
-                                ) {
-                                    Icon(imageVector = SimpIcons.Replay, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(text = stringResource(Res.string.recognize_listen_again), color = LocalContentColor.current)
-                                }
+                                Text(
+                                    text = stringResource(Res.string.recognize_search_another),
+                                    style = typo().bodyMedium,
+                                    color = colors.subtitle,
+                                    textAlign = TextAlign.Center,
+                                )
                             }
                         }
+                    }
 
-                        state is Recognition.NoMatch || state is Recognition.Failed -> {
+                    state is Recognition.NoMatch || state is Recognition.Failed -> {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .navigationBarsPadding()
+                                    .padding(start = 28.dp, end = 28.dp, bottom = 48.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
+                        ) {
                             val noMatch = state is Recognition.NoMatch
                             RecognitionOrb(if (noMatch) SimpIcons.MusicOff else SimpIcons.CloudOff, muted = true)
                             Message(
@@ -337,8 +474,19 @@ actual fun SongRecognitionSheet(
                             )
                             SheetButton(stringResource(Res.string.recognize_try_again), SimpIcons.Refresh) { viewModel.retry() }
                         }
+                    }
 
-                        else -> {
+                    else -> {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .navigationBarsPadding()
+                                    .padding(start = 28.dp, end = 28.dp, bottom = 48.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
+                        ) {
                             val listening = state is Recognition.Listening
                             val identifyingMore = state is Recognition.Identifying && state.attempt > 1
                             RecognitionOrb(
@@ -452,6 +600,6 @@ private fun SheetButton(
             Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
         }
-        Text(text = text, color = LocalContentColor.current)
+        Text(text)
     }
 }

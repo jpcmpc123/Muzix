@@ -65,6 +65,7 @@ fun AppNavigationGraph(
         composable<SearchDestination> {
             SearchScreen(
                 navController = navController,
+                showNowPlayingSheet = showNowPlayingSheet,
             )
         }
         composable<LibraryDestination> {

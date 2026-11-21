@@ -250,6 +250,9 @@ val viewModelModule =
         viewModel {
             SongRecognitionViewModel(
                 searchRepository = get(),
+                songRepository = get(),
+                localPlaylistRepository = get(),
+                playlistRepository = get(),
             )
         }
 

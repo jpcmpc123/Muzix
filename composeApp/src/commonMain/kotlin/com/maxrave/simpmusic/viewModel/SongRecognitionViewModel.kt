@@ -2,13 +2,20 @@ package com.maxrave.simpmusic.viewModel
 
 import androidx.lifecycle.viewModelScope
 import com.maxrave.common.Config
+import com.maxrave.domain.data.entities.LocalPlaylistEntity
 import com.maxrave.domain.data.model.browse.album.Track
+import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
 import com.maxrave.domain.data.model.searchResult.songs.SongsResult
 import com.maxrave.domain.mediaservice.handler.PlayerEvent
 import com.maxrave.domain.mediaservice.handler.PlaylistType
 import com.maxrave.domain.mediaservice.handler.QueueData
+import com.maxrave.domain.repository.LocalPlaylistRepository
+import com.maxrave.domain.repository.PlaylistRepository
 import com.maxrave.domain.repository.SearchRepository
+import com.maxrave.domain.repository.SongRepository
 import com.maxrave.domain.utils.Resource
+import com.maxrave.domain.utils.collectLatestResource
+import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.expect.PlatformSongRecognizer
 import com.maxrave.simpmusic.recognition.Recognition
@@ -17,8 +24,16 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.lastOrNull
+import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.getString
+import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.added_to_playlist
+import simpmusic.composeapp.generated.resources.added_to_youtube_playlist
+import simpmusic.composeapp.generated.resources.error
 
 internal data class SongRecognitionUiState(
     val recognition: Recognition = Recognition.Listening,
@@ -26,16 +41,24 @@ internal data class SongRecognitionUiState(
     val lowAudio: Boolean = false,
     val matchedTrack: SongsResult? = null,
     val isResolvingTrack: Boolean = false,
+    val isLiked: Boolean = false,
+    val listLocalPlaylist: List<LocalPlaylistEntity> = emptyList(),
+    val listYouTubePlaylist: List<PlaylistsResult> = emptyList(),
 )
 
 internal class SongRecognitionViewModel(
     private val searchRepository: SearchRepository,
+    private val songRepository: SongRepository,
+    private val localPlaylistRepository: LocalPlaylistRepository,
+    private val playlistRepository: PlaylistRepository,
 ) : BaseViewModel() {
     private val _uiState = MutableStateFlow(SongRecognitionUiState())
     val uiState: StateFlow<SongRecognitionUiState> = _uiState.asStateFlow()
 
     private var recognitionJob: Job? = null
     private var resolveJob: Job? = null
+    private var likeObserverJob: Job? = null
+    private var playlistsJob: Job? = null
     private var sessionActive = false
 
     fun startIfNeeded() {
@@ -59,6 +82,10 @@ internal class SongRecognitionViewModel(
         recognitionJob = null
         resolveJob?.cancel()
         resolveJob = null
+        likeObserverJob?.cancel()
+        likeObserverJob = null
+        playlistsJob?.cancel()
+        playlistsJob = null
         _uiState.value = SongRecognitionUiState()
     }
 
@@ -66,6 +93,7 @@ internal class SongRecognitionViewModel(
         sessionActive = true
         recognitionJob?.cancel()
         resolveJob?.cancel()
+        likeObserverJob?.cancel()
         _uiState.value = SongRecognitionUiState(recognition = Recognition.Listening)
 
         recognitionJob =
@@ -108,7 +136,8 @@ internal class SongRecognitionViewModel(
         val query = "${found.title} ${found.artist}".trim()
         if (query.isEmpty()) return
         resolveJob?.cancel()
-        _uiState.update { it.copy(isResolvingTrack = true, matchedTrack = null) }
+        likeObserverJob?.cancel()
+        _uiState.update { it.copy(isResolvingTrack = true, matchedTrack = null, isLiked = false) }
         resolveJob =
             viewModelScope.launch {
                 searchRepository.getSearchDataSong(query).collect { res ->
@@ -116,6 +145,9 @@ internal class SongRecognitionViewModel(
                         is Resource.Success -> {
                             val best = pickBestSongMatch(found, res.data.orEmpty())
                             _uiState.update { it.copy(matchedTrack = best, isResolvingTrack = false) }
+                            if (best != null) {
+                                observeLikedState(best.videoId)
+                            }
                         }
                         is Resource.Error -> {
                             _uiState.update { it.copy(isResolvingTrack = false) }
@@ -125,8 +157,18 @@ internal class SongRecognitionViewModel(
             }
     }
 
-    fun playMatchedTrack(): Boolean {
-        val song = _uiState.value.matchedTrack ?: return false
+    private fun observeLikedState(videoId: String) {
+        likeObserverJob?.cancel()
+        if (videoId.isEmpty()) return
+        likeObserverJob =
+            viewModelScope.launch {
+                songRepository.getSongAsFlow(videoId).collectLatest { song ->
+                    _uiState.update { it.copy(isLiked = song?.liked == true) }
+                }
+            }
+    }
+
+    fun playTrack(song: SongsResult) {
         val firstTrack: Track = song.toTrack()
         setQueueData(
             QueueData.Data(
@@ -139,12 +181,86 @@ internal class SongRecognitionViewModel(
             ),
         )
         loadMediaItem(firstTrack, type = Config.SONG_CLICK)
-        return true
+    }
+
+    fun toggleLike() {
+        val song = _uiState.value.matchedTrack ?: return
+        val nextLikeStatus = if (_uiState.value.isLiked) 0 else 1
+        _uiState.update { it.copy(isLiked = nextLikeStatus == 1) }
+        viewModelScope.launch {
+            val existing = songRepository.getSongById(song.videoId).lastOrNull()
+            if (existing == null) {
+                songRepository.insertSong(song.toTrack().toSongEntity()).singleOrNull()
+            }
+            songRepository.updateLikeStatus(song.videoId, nextLikeStatus)
+        }
+    }
+
+    fun loadPlaylistsForSave() {
+        playlistsJob?.cancel()
+        playlistsJob =
+            viewModelScope.launch {
+                launch {
+                    localPlaylistRepository.getAllLocalPlaylists().collectLatest { list ->
+                        _uiState.update { it.copy(listLocalPlaylist = list) }
+                    }
+                }
+                launch {
+                    playlistRepository.getLibraryPlaylist().collect { data ->
+                        _uiState.update { state ->
+                            state.copy(
+                                listYouTubePlaylist =
+                                    data?.filter { it.browseId != "VLLM" } ?: emptyList(),
+                            )
+                        }
+                    }
+                }
+            }
+    }
+
+    fun addToLocalPlaylist(playlistId: Long) {
+        val song = _uiState.value.matchedTrack ?: return
+        viewModelScope.launch {
+            val target = _uiState.value.listLocalPlaylist.find { it.id == playlistId } ?: return@launch
+            if ((target.tracks ?: emptyList()).contains(song.videoId)) return@launch
+            val entity =
+                songRepository.getSongById(song.videoId).lastOrNull()
+                    ?: song.toTrack().toSongEntity().also {
+                        songRepository.insertSong(it).singleOrNull()
+                    }
+            localPlaylistRepository
+                .addTrackToLocalPlaylist(
+                    id = playlistId,
+                    song = entity,
+                    successMessage = getString(Res.string.added_to_playlist),
+                    updatedYtMessage = getString(Res.string.added_to_youtube_playlist),
+                    errorMessage = getString(Res.string.error),
+                ).collectLatestResource(
+                    onSuccess = { makeToast(it ?: getString(Res.string.added_to_playlist)) },
+                    onError = { makeToast(it) },
+                )
+        }
+    }
+
+    fun addToYouTubePlaylist(browseId: String) {
+        val song = _uiState.value.matchedTrack ?: return
+        viewModelScope.launch {
+            localPlaylistRepository
+                .addYouTubePlaylistItem(
+                    youtubePlaylistId = browseId,
+                    videoId = song.videoId,
+                ).collectLatestResource(
+                    onSuccess = { makeToast(it) },
+                    onError = { makeToast(it) },
+                )
+        }
     }
 
     override fun onCleared() {
         recognitionJob?.cancel()
         resolveJob?.cancel()
+        likeObserverJob?.cancel()
+        playlistsJob?.cancel()
         super.onCleared()
     }
 

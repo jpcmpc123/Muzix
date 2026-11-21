@@ -10,5 +10,6 @@ import androidx.compose.runtime.Composable
 @Composable
 expect fun SongRecognitionSheet(
     onFind: (String) -> Unit,
+    onOpenPlayer: () -> Unit = {},
     onDismiss: () -> Unit,
 )

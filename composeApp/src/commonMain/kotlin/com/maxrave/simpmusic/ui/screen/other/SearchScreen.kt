@@ -189,6 +189,7 @@ fun SearchScreen(
     searchViewModel: SearchViewModel = koinInject(),
     sharedViewModel: SharedViewModel = koinInject(),
     navController: NavController,
+    showNowPlayingSheet: () -> Unit = {},
 ) {
     val uriHandler = LocalUriHandler.current
     val focusManager = LocalFocusManager.current
@@ -479,6 +480,7 @@ fun SearchScreen(
                 searchViewModel.setSearchType(SearchType.SONGS)
                 searchViewModel.searchSongs(query)
             },
+            onOpenPlayer = showNowPlayingSheet,
             onDismiss = { showRecognition = false },
         )
     }
