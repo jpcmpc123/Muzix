@@ -506,32 +506,38 @@ fun SearchScreen(
         ) {
             when (it) {
                 SearchUIType.SEARCH_SUGGESTIONS -> {
-                    val suggestKeys =
+                    val (suggestItems, suggestKeys) =
                         remember(searchScreenState.suggestYTItems) {
-                            val seen = HashMap<String, Int>(searchScreenState.suggestYTItems.size)
-                            searchScreenState.suggestYTItems.map { s ->
-                                val base =
-                                    when (s) {
-                                        is SongsResult -> "song_${s.videoId}"
-                                        is VideosResult -> "video_${s.videoId}"
-                                        is ArtistsResult -> "artist_${s.browseId}"
-                                        is AlbumsResult -> "album_${s.browseId}"
-                                        is PlaylistsResult -> "playlist_${s.browseId}"
-                                        else -> "other_${s.hashCode()}"
-                                    }
-                                val count = seen[base] ?: 0
-                                seen[base] = count + 1
-                                if (count == 0) base else "$base#$count"
-                            }
+                            val snapshot = searchScreenState.suggestYTItems
+                            val seen = HashMap<String, Int>(snapshot.size)
+                            val keys =
+                                snapshot.map { s ->
+                                    val base =
+                                        when (s) {
+                                            is SongsResult -> "song_${s.videoId}"
+                                            is VideosResult -> "video_${s.videoId}"
+                                            is ArtistsResult -> "artist_${s.browseId}"
+                                            is AlbumsResult -> "album_${s.browseId}"
+                                            is PlaylistsResult -> "playlist_${s.browseId}"
+                                            else -> "other_${s.hashCode()}"
+                                        }
+                                    val count = seen[base] ?: 0
+                                    seen[base] = count + 1
+                                    if (count == 0) base else "$base#$count"
+                                }
+                            snapshot to keys
                         }
-                    val suggestQueryKeys =
+                    val (suggestQueryItems, suggestQueryKeys) =
                         remember(searchScreenState.suggestQueries) {
-                            val seen = HashMap<String, Int>(searchScreenState.suggestQueries.size)
-                            searchScreenState.suggestQueries.map { q ->
-                                val count = seen[q] ?: 0
-                                seen[q] = count + 1
-                                if (count == 0) "q_$q" else "q_$q#$count"
-                            }
+                            val snapshot = searchScreenState.suggestQueries
+                            val seen = HashMap<String, Int>(snapshot.size)
+                            val keys =
+                                snapshot.map { q ->
+                                    val count = seen[q] ?: 0
+                                    seen[q] = count + 1
+                                    if (count == 0) "q_$q" else "q_$q#$count"
+                                }
+                            snapshot to keys
                         }
                     LazyColumn(
                         Modifier.padding(horizontal = 16.dp),
@@ -539,8 +545,8 @@ fun SearchScreen(
                         contentPadding = PaddingValues(top = searchBarHeight, bottom = 10.dp),
                     ) {
                         itemsIndexed(
-                            items = searchScreenState.suggestYTItems,
-                            key = { index, _ -> suggestKeys[index] },
+                            items = suggestItems,
+                            key = { index, item -> suggestKeys.getOrElse(index) { "suggest_${item.hashCode()}_$index" } },
                             contentType = { _, item -> item::class.simpleName ?: "suggest_item" },
                         ) { _, item ->
                             SuggestItemRow(
@@ -587,8 +593,8 @@ fun SearchScreen(
                             )
                         }
                         itemsIndexed(
-                            items = searchScreenState.suggestQueries,
-                            key = { index, _ -> suggestQueryKeys[index] },
+                            items = suggestQueryItems,
+                            key = { index, q -> suggestQueryKeys.getOrElse(index) { "q_${q}_$index" } },
                             contentType = { _, _ -> "suggest_query" },
                         ) { _, suggestion ->
                             Row(

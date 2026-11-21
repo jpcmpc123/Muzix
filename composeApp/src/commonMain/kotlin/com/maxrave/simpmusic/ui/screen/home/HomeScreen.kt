@@ -347,13 +347,16 @@ fun HomeScreen(
             ordered to keys
         }
     val newRelease by viewModel.newRelease.collectAsStateWithLifecycle()
-    val newReleaseKeys =
+    val (newReleaseItems, newReleaseKeys) =
         remember(newRelease) {
-            dedupeListKeys(
-                newRelease.map {
-                    it.title + "|" + (it.moreEndpoint?.browseId ?: "") + "|" + (it.thumbnail?.firstOrNull()?.url ?: "")
-                },
-            )
+            val snapshot = newRelease
+            val keys =
+                dedupeListKeys(
+                    snapshot.map {
+                        it.title + "|" + (it.moreEndpoint?.browseId ?: "") + "|" + (it.thumbnail?.firstOrNull()?.url ?: "")
+                    },
+                )
+            snapshot to keys
         }
     val chart by viewModel.chart.collectAsStateWithLifecycle()
     val moodMomentAndGenre by viewModel.exploreMoodItem.collectAsStateWithLifecycle()
@@ -901,12 +904,12 @@ fun HomeScreen(
                         }
                         if (homeListState == ListState.PAGINATION_EXHAUST) {
                             itemsIndexed(
-                                items = newRelease,
-                                key = { index, _ -> newReleaseKeys[index] },
+                                items = newReleaseItems,
+                                key = { index, item -> newReleaseKeys.getOrElse(index) { "${item.title}_$index" } },
                                 contentType = { _, _ -> "shelf" },
                             ) { _, item ->
                                 AnimatedVisibility(
-                                    visible = newRelease.isNotEmpty(),
+                                    visible = newReleaseItems.isNotEmpty(),
                                 ) {
                                     Box(
                                         modifier =
