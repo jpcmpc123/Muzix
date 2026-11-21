@@ -347,6 +347,14 @@ fun HomeScreen(
             ordered to keys
         }
     val newRelease by viewModel.newRelease.collectAsStateWithLifecycle()
+    val newReleaseKeys =
+        remember(newRelease) {
+            dedupeListKeys(
+                newRelease.map {
+                    it.title + "|" + (it.moreEndpoint?.browseId ?: "") + "|" + (it.thumbnail?.firstOrNull()?.url ?: "")
+                },
+            )
+        }
     val chart by viewModel.chart.collectAsStateWithLifecycle()
     val moodMomentAndGenre by viewModel.exploreMoodItem.collectAsStateWithLifecycle()
     val chartLoading by viewModel.loadingChart.collectAsStateWithLifecycle()
@@ -892,11 +900,11 @@ fun HomeScreen(
                             }
                         }
                         if (homeListState == ListState.PAGINATION_EXHAUST) {
-                            items(
+                            itemsIndexed(
                                 items = newRelease,
-                                key = { it.title + "|" + (it.moreEndpoint?.browseId ?: "") + "|" + (it.thumbnail?.firstOrNull()?.url ?: "") },
-                                contentType = { "shelf" },
-                            ) {
+                                key = { index, _ -> newReleaseKeys[index] },
+                                contentType = { _, _ -> "shelf" },
+                            ) { _, item ->
                                 AnimatedVisibility(
                                     visible = newRelease.isNotEmpty(),
                                 ) {
@@ -907,7 +915,7 @@ fun HomeScreen(
                                     ) {
                                         HomeItem(
                                             navController = navController,
-                                            data = it,
+                                            data = item,
                                         )
                                     }
                                 }
@@ -1583,6 +1591,10 @@ fun MoodMomentAndGenre(
         mood.sections.forEach { section ->
             val gridState = rememberLazyGridState()
             val flingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = gridState))
+            val itemKeys =
+                remember(section.items) {
+                    dedupeListKeys(section.items.map { it.params.ifEmpty { it.title } })
+                }
             Text(
                 text = section.title,
                 style = typo().headlineMedium,
@@ -1599,7 +1611,11 @@ fun MoodMomentAndGenre(
                 state = gridState,
                 flingBehavior = flingBehavior,
             ) {
-                items(section.items, key = { it.params }) { item ->
+                items(
+                    count = section.items.size,
+                    key = { index -> itemKeys[index] },
+                ) { index ->
+                    val item = section.items[index]
                     MoodMomentAndGenreHomeItem(
                         title = item.title,
                         stripeColor = item.stripeColor,
@@ -1657,6 +1673,7 @@ fun ChartData(
         val chartItemWidthDp = if (isPortrait) gridWidthDp else minOf(gridWidthDp, LandscapeGridItemMaxWidth)
         Column(Modifier.fillMaxWidth()) {
             chart.listChartItem.forEach { item ->
+                val playlistKeys = remember(item.playlists) { dedupeListKeys(item.playlists.map { it.id }) }
                 Text(
                     text = item.title,
                     style = typo().headlineMedium,
@@ -1676,7 +1693,7 @@ fun ChartData(
                 ) {
                     items(
                         count = item.playlists.size,
-                        key = { index -> item.playlists[index].id },
+                        key = { index -> playlistKeys[index] },
                         contentType = { "chart_playlist" },
                     ) {
                         HomeItemContentPlaylist(
@@ -1693,6 +1710,10 @@ fun ChartData(
                     }
                 }
             }
+            val artistKeys =
+                remember(chart.artists.itemArtists) {
+                    dedupeListKeys(chart.artists.itemArtists.map { it.browseId })
+                }
             Text(
                 text = stringResource(Res.string.top_artists),
                 style = typo().headlineMedium,
@@ -1711,7 +1732,7 @@ fun ChartData(
             ) {
                 items(
                     count = chart.artists.itemArtists.size,
-                    key = { index -> chart.artists.itemArtists[index].browseId },
+                    key = { index -> artistKeys[index] },
                     contentType = { "chart_artist" },
                 ) {
                     val data = chart.artists.itemArtists[it]
@@ -1735,6 +1756,7 @@ fun ChartData(
             )
             // Ranked podcast shows, laid out exactly like the artist chart above.
             chart.podcasts?.let { podcasts ->
+                val podcastKeys = remember(podcasts.shows) { dedupeListKeys(podcasts.shows.map { it.browseId }) }
                 Text(
                     text = podcasts.title,
                     style = typo().headlineMedium,
@@ -1756,7 +1778,7 @@ fun ChartData(
                 ) {
                     items(
                         count = podcasts.shows.size,
-                        key = { index -> podcasts.shows[index].browseId },
+                        key = { index -> podcastKeys[index] },
                         contentType = { "chart_podcast" },
                     ) {
                         val data = podcasts.shows[it]
@@ -1776,5 +1798,15 @@ fun ChartData(
                 )
             }
         }
+    }
+}
+
+internal fun dedupeListKeys(rawKeys: List<String>): List<String> {
+    val seen = HashMap<String, Int>(rawKeys.size)
+    return rawKeys.mapIndexed { index, raw ->
+        val base = raw.ifEmpty { "empty_$index" }
+        val occurrence = seen[base] ?: 0
+        seen[base] = occurrence + 1
+        if (occurrence == 0) base else "$base#$occurrence"
     }
 }

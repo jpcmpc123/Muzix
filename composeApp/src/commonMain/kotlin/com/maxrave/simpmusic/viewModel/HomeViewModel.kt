@@ -4,7 +4,6 @@ import androidx.lifecycle.viewModelScope
 import com.maxrave.common.SELECTED_LANGUAGE
 import com.maxrave.common.SUPPORTED_LANGUAGE
 import com.maxrave.domain.data.entities.SongEntity
-import com.maxrave.domain.data.model.home.HomeDataCombine
 import com.maxrave.domain.data.model.home.HomeItem
 import com.maxrave.domain.data.model.home.chart.Chart
 import com.maxrave.domain.data.model.mood.Mood
@@ -28,7 +27,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.music_video
 import simpmusic.composeapp.generated.resources.new_release
@@ -55,7 +53,10 @@ class HomeViewModel(
     val accountInfo: StateFlow<Pair<String?, String?>?> = _accountInfo
 
     private var homeJob: Job? = null
+    private var paginationJob: Job? = null
+    private var moodJob: Job? = null
     private var chartJob: Job? = null
+    private var newReleaseJob: Job? = null
 
     val showSnackBarErrorState = MutableSharedFlow<String>()
 
@@ -93,7 +94,6 @@ class HomeViewModel(
     val homeBackground: StateFlow<String?> = _homeBackground
 
     init {
-        homeJob = Job()
         viewModelScope.launch {
             if (dataStoreManager.cookie.first().isEmpty() &&
                 dataStoreManager.shouldShowLogInRequiredAlert.first() == TRUE
@@ -101,11 +101,6 @@ class HomeViewModel(
                 _showLogInAlert.update { true }
             }
             regionCodeChart.value = dataStoreManager.chartKey.first()
-            // No exploreChart call here: the load trigger below runs getHomeItemList on its
-            // first emission, and that load already fetches the chart for this same stored key
-            // as part of its combine — calling exploreChart as well loaded the chart twice on
-            // every cold start, both writes racing into _chart. exploreChart itself stays: the
-            // chart section's country picker calls it directly.
             language = dataStoreManager.getString(SELECTED_LANGUAGE).first()
                 ?: SUPPORTED_LANGUAGE.codes.first()
             //  One single load trigger for Home. Region, language, the login cookie and
@@ -116,7 +111,7 @@ class HomeViewModel(
             //  load runs once, and then only when one of the four actually changes.
             val job1 =
                 launch {
-                    var previousCookie: String? = null
+                    var previousTrigger: HomeLoadTrigger? = null
                     combine(
                         dataStoreManager.location,
                         dataStoreManager.language,
@@ -127,9 +122,16 @@ class HomeViewModel(
                     }.distinctUntilChanged().collectLatest { trigger ->
                         regionCode = trigger.location
                         language = trigger.language
-                        val isFirstEmission = previousCookie == null
-                        val cookieChanged = !isFirstEmission && previousCookie != trigger.cookie
-                        previousCookie = trigger.cookie
+                        val prev = previousTrigger
+                        previousTrigger = trigger
+                        val isFirstEmission = prev == null
+                        val cookieChanged = !isFirstEmission && prev.cookie != trigger.cookie
+                        val onlyParamsChanged =
+                            prev != null &&
+                                prev.location == trigger.location &&
+                                prev.language == trigger.language &&
+                                prev.cookie == trigger.cookie &&
+                                prev.params != trigger.params
                         if (isFirstEmission || cookieChanged) {
                             _accountInfo.emit(
                                 Pair(
@@ -143,7 +145,10 @@ class HomeViewModel(
                             loading.value = true
                             delay(1000) // To wait for the cookie to be saved properly
                         }
-                        getHomeItemList(trigger.params)
+                        loadHomeFeed(
+                            params = trigger.params,
+                            includeSecondary = !onlyParamsChanged,
+                        )
                     }
                 }
             val job6 =
@@ -174,109 +179,124 @@ class HomeViewModel(
     }
 
     fun getHomeItemList(params: String? = null) {
+        loadHomeFeed(params = params, includeSecondary = true)
+    }
+
+    private fun loadHomeFeed(
+        params: String?,
+        includeSecondary: Boolean,
+    ) {
         loading.value = true
-        loadingChart.value = true
         _homeListState.value = ListState.LOADING
         homeJob?.cancel()
-        chartJob?.cancel()
-        chartJob = null
+        paginationJob?.cancel()
+        paginationJob = null
         homeJob =
             viewModelScope.launch {
                 language =
                     dataStoreManager.getString(SELECTED_LANGUAGE).first()
                         ?: SUPPORTED_LANGUAGE.codes.first()
                 regionCode = dataStoreManager.location.first()
-                combine(
-                    homeRepository.getHomeData(
+                homeRepository
+                    .getHomeData(
                         params,
                         getString(Res.string.view_count),
                         getString(Res.string.song),
-                    ),
-                    homeRepository.getMoodAndMomentsData(),
-                    homeRepository.getChartData(dataStoreManager.chartKey.first()),
-                    homeRepository.getNewRelease(
-                        getString(Res.string.new_release),
-                        getString(Res.string.music_video),
-                    ),
-                ) { home, exploreMood, exploreChart, newRelease ->
-                    HomeDataCombine(home, exploreMood, exploreChart, newRelease)
-                }.collect { result ->
-                    val home = result.home
-                    Logger.d("home size", "${home.data?.second?.size}")
-                    val exploreMoodItem = result.mood
-                    val chart = result.chart
-                    val newRelease = result.newRelease
-                    when (home) {
-                        is Resource.Success -> {
-                            _continuation.value = home.data?.first
-                            _homeItemList.value = home.data?.second ?: listOf()
-                            _homeBackground.value = home.data?.third
-                        }
+                    ).collect { home ->
+                        Logger.d("home size", "${home.data?.second?.size}")
+                        when (home) {
+                            is Resource.Success -> {
+                                _continuation.value = home.data?.first
+                                _homeItemList.value = home.data?.second ?: listOf()
+                                _homeBackground.value = home.data?.third
+                                _homeListState.value =
+                                    if (continuation.value.isNullOrEmpty()) {
+                                        ListState.PAGINATION_EXHAUST
+                                    } else {
+                                        ListState.IDLE
+                                    }
+                                if (dataStoreManager.cookie.first().isNotEmpty() &&
+                                    _accountInfo.value?.first.isNullOrBlank()
+                                ) {
+                                    _accountInfo.emit(
+                                        Pair(
+                                            dataStoreManager.getString("AccountName").first(),
+                                            dataStoreManager.getString("AccountThumbUrl").first(),
+                                        ),
+                                    )
+                                }
+                            }
 
-                        else -> {
-                            _continuation.value = null
-                            _homeItemList.value = listOf()
+                            is Resource.Error -> {
+                                if (_homeItemList.value.isEmpty()) {
+                                    _continuation.value = null
+                                    _homeItemList.value = listOf()
+                                    _homeListState.value = ListState.PAGINATION_EXHAUST
+                                } else {
+                                    _homeListState.value =
+                                        if (_continuation.value.isNullOrEmpty()) {
+                                            ListState.PAGINATION_EXHAUST
+                                        } else {
+                                            ListState.IDLE
+                                        }
+                                }
+                                home.message?.let {
+                                    showSnackBarErrorState.emit(it)
+                                    Logger.w("Error", "getHomeItemList: $it")
+                                }
+                            }
                         }
+                        loading.value = false
                     }
-                    if (continuation.value.isNullOrEmpty()) {
-                        _homeListState.value = ListState.PAGINATION_EXHAUST
-                    } else {
-                        _homeListState.value = ListState.IDLE
-                    }
-                    when (chart) {
-                        is Resource.Success -> {
-                            _chart.value = chart.data
-                        }
+            }
+        if (includeSecondary) {
+            loadSecondarySections()
+        }
+    }
 
-                        else -> {
-                            _chart.value = null
-                        }
-                    }
-                    loadingChart.value = false
-                    when (newRelease) {
-                        is Resource.Success -> {
-                            _newRelease.value = newRelease.data ?: arrayListOf()
-                        }
-
-                        else -> {
-                            _newRelease.value = arrayListOf()
-                        }
-                    }
+    private fun loadSecondarySections() {
+        moodJob?.cancel()
+        moodJob =
+            viewModelScope.launch {
+                homeRepository.getMoodAndMomentsData().collect { exploreMoodItem ->
                     when (exploreMoodItem) {
                         is Resource.Success -> {
                             _exploreMoodItem.value = exploreMoodItem.data
                         }
 
-                        else -> {
-                            _exploreMoodItem.value = null
+                        is Resource.Error -> {
+                            exploreMoodItem.message?.let {
+                                Logger.w("Error", "getMoodAndMomentsData: $it")
+                                if (_exploreMoodItem.value == null) {
+                                    showSnackBarErrorState.emit(it)
+                                }
+                            }
                         }
                     }
-                    regionCodeChart.value = dataStoreManager.chartKey.first()
-                    Logger.d("HomeViewModel", "getHomeItemList: $result")
-                    dataStoreManager.cookie.first().let {
-                        if (it != "") {
-                            _accountInfo.emit(
-                                Pair(
-                                    dataStoreManager.getString("AccountName").first(),
-                                    dataStoreManager.getString("AccountThumbUrl").first(),
-                                ),
-                            )
-                        }
-                    }
-                    when {
-                        home is Resource.Error -> home.message
-                        exploreMoodItem is Resource.Error -> exploreMoodItem.message
-                        chart is Resource.Error -> chart.message
-                        else -> null
-                    }?.let {
-                        showSnackBarErrorState.emit(it)
-                        Logger.w("Error", "getHomeItemList: ${home.message}")
-                        Logger.w("Error", "getHomeItemList: ${exploreMoodItem.message}")
-                        Logger.w("Error", "getHomeItemList: ${chart.message}")
-                    }
-                    loading.value = false
                 }
             }
+
+        newReleaseJob?.cancel()
+        newReleaseJob =
+            viewModelScope.launch {
+                homeRepository
+                    .getNewRelease(
+                        getString(Res.string.new_release),
+                        getString(Res.string.music_video),
+                    ).collect { newRelease ->
+                        when (newRelease) {
+                            is Resource.Success -> {
+                                _newRelease.value = newRelease.data ?: arrayListOf()
+                            }
+
+                            is Resource.Error -> {
+                                Logger.w("Error", "getNewRelease: ${newRelease.message}")
+                            }
+                        }
+                    }
+            }
+
+        loadChart(region = null, persistRegion = false)
     }
 
     /** A shelf's "Play all": YouTube's own finite queue of that shelf's songs. */
@@ -285,63 +305,84 @@ class HomeViewModel(
     }
 
     fun getContinueHomeItem(continuation: String?) {
-        viewModelScope.launch {
-            if (continuation.isNullOrEmpty()) {
-                _homeListState.value = ListState.PAGINATION_EXHAUST
-                return@launch
-            } else {
-                log("Get more home item with continuation: $continuation")
-                _homeListState.value = ListState.PAGINATING
-                homeRepository
-                    .getHomeDataContinue(
-                        continuation,
-                        getString(Res.string.view_count),
-                        getString(Res.string.song),
-                    ).collect { home ->
-                        when (home) {
-                            is Resource.Success -> {
-                                _continuation.value = home.data?.first
-                                val newItems = home.data?.second ?: listOf()
-                                _homeItemList.update { it + newItems }
-                                if (home.data?.first.isNullOrEmpty()) {
+        paginationJob?.cancel()
+        paginationJob =
+            viewModelScope.launch {
+                if (continuation.isNullOrEmpty()) {
+                    _homeListState.value = ListState.PAGINATION_EXHAUST
+                    return@launch
+                } else {
+                    log("Get more home item with continuation: $continuation")
+                    _homeListState.value = ListState.PAGINATING
+                    homeRepository
+                        .getHomeDataContinue(
+                            continuation,
+                            getString(Res.string.view_count),
+                            getString(Res.string.song),
+                        ).collect { home ->
+                            when (home) {
+                                is Resource.Success -> {
+                                    _continuation.value = home.data?.first
+                                    val newItems = home.data?.second ?: listOf()
+                                    _homeItemList.update { it + newItems }
+                                    if (home.data?.first.isNullOrEmpty()) {
+                                        _homeListState.value = ListState.PAGINATION_EXHAUST
+                                    } else {
+                                        _homeListState.value = ListState.IDLE
+                                    }
+                                }
+
+                                is Resource.Error -> {
+                                    _continuation.value = null
+                                    Logger.w(tag, "getContinueHomeItem: ${home.message}")
+                                    showSnackBarErrorState.emit(home.message ?: "Unknown error")
                                     _homeListState.value = ListState.PAGINATION_EXHAUST
-                                } else {
-                                    _homeListState.value = ListState.IDLE
                                 }
                             }
-
-                            is Resource.Error -> {
-                                _continuation.value = null
-                                Logger.w(tag, "getContinueHomeItem: ${home.message}")
-                                showSnackBarErrorState.emit(home.message ?: "Unknown error")
-                                _homeListState.value = ListState.PAGINATION_EXHAUST
-                            }
                         }
-                    }
+                }
             }
-        }
     }
 
     fun exploreChart(region: String) {
+        loadChart(region = region, persistRegion = true)
+    }
+
+    private fun loadChart(
+        region: String?,
+        persistRegion: Boolean,
+    ) {
         chartJob?.cancel()
         lateinit var job: Job
         job =
             viewModelScope.launch(start = CoroutineStart.LAZY) {
                 loadingChart.value = true
                 try {
+                    val targetRegion = region ?: dataStoreManager.chartKey.first()
+                    regionCodeChart.value = targetRegion
                     homeRepository
                         .getChartData(
-                            region,
+                            targetRegion,
                         ).collect { values ->
-                            regionCodeChart.value = region
-                            dataStoreManager.setChartKey(region)
+                            regionCodeChart.value = targetRegion
+                            if (persistRegion) {
+                                dataStoreManager.setChartKey(targetRegion)
+                            }
                             when (values) {
                                 is Resource.Success -> {
                                     _chart.value = values.data
                                 }
 
-                                else -> {
-                                    _chart.value = null
+                                is Resource.Error -> {
+                                    if (persistRegion) {
+                                        _chart.value = null
+                                    }
+                                    values.message?.let {
+                                        Logger.w("Error", "getChartData: $it")
+                                        if (_chart.value == null) {
+                                            showSnackBarErrorState.emit(it)
+                                        }
+                                    }
                                 }
                             }
                             loadingChart.value = false
@@ -363,7 +404,10 @@ class HomeViewModel(
     override fun onCleared() {
         super.onCleared()
         homeJob?.cancel()
+        paginationJob?.cancel()
+        moodJob?.cancel()
         chartJob?.cancel()
+        newReleaseJob?.cancel()
     }
 
     companion object {
