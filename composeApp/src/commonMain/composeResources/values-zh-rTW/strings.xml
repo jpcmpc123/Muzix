@@ -500,7 +500,7 @@
     <string name="later">以後再說</string>
     <string name="give_a_star">給個星吧</string>
     <string name="enjoying_simpmusic">享受Muzix</string>
-    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">如果你享受使用SimpMusic，就在GitHub給個星或者評論吧</string>
+    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">如果你享受使用Muzix，就在GitHub給個星或者評論吧</string>
     <string name="if_you_love_my_work_consider">"若你認可我的工作，考慮 "</string>
     <string name="buying_me_a_coffee">請我喝杯咖啡。</string>
     <string name="footguns_promo_title">我跌入的每個陷阱</string>
@@ -692,7 +692,7 @@
     <string name="local_tracking_description">將您的收聽歷史記錄到本機資料庫</string>
     <string name="blog_notification_title">部落格文章通知</string>
     <string name="blog_notification_description">在新文章發佈時接收通知</string>
-    <string name="simpmusic_charts">SimpMusic排行榜</string>
+    <string name="simpmusic_charts">Muzix排行榜</string>
     <string name="crossfading">交叉淡入淡出</string>
     <string name="your_320kbps_url">您的 320kbps URL</string>
     <string name="your_320kbps_url_description">保持空白以自動選擇上一次工作中的URL。</string>
@@ -716,7 +716,7 @@
     <string name="audio_output_hdmi">HDMI裝置</string>
     <string name="import_data">匯入播放清單</string>
     <string name="import_playlists_from_other_apps">從其他軟體匯入播放清單</string>
-    <string name="import_data_intro">匯入功能可將Spotify或其他YouTube音樂用戶端套用轉換後的播放清單匯入SimpMusic。 \n轉換工具：https://www.simpmusic.org/tools\nSimpMusic僅支援匯入我們自身格式的播放清單檔案</string>
+    <string name="import_data_intro">匯入功能可將Spotify或其他YouTube音樂用戶端套用轉換後的播放清單匯入Muzix。 \n轉換工具：https://www.simpmusic.org/tools\nMuzix僅支援匯入我們自身格式的播放清單檔案</string>
     <string name="import_reading_file">正在讀取檔案…</string>
     <string name="import_progress_songs">%1$d 首/%2$d 首</string>
     <string name="import_result">創建了 %1$d 個播放列表，並匯入了 %2$d 首歌曲。</string>

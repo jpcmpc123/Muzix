@@ -514,7 +514,7 @@
     <string name="later">Để sau</string>
     <string name="give_a_star">Tặng một sao</string>
     <string name="enjoying_simpmusic">Yêu thích Muzix</string>
-    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">Nếu bạn yêu thích SimpMusic, sao SimpMusic trên GitHub hoặc để lại một đánh giá trên</string>
+    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">Nếu bạn yêu thích Muzix, sao Muzix trên GitHub hoặc để lại một đánh giá trên</string>
     <string name="if_you_love_my_work_consider">"Nếu bạn cảm thấy yêu thích những gì tôi làm, có thể "</string>
     <string name="buying_me_a_coffee">mua cho tôi một ly cà phê.</string>
     <string name="footguns_promo_title">Mỗi cái bẫy tôi rơi vào</string>
@@ -713,7 +713,7 @@
     <string name="local_tracking_description">Ghi lại lịch sử nghe nhạc vào cơ sở dữ liệu cục bộ</string>
     <string name="blog_notification_title">Thông báo về các bài blog mới</string>
     <string name="blog_notification_description">Nhận thông báo khi có bài blog mới được phát hành</string>
-    <string name="simpmusic_charts">SimpMusic Charts</string>
+    <string name="simpmusic_charts">Muzix Charts</string>
     <string name="crossfading">Đang chuyển bài mượt mà</string>
     <string name="your_320kbps_url">Đường dẫn link 320kbps của bạn</string>
     <string name="your_320kbps_url_description">Để trống để tự động chọn một URL hoạt động từ hệ thống kiểm tra.</string>
@@ -737,7 +737,7 @@
     <string name="audio_output_hdmi">HDMI</string>
     <string name="import_data">Nhập danh sách phát</string>
     <string name="import_playlists_from_other_apps">Nhập danh sách phát từ ứng dụng khác</string>
-    <string name="import_data_intro">Tính năng nhập sẽ thêm các danh sách phát đã chuyển đổi từ Spotify hoặc một ứng dụng YT Music khác.\nCông cụ chuyển đổi: https://www.simpmusic.org/tools\nSimpMusic chỉ nhập được tệp danh sách phát theo định dạng riêng của SimpMusic</string>
+    <string name="import_data_intro">Tính năng nhập sẽ thêm các danh sách phát đã chuyển đổi từ Spotify hoặc một ứng dụng YT Music khác.\nCông cụ chuyển đổi: https://www.simpmusic.org/tools\nMuzix chỉ nhập được tệp danh sách phát theo định dạng riêng của Muzix</string>
     <string name="import_reading_file">Đang đọc tệp…</string>
     <string name="import_progress_songs">%1$d / %2$d bài hát</string>
     <string name="import_result">Đã tạo %1$d danh sách phát và nhập %2$d bài hát.</string>

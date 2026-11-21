@@ -34,7 +34,7 @@ fun EndOfPage(withoutCredit: Boolean = false) {
                     stringResource(
                         Res.string.version_format,
                         VersionManager.getVersionName(),
-                    ) + "\njpcmpc123 • Based on SimpMusic (maxrave-dev)",
+                    ) + "\njpcmpc123",
                 style = typo().bodySmall,
                 textAlign = TextAlign.Center,
                 modifier =

@@ -413,7 +413,7 @@
     <string name="later">稍后询问</string>
     <string name="give_a_star">给颗星星</string>
     <string name="enjoying_simpmusic">享受Muzix吧</string>
-    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">如果你喜欢SimpMusic，别忘了在Github给SimpMusic点星星或留好评</string>
+    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">如果你喜欢Muzix，别忘了在Github给Muzix点星星或留好评</string>
     <string name="if_you_love_my_work_consider">"如果你喜欢我的工作，请考虑： "</string>
     <string name="buying_me_a_coffee">软件称心多雅意，薄酬一杯解劳辛。</string>
     <string name="fade_audio_effect">音频淡入淡出</string>
@@ -554,7 +554,7 @@
     <string name="local_tracking_description">将您的收听历史记录到本地数据库</string>
     <string name="blog_notification_title">博客文章通知</string>
     <string name="blog_notification_description">在开发者发布新博文时接收通知</string>
-    <string name="simpmusic_charts">SimpMusic 排行榜</string>
+    <string name="simpmusic_charts">Muzix 排行榜</string>
     <string name="crossfading">交叉淡入淡出</string>
     <string name="your_320kbps_url">您的 320kbps URL</string>
     <string name="your_320kbps_url_description">留空则由可用性检查程序自动选择一个有效的 URL。</string>

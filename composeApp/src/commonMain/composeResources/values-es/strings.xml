@@ -497,7 +497,7 @@
     <string name="later">Más tarde</string>
     <string name="give_a_star">Dar una estrella</string>
     <string name="enjoying_simpmusic">Disfrutando Muzix</string>
-    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">Si te gusta usar SimpMusic, da una estrella a SimpMusic en gituhb o deja una reseña</string>
+    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">Si te gusta usar Muzix, da una estrella a Muzix en gituhb o deja una reseña</string>
     <string name="if_you_love_my_work_consider">"Si amas mi trabajo, considera "</string>
     <string name="buying_me_a_coffee">comprame un café.</string>
     <string name="footguns_promo_title">Every trap I fell into</string>
@@ -667,7 +667,7 @@
     <string name="local_tracking_description">Registra tu historial de escucha en la base de datos local</string>
     <string name="blog_notification_title">Notificaciones de publicaciones del blog</string>
     <string name="blog_notification_description">Recibe una notificación cuando se publique una nueva entrada del blog</string>
-    <string name="simpmusic_charts">Gráficos SimpMusic</string>
+    <string name="simpmusic_charts">Gráficos Muzix</string>
     <string name="crossfading">Crossfade</string>
     <string name="your_320kbps_url">Su URL de 320kbps</string>
     <string name="your_320kbps_url_description">Dejar en blanco para elegir automáticamente una URL funcional desde la comprobación de tiempo de activación.</string>
@@ -683,7 +683,7 @@
     <string name="not_available_while_casting">No disponible durante la transmisión</string>
     <string name="import_data">Importar listas de reproducción</string>
     <string name="import_playlists_from_other_apps">Importar listas de reproducción desde otra aplicación</string>
-    <string name="import_data_intro">Importar trae en listas convertidas de Spotify u otra aplicación cliente de YT.\nHerramienta de conversión: https://www. impmusic.org/tools\nEn SimpMusic, sólo se pueden importar los archivos de la lista de reproducción en nuestro propio formato</string>
+    <string name="import_data_intro">Importar trae en listas convertidas de Spotify u otra aplicación cliente de YT.\nHerramienta de conversión: https://www. impmusic.org/tools\nEn Muzix, sólo se pueden importar los archivos de la lista de reproducción en nuestro propio formato</string>
     <string name="import_reading_file">Leyendo archivo…</string>
     <string name="import_progress_songs">%1$d de %2$d canciones</string>
     <string name="import_result">Creadas %1$d listas de reproducción e importadas %2$d canciones.</string>

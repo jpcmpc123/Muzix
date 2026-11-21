@@ -517,7 +517,7 @@
     <string name="later">Senare</string>
     <string name="give_a_star">Ge en stjärna</string>
     <string name="enjoying_simpmusic">Gillar du Muzix?</string>
-    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">Om du gillar SimpMusic kan du ge projektet en stjärna på GitHub eller lämna en recension på</string>
+    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">Om du gillar Muzix kan du ge projektet en stjärna på GitHub eller lämna en recension på</string>
     <string name="if_you_love_my_work_consider">"Om du uppskattar mitt arbete kan du överväga att "</string>
     <string name="buying_me_a_coffee">bjuda mig på en kaffe.</string>
     <string name="footguns_promo_title">Alla fallgropar jag hamnade i</string>
@@ -716,7 +716,7 @@
     <string name="local_tracking_description">Spara din lyssningshistorik i den lokala databasen</string>
     <string name="blog_notification_title">Aviseringar om blogginlägg</string>
     <string name="blog_notification_description">Få en avisering när ett nytt blogginlägg publiceras</string>
-    <string name="simpmusic_charts">SimpMusic-topplistor</string>
+    <string name="simpmusic_charts">Muzix-topplistor</string>
     <string name="crossfading">Övertoning</string>
     <string name="your_320kbps_url">Din webbadress för 320 kbit/s</string>
     <string name="your_320kbps_url_description">Lämna tomt för att automatiskt välja en fungerande webbadress med hjälp av drifttidskontrollen.</string>
@@ -740,7 +740,7 @@
     <string name="audio_output_hdmi">HDMI</string>
     <string name="import_data">Importera spellistor</string>
     <string name="import_playlists_from_other_apps">Importera spellistor från en annan app</string>
-    <string name="import_data_intro">Med importfunktionen kan du importera spellistor som har konverterats från Spotify eller en annan YouTube Music-klient.\nKonverteringsverktyg: https://www.simpmusic.org/tools\nI SimpMusic kan endast spellistefiler i SimpMusics eget format importeras</string>
+    <string name="import_data_intro">Med importfunktionen kan du importera spellistor som har konverterats från Spotify eller en annan YouTube Music-klient.\nKonverteringsverktyg: https://www.simpmusic.org/tools\nI Muzix kan endast spellistefiler i Muzixs eget format importeras</string>
     <string name="import_reading_file">Läser filen…</string>
     <string name="import_progress_songs">Låtar: %1$d av %2$d</string>
     <string name="import_result">Skapade spellistor: %1$d. Importerade låtar: %2$d.</string>

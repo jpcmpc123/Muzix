@@ -517,7 +517,7 @@
     <string name="later">später</string>
     <string name="give_a_star">Gebe einen Stern</string>
     <string name="enjoying_simpmusic">Spaß an Muzix</string>
-    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">Wenn dir SimpMusic gefällt, gib SimpMusic einen Stern auf Github oder lasse eine Rezension da</string>
+    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">Wenn dir Muzix gefällt, gib Muzix einen Stern auf Github oder lasse eine Rezension da</string>
     <string name="if_you_love_my_work_consider">"Wenn Dumeine Arbeit liebst, denk darüber nach "</string>
     <string name="buying_me_a_coffee">Mir einen Kaffee zu kaufen.</string>
     <string name="footguns_promo_title">Jede Falle, in die ich getappt bin</string>
@@ -716,7 +716,7 @@
     <string name="local_tracking_description">Zeichne den Wiedergabeverlauf in der lokalen Datenbank auf</string>
     <string name="blog_notification_title">Benachrichtigungen zu Blogbeiträgen</string>
     <string name="blog_notification_description">Werde benachrichtigt wenn ein neuer Blog-Beitrag veröffentlicht wird</string>
-    <string name="simpmusic_charts">SimpMusic Charts</string>
+    <string name="simpmusic_charts">Muzix Charts</string>
     <string name="crossfading">Crossfading (überblenden)</string>
     <string name="your_320kbps_url">Deine 320kbps URL</string>
     <string name="your_320kbps_url_description">Lassen Sie das Feld leer, damit automatisch eine funktionierende URL aus dem Verfügbarkeitsprüfer ausgewählt wird.</string>
@@ -740,7 +740,7 @@
     <string name="import_data">Playlists importieren</string>
     <string name="import_playlists_from_other_apps">Playlisten von einer anderen App importieren</string>
     <string name="import_data_intro">Mit der Importfunktion kannst Du Playlists einlesen, die aus Spotify oder einer anderen YT Music-Client-App konvertiert wurden. Konvertierungstool: https://www.simpmusic.org/tools 
-In SimpMusic können nur Playlist-Dateien in unserem eigenen Format importiert werden</string>
+In Muzix können nur Playlist-Dateien in unserem eigenen Format importiert werden</string>
     <string name="import_reading_file">Datei wird gelesen…</string>
     <string name="import_progress_songs">%1$d von %2$d Songs</string>
     <string name="import_result">%1$d Playlisten erstellt und %2$d Songs importiert.</string>

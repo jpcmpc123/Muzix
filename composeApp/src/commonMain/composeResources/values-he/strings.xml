@@ -522,7 +522,7 @@ SimpMusic תמיד בחינם וללא פרסומות \n\nנבנה ב-❤️ מ�
     <string name="later">מאוחר יותר</string>
     <string name="give_a_star">סימון בכוכב</string>
     <string name="enjoying_simpmusic">נהנים מאפליקציית Muzix</string>
-    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">אם אתם נהנים מהשימוש ב-SimpMusic, סמנו את SimpMusic בכוכב ב-GitHub או השאירו חוות דעת ב</string>
+    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">אם אתם נהנים מהשימוש ב-Muzix, סמנו את Muzix בכוכב ב-GitHub או השאירו חוות דעת ב</string>
     <string name="if_you_love_my_work_consider">"אם אתם אוהבים את העבודה שלי, תשקלו "</string>
     <string name="buying_me_a_coffee">לקנות לי קפה.</string>
     <string name="footguns_promo_title">כל מלכודת שנפלתי בה</string>
@@ -721,7 +721,7 @@ SimpMusic תמיד בחינם וללא פרסומות \n\nנבנה ב-❤️ מ�
     <string name="local_tracking_description">רשום את היסטוריית ההאזנה שלך למסד הנתונים המקומי</string>
     <string name="blog_notification_title">עדכוני פוסט הבלוג</string>
     <string name="blog_notification_description">קבל התראה כאשר פוסט בלוג חדש מפורסם</string>
-    <string name="simpmusic_charts">מצעדי SimpMusic</string>
+    <string name="simpmusic_charts">מצעדי Muzix</string>
     <string name="crossfading">משלב בין השירים</string>
     <string name="your_320kbps_url">קישור ה-320kbps שלך</string>
     <string name="your_320kbps_url_description">השאר ריק כדי לבחור אוטומטית את הקישור העובד מבודק זמן הפעילות.</string>
@@ -745,7 +745,7 @@ SimpMusic תמיד בחינם וללא פרסומות \n\nנבנה ב-❤️ מ�
     <string name="audio_output_hdmi">HDMI</string>
     <string name="import_data">יבא פלייליסטים</string>
     <string name="import_playlists_from_other_apps">יבא פלייליסטים מאפליקציה אחרת</string>
-    <string name="import_data_intro">ייבוא מביא פלייליסטים שהומרו מ-Spotify או מאפליקציית לקוח אחרת של YouTube Music.\nכלי המרה: https://www.simpmusic.org/tools\nב-SimpMusic, ניתן לייבא רק קבצי פלייליסט בפורמט שלנו</string>
+    <string name="import_data_intro">ייבוא מביא פלייליסטים שהומרו מ-Spotify או מאפליקציית לקוח אחרת של YouTube Music.\nכלי המרה: https://www.simpmusic.org/tools\nב-Muzix, ניתן לייבא רק קבצי פלייליסט בפורמט שלנו</string>
     <string name="import_reading_file">קורא קובץ…</string>
     <string name="import_progress_songs">%1$d מתוך %2$d שירים</string>
     <string name="import_result">נוצרו %1$d פלייליסטים ויובאו %2$d שירים.</string>

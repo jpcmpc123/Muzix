@@ -431,7 +431,7 @@
     <string name="later">ไว้ที่หลังนะ</string>
     <string name="give_a_star">ให้ดาว</string>
     <string name="enjoying_simpmusic">กำลังเพลิดเพลินกับ Muzix</string>
-    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">หากสนุกกับการใช้ SimpMusic กรุณากดดาวที่ SimpMusic บน GitHub หรือเขียนรีวิวให้ด้วยนะ</string>
+    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">หากสนุกกับการใช้ Muzix กรุณากดดาวที่ Muzix บน GitHub หรือเขียนรีวิวให้ด้วยนะ</string>
     <string name="if_you_love_my_work_consider">"ถ้าคุณชอบผลงานของฉัน ลองพิจารณา "</string>
     <string name="buying_me_a_coffee">เลี้ยงกาแฟฉัน</string>
     <string name="fade_audio_effect">เอฟเฟกต์การจางเสียง</string>
@@ -569,7 +569,7 @@
     <string name="local_tracking_description">บันทึกประวัติการฟังไว้ในฐานข้อมูลภายในเครื่อง</string>
     <string name="blog_notification_title">รับการแจ้งเตือนจากบล็อก</string>
     <string name="blog_notification_description">รับการแจ้งเตือนจากบล็อกเมื่อมีบทความใหม่</string>
-    <string name="simpmusic_charts">ชาร์ต SimpMusic</string>
+    <string name="simpmusic_charts">ชาร์ต Muzix</string>
     <string name="crossfading">Crossfading</string>
     <string name="your_320kbps_url">ลิงก์สตรีม 320 kbps ของคุณ</string>
     <string name="your_320kbps_url_description">เว้นว่างไว้เพื่อให้ระบบเลือก URL ที่ใช้งานได้จากตัวตรวจสอบสถานะให้อัตโนมัติ</string>
