@@ -368,7 +368,9 @@ import simpmusic.composeapp.generated.resources.lyrics_style_apple_music
 import simpmusic.composeapp.generated.resources.lyrics_style_classic
 import simpmusic.composeapp.generated.resources.main_lyrics_provider
 import simpmusic.composeapp.generated.resources.manage_your_youtube_accounts
+import simpmusic.composeapp.generated.resources.based_on_simpmusic
 import simpmusic.composeapp.generated.resources.maxrave_dev
+import simpmusic.composeapp.generated.resources.muzix_author
 import simpmusic.composeapp.generated.resources.monthly
 import simpmusic.composeapp.generated.resources.never
 import simpmusic.composeapp.generated.resources.no_account
@@ -2845,9 +2847,16 @@ fun SettingScreen(
                 )
                 SettingItem(
                     title = stringResource(Res.string.author),
-                    subtitle = stringResource(Res.string.maxrave_dev),
+                    subtitle = stringResource(Res.string.muzix_author),
                     onClick = {
-                        uriHandler.openUri("https://github.com/maxrave-dev")
+                        uriHandler.openUri("https://github.com/jpcmpc123")
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.maxrave_dev),
+                    subtitle = stringResource(Res.string.based_on_simpmusic),
+                    onClick = {
+                        uriHandler.openUri("https://github.com/maxrave-dev/SimpMusic")
                     },
                 )
                 SettingItem(

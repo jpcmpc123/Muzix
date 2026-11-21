@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
@@ -91,7 +91,7 @@ fun CreditScreen(
             modifier =
                 Modifier
                     .size(150.dp)
-                    .clip(CircleShape),
+                    .clip(RoundedCornerShape(32.dp)),
         )
 
         Spacer(modifier = Modifier.height(30.dp))
@@ -110,15 +110,30 @@ fun CreditScreen(
             fontSize = 13.sp,
         )
 
-        // Developer - clickable, opens dev blog
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Fork author (GitHub handle only)
         Text(
-            text = stringResource(Res.string.maxrave_dev),
+            text = stringResource(Res.string.muzix_version_author),
             style = typo().bodyMedium,
             textDecoration = TextDecoration.Underline,
             modifier =
                 Modifier.clickable {
-                    openUrl("https://maxrave.dev")
+                    openUrl("https://github.com/jpcmpc123")
                 },
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Mandatory upstream SimpMusic & GPLv3 credit
+        Text(
+            text = stringResource(Res.string.based_on_simpmusic),
+            style = typo().bodySmall,
+            textAlign = TextAlign.Center,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 25.dp),
         )
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -137,6 +152,34 @@ fun CreditScreen(
         Spacer(modifier = Modifier.height(10.dp))
 
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+            // Original repository (SimpMusic) button
+            TextButton(
+                onClick = {
+                    openUrl("https://github.com/maxrave-dev/SimpMusic")
+                },
+                modifier =
+                    Modifier
+                        .align(Alignment.Start)
+                        .padding(horizontal = 25.dp)
+                        .defaultMinSize(minHeight = 1.dp, minWidth = 1.dp),
+            ) {
+                Text(text = stringResource(Res.string.original_repository))
+            }
+
+            // GPLv3 license button
+            TextButton(
+                onClick = {
+                    openUrl("https://www.gnu.org/licenses/gpl-3.0.html")
+                },
+                modifier =
+                    Modifier
+                        .align(Alignment.Start)
+                        .padding(horizontal = 25.dp)
+                        .defaultMinSize(minHeight = 1.dp, minWidth = 1.dp),
+            ) {
+                Text(text = stringResource(Res.string.gplv3_license))
+            }
+
             // Website button
             TextButton(
                 onClick = {
