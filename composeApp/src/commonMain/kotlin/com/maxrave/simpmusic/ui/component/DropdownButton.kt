@@ -32,7 +32,7 @@ fun DropdownButton(
     var expanded by rememberSaveable {
         mutableStateOf(false)
     }
-    var selected by rememberSaveable {
+    var selected by rememberSaveable(defaultSelected) {
         mutableStateOf(defaultSelected)
     }
     Box(Modifier.wrapContentWidth(align = Alignment.CenterHorizontally)) {

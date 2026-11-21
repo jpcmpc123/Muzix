@@ -14,6 +14,7 @@ import com.maxrave.domain.repository.HomeRepository
 import com.maxrave.domain.utils.Resource
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -54,6 +55,7 @@ class HomeViewModel(
     val accountInfo: StateFlow<Pair<String?, String?>?> = _accountInfo
 
     private var homeJob: Job? = null
+    private var chartJob: Job? = null
 
     val showSnackBarErrorState = MutableSharedFlow<String>()
 
@@ -173,8 +175,11 @@ class HomeViewModel(
 
     fun getHomeItemList(params: String? = null) {
         loading.value = true
+        loadingChart.value = true
         _homeListState.value = ListState.LOADING
         homeJob?.cancel()
+        chartJob?.cancel()
+        chartJob = null
         homeJob =
             viewModelScope.launch {
                 language =
@@ -227,6 +232,7 @@ class HomeViewModel(
                             _chart.value = null
                         }
                     }
+                    loadingChart.value = false
                     when (newRelease) {
                         is Resource.Success -> {
                             _newRelease.value = newRelease.data ?: arrayListOf()
@@ -317,26 +323,37 @@ class HomeViewModel(
     }
 
     fun exploreChart(region: String) {
-        viewModelScope.launch {
-            loadingChart.value = true
-            homeRepository
-                .getChartData(
-                    region,
-                ).collect { values ->
-                    regionCodeChart.value = region
-                    dataStoreManager.setChartKey(region)
-                    when (values) {
-                        is Resource.Success -> {
-                            _chart.value = values.data
-                        }
+        chartJob?.cancel()
+        lateinit var job: Job
+        job =
+            viewModelScope.launch(start = CoroutineStart.LAZY) {
+                loadingChart.value = true
+                try {
+                    homeRepository
+                        .getChartData(
+                            region,
+                        ).collect { values ->
+                            regionCodeChart.value = region
+                            dataStoreManager.setChartKey(region)
+                            when (values) {
+                                is Resource.Success -> {
+                                    _chart.value = values.data
+                                }
 
-                        else -> {
-                            _chart.value = null
+                                else -> {
+                                    _chart.value = null
+                                }
+                            }
+                            loadingChart.value = false
                         }
+                } finally {
+                    if (chartJob === job) {
+                        loadingChart.value = false
                     }
-                    loadingChart.value = false
                 }
-        }
+            }
+        chartJob = job
+        job.start()
     }
 
     fun setParams(params: String?) {
@@ -346,6 +363,7 @@ class HomeViewModel(
     override fun onCleared() {
         super.onCleared()
         homeJob?.cancel()
+        chartJob?.cancel()
     }
 
     companion object {
