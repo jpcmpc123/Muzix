@@ -1128,6 +1128,9 @@
     <string name="recognize_listening">Listening…</string>
     <string name="recognize_listening_hint">Hold your phone near the music</string>
     <string name="recognize_identifying">Identifying…</string>
+    <string name="recognize_identifying_more">Listening a bit longer…</string>
+    <string name="recognize_low_audio_hint">Volume is low — hold your phone closer to the music</string>
+    <string name="recognize_play_now">Play now</string>
     <string name="recognize_find">Find in SimpMusic</string>
     <string name="recognize_listen_again">Listen again</string>
     <string name="recognize_no_match">No match found</string>

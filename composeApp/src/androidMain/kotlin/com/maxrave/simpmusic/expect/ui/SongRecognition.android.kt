@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -37,13 +38,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -53,19 +54,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.maxrave.simpmusic.extension.findActivity
 import com.maxrave.simpmusic.recognition.Recognition
-import com.maxrave.simpmusic.recognition.SongRecognizer
 import com.maxrave.simpmusic.ui.component.SurfaceDarkColors
 import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
 import com.maxrave.simpmusic.ui.icon.Close
@@ -74,14 +78,17 @@ import com.maxrave.simpmusic.ui.icon.GraphicEq
 import com.maxrave.simpmusic.ui.icon.MicOff
 import com.maxrave.simpmusic.ui.icon.MusicNote
 import com.maxrave.simpmusic.ui.icon.MusicOff
+import com.maxrave.simpmusic.ui.icon.PlayArrow
 import com.maxrave.simpmusic.ui.icon.Refresh
 import com.maxrave.simpmusic.ui.icon.Replay
 import com.maxrave.simpmusic.ui.icon.Search
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.ArtworkShape
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.viewModel.SongRecognitionViewModel
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.login_sync_open_settings
 import simpmusic.composeapp.generated.resources.recognize_allow_mic
@@ -89,13 +96,16 @@ import simpmusic.composeapp.generated.resources.recognize_failed
 import simpmusic.composeapp.generated.resources.recognize_failed_hint
 import simpmusic.composeapp.generated.resources.recognize_find
 import simpmusic.composeapp.generated.resources.recognize_identifying
+import simpmusic.composeapp.generated.resources.recognize_identifying_more
 import simpmusic.composeapp.generated.resources.recognize_listen_again
 import simpmusic.composeapp.generated.resources.recognize_listening
 import simpmusic.composeapp.generated.resources.recognize_listening_hint
+import simpmusic.composeapp.generated.resources.recognize_low_audio_hint
 import simpmusic.composeapp.generated.resources.recognize_mic_hint
 import simpmusic.composeapp.generated.resources.recognize_mic_needed
 import simpmusic.composeapp.generated.resources.recognize_no_match
 import simpmusic.composeapp.generated.resources.recognize_no_match_hint
+import simpmusic.composeapp.generated.resources.recognize_play_now
 import simpmusic.composeapp.generated.resources.recognize_song
 import simpmusic.composeapp.generated.resources.recognize_try_again
 
@@ -110,23 +120,27 @@ actual fun SongRecognitionSheet(
 ) {
     val context = LocalContext.current
     val localDensity = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
     val colors = rememberSurfaceDarkColors()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+    val viewModel: SongRecognitionViewModel = koinViewModel()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     fun hasMic() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     var micGranted by remember { mutableStateOf(hasMic()) }
     var micBlocked by remember { mutableStateOf(false) }
-    // Bumped by Try again and Listen again; each value is one pass.
-    var attempt by remember { mutableIntStateOf(0) }
-    var recognition by remember { mutableStateOf<Recognition>(Recognition.Listening) }
 
     val micLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             micGranted = granted
             // Rationale is false after a denial only when the system will not ask again.
-            micBlocked = !granted && !context.findActivity().shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)
+            val showRationale =
+                runCatching {
+                    context.findActivity().shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)
+                }.getOrDefault(false)
+            micBlocked = !granted && !showRationale
         }
 
     // Back from the system settings page with the microphone now allowed.
@@ -135,23 +149,32 @@ actual fun SongRecognitionSheet(
         onPauseOrDispose { }
     }
 
-    // ponytail: the pass lives in this composition, so closing the sheet stops the recording and a
-    // rotation starts listening again; move it to a ViewModel if a result must survive rotation.
-    LaunchedEffect(micGranted, attempt) {
-        if (!micGranted) return@LaunchedEffect
-        recognition = Recognition.Listening
-        recognition = SongRecognizer.recognize(onIdentifying = { recognition = Recognition.Identifying })
+    LaunchedEffect(micGranted) {
+        if (micGranted) {
+            viewModel.startIfNeeded()
+        }
+    }
+
+    LaunchedEffect(uiState.recognition) {
+        if (uiState.recognition is Recognition.Found) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
     }
 
     fun close(then: () -> Unit = {}) {
+        viewModel.cancelListening()
         scope.launch { sheetState.hide() }.invokeOnCompletion {
+            viewModel.resetSession()
             then()
             onDismiss()
         }
     }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            viewModel.resetSession()
+            onDismiss()
+        },
         sheetState = sheetState,
         containerColor = Color.Transparent,
         contentColor = Color.Transparent,
@@ -206,7 +229,7 @@ actual fun SongRecognitionSheet(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
                 ) {
-                    val state = recognition
+                    val state = uiState.recognition
                     when {
                         !micGranted -> {
                             RecognitionOrb(SimpIcons.MicOff, muted = true)
@@ -251,18 +274,50 @@ actual fun SongRecognitionSheet(
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                 )
+                                val metaLine = listOfNotNull(state.album, state.year).joinToString(" · ")
+                                if (metaLine.isNotEmpty()) {
+                                    Text(
+                                        text = metaLine,
+                                        style = typo().bodySmall,
+                                        color = colors.subtitle.copy(alpha = 0.8f),
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
                             Column(
                                 modifier = Modifier.padding(top = 6.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                SheetButton(stringResource(Res.string.recognize_find), SimpIcons.Search) {
-                                    val query = "${state.title} ${state.artist}".trim()
-                                    close { onFind(query) }
+                                val hasPlayableTrack = uiState.matchedTrack != null
+                                SheetButton(
+                                    text = stringResource(if (hasPlayableTrack) Res.string.recognize_play_now else Res.string.recognize_find),
+                                    icon = if (hasPlayableTrack) SimpIcons.PlayArrow else SimpIcons.Search,
+                                ) {
+                                    if (hasPlayableTrack) {
+                                        close { viewModel.playMatchedTrack() }
+                                    } else {
+                                        val query = "${state.title} ${state.artist}".trim()
+                                        close { onFind(query) }
+                                    }
+                                }
+                                if (hasPlayableTrack) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            val query = "${state.title} ${state.artist}".trim()
+                                            close { onFind(query) }
+                                        },
+                                        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                                    ) {
+                                        Icon(imageVector = SimpIcons.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(text = stringResource(Res.string.recognize_find), color = colors.content)
+                                    }
                                 }
                                 TextButton(
-                                    onClick = { attempt++ },
+                                    onClick = { viewModel.retry() },
                                     contentPadding = ButtonDefaults.TextButtonWithIconContentPadding,
                                 ) {
                                     Icon(imageVector = SimpIcons.Replay, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -280,18 +335,30 @@ actual fun SongRecognitionSheet(
                                 hint = stringResource(if (noMatch) Res.string.recognize_no_match_hint else Res.string.recognize_failed_hint),
                                 colors = colors,
                             )
-                            SheetButton(stringResource(Res.string.recognize_try_again), SimpIcons.Refresh) { attempt++ }
+                            SheetButton(stringResource(Res.string.recognize_try_again), SimpIcons.Refresh) { viewModel.retry() }
                         }
 
                         else -> {
                             val listening = state is Recognition.Listening
-                            RecognitionOrb(if (listening) SimpIcons.GraphicEq else SimpIcons.MusicNote, listening = listening)
-                            Message(
-                                title = stringResource(if (listening) Res.string.recognize_listening else Res.string.recognize_identifying),
-                                // Kept as an empty line while identifying, so the layout does not jump.
-                                hint = if (listening) stringResource(Res.string.recognize_listening_hint) else "",
-                                colors = colors,
+                            val identifyingMore = state is Recognition.Identifying && state.attempt > 1
+                            RecognitionOrb(
+                                icon = if (listening || identifyingMore) SimpIcons.GraphicEq else SimpIcons.MusicNote,
+                                listening = listening || state is Recognition.Identifying,
+                                amplitude = uiState.amplitude,
                             )
+                            val title =
+                                when {
+                                    listening -> stringResource(Res.string.recognize_listening)
+                                    identifyingMore -> stringResource(Res.string.recognize_identifying_more)
+                                    else -> stringResource(Res.string.recognize_identifying)
+                                }
+                            val hint =
+                                when {
+                                    uiState.lowAudio -> stringResource(Res.string.recognize_low_audio_hint)
+                                    listening || identifyingMore -> stringResource(Res.string.recognize_listening_hint)
+                                    else -> ""
+                                }
+                            Message(title = title, hint = hint, colors = colors)
                         }
                     }
                 }
@@ -300,14 +367,20 @@ actual fun SongRecognitionSheet(
     }
 }
 
-/** The disc in the middle of the sheet; while listening, rings spread out from it. */
+/** The disc in the middle of the sheet; while listening, rings spread out and pulse with live audio amplitude. */
 @Composable
 private fun RecognitionOrb(
     icon: ImageVector,
     muted: Boolean = false,
     listening: Boolean = false,
+    amplitude: Float = 0f,
 ) {
     val cs = MaterialTheme.colorScheme
+    val smoothedAmplitude by animateFloatAsState(
+        targetValue = if (listening) amplitude.coerceIn(0f, 1f) else 0f,
+        animationSpec = tween(durationMillis = 110),
+        label = "orbAmplitude",
+    )
     Box(Modifier.size(if (muted) 140.dp else OrbSize), contentAlignment = Alignment.Center) {
         if (listening) {
             val ring = cs.primary
@@ -318,21 +391,30 @@ private fun RecognitionOrb(
                 label = "ring",
             )
             Canvas(Modifier.size(OrbSize)) {
-                val stroke = 2.dp.toPx()
-                val from = CoreSize.toPx() / 2
+                val stroke = (2.dp + (smoothedAmplitude * 2.5f).dp).toPx()
+                val from = (CoreSize.toPx() / 2) * (1f + smoothedAmplitude * 0.14f)
                 val to = size.minDimension / 2 - stroke / 2
                 // Two rings half a cycle apart, fading as they grow.
                 for (k in 0..1) {
                     val p = (progress + k / 2f) % 1f
-                    drawCircle(ring, radius = from + (to - from) * p, alpha = 0.5f * (1f - p), style = Stroke(stroke))
+                    drawCircle(
+                        color = ring,
+                        radius = from + (to - from) * p,
+                        alpha = (0.35f + smoothedAmplitude * 0.45f) * (1f - p),
+                        style = Stroke(stroke),
+                    )
                 }
             }
         }
+        val coreScale = if (listening) 1f + smoothedAmplitude * 0.14f else 1f
         Box(
             modifier =
                 Modifier
                     .size(CoreSize)
-                    .clip(CircleShape)
+                    .graphicsLayer {
+                        scaleX = coreScale
+                        scaleY = coreScale
+                    }.clip(CircleShape)
                     .background(if (muted) cs.surfaceContainerHighest else cs.primary),
             contentAlignment = Alignment.Center,
         ) {

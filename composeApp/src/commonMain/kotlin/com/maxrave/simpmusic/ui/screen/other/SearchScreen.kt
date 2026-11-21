@@ -477,16 +477,8 @@ fun SearchScreen(
                 focusManager.clearFocus()
                 isSearchSubmitted = true
                 searchViewModel.insertSearchHistory(query)
-                when (searchScreenState.searchType) {
-                    SearchType.ALL -> searchViewModel.searchAll(query)
-                    SearchType.SONGS -> searchViewModel.searchSongs(query)
-                    SearchType.VIDEOS -> searchViewModel.searchVideos(query)
-                    SearchType.ALBUMS -> searchViewModel.searchAlbums(query)
-                    SearchType.ARTISTS -> searchViewModel.searchArtists(query)
-                    SearchType.PLAYLISTS -> searchViewModel.searchPlaylists(query)
-                    SearchType.FEATURED_PLAYLISTS -> searchViewModel.searchFeaturedPlaylist(query)
-                    SearchType.PODCASTS -> searchViewModel.searchPodcast(query)
-                }
+                searchViewModel.setSearchType(SearchType.SONGS)
+                searchViewModel.searchSongs(query)
             },
             onDismiss = { showRecognition = false },
         )

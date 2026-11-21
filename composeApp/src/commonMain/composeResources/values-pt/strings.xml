@@ -583,4 +583,7 @@
     <string name="log_export_failed">Não foi possível exportar o log</string>
     <string name="log_saved">Salvo na pasta Downloads</string>
     <string name="log_save_permission_denied">Permissão de armazenamento necessária para salvar o log</string>
+    <string name="recognize_identifying_more">Ouvindo mais um pouco…</string>
+    <string name="recognize_low_audio_hint">Volume baixo — aproxime o celular da música</string>
+    <string name="recognize_play_now">Tocar agora</string>
 </resources>

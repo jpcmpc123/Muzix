@@ -31,6 +31,7 @@ import com.maxrave.simpmusic.viewModel.SearchViewModel
 import com.maxrave.simpmusic.viewModel.AutoEqViewModel
 import com.maxrave.simpmusic.viewModel.SettingsViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
+import com.maxrave.simpmusic.viewModel.SongRecognitionViewModel
 import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
 import com.maxrave.simpmusic.viewModel.TasteViewModel
 import com.maxrave.simpmusic.viewModel.WrappedViewModel
@@ -244,6 +245,11 @@ val viewModelModule =
                 repository = get(),
                 dataStore = get(),
                 bridge = get(),
+            )
+        }
+        viewModel {
+            SongRecognitionViewModel(
+                searchRepository = get(),
             )
         }
 
