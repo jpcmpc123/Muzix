@@ -1212,4 +1212,11 @@
     <string name="lyrics_translation_provider">Translation engine</string>
     <string name="lyrics_translation_provider_free">Built-in (Free)</string>
     <string name="lyrics_translation_provider_ai">AI (requires API key)</string>
+    <string name="retranslating_lyrics">Updating translation…</string>
+    <string name="translation_source_vagalume">Human translation · Vagalume</string>
+    <string name="translation_source_simpmusic">Community translation · SimpMusic</string>
+    <string name="translation_source_youtube">Subtitles · YouTube</string>
+    <string name="translation_source_microsoft">Neural translation · Microsoft</string>
+    <string name="translation_source_google">Translator · Google</string>
+    <string name="translation_source_ai">Translation · AI</string>
 </resources>

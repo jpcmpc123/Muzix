@@ -190,6 +190,8 @@ class NowPlayingContentActions(
     val onLyricsOffsetChange: (Int) -> Unit,
     /** Toggles on-demand lyrics translation visibility/fetching for the current song. */
     val onToggleLyricsTranslation: () -> Unit = {},
+    /** Forces a fresh translation bypass of the local cache on long press. */
+    val onRetranslateLyrics: () -> Unit = {},
     val onEnterFullscreenVideo: () -> Unit,
     val onDismiss: () -> Unit,
     val onToolbarVisibilityChange: (Boolean) -> Unit,

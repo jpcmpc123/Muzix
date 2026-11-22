@@ -525,6 +525,7 @@ fun FullscreenLyricsContent(
                                         translationStateFlow = sharedViewModel.lyricsTranslationUiState,
                                         accentBackgroundColor = color,
                                         onClick = { sharedViewModel.toggleLyricsTranslation() },
+                                        onLongClick = { sharedViewModel.retranslateLyrics() },
                                         modifier = Modifier.align(Alignment.CenterStart),
                                     )
                                 }
@@ -1249,6 +1250,7 @@ private fun FullscreenLyricsList(
                     translationStateFlow = sharedViewModel.lyricsTranslationUiState,
                     accentBackgroundColor = color,
                     onClick = { sharedViewModel.toggleLyricsTranslation() },
+                    onLongClick = { sharedViewModel.retranslateLyrics() },
                     modifier =
                         Modifier
                             .align(Alignment.BottomStart)

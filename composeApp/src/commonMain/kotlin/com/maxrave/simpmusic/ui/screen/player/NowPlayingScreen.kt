@@ -753,6 +753,7 @@ fun NowPlayingScreenContent(
             onShowVoteDialog = { showVoteDialog = true },
             onLyricsOffsetChange = { sharedViewModel.setLyricsOffsetMs(it) },
             onToggleLyricsTranslation = { sharedViewModel.toggleLyricsTranslation() },
+            onRetranslateLyrics = { sharedViewModel.retranslateLyrics() },
             onEnterFullscreenVideo = {
                 onDismiss()
                 navController.navigate(FullscreenDestination)

@@ -39,6 +39,7 @@ import com.maxrave.domain.extension.decodeHtmlEntities
 import com.maxrave.domain.extension.isSong
 import com.maxrave.domain.extension.isVideo
 import com.maxrave.domain.extension.toGenericMediaItem
+import com.maxrave.domain.lyrics.LyricsHeaderSanitizer
 import com.maxrave.domain.lyrics.LyricsLookupRequest
 import com.maxrave.domain.lyrics.LyricsQuality
 import com.maxrave.domain.lyrics.LyricsResolution
@@ -149,6 +150,7 @@ import simpmusic.composeapp.generated.resources.login_success
 import simpmusic.composeapp.generated.resources.lyrics_already_in_language
 import simpmusic.composeapp.generated.resources.play_next
 import simpmusic.composeapp.generated.resources.removed_from_youtube_liked
+import simpmusic.composeapp.generated.resources.retranslating_lyrics
 import simpmusic.composeapp.generated.resources.shared
 import simpmusic.composeapp.generated.resources.translation_failed
 import simpmusic.composeapp.generated.resources.updated
@@ -1538,6 +1540,12 @@ class SharedViewModel(
             return null
         }
 
+        val trackState = _nowPlayingState.value
+        val trackTitle = trackState?.songEntity?.title ?: trackState?.mediaItem?.metadata?.title
+        val trackArtists =
+            trackState?.songEntity?.artistName?.joinToString(", ")
+                ?: trackState?.mediaItem?.metadata?.artist
+
         val baselineForWarmup =
             if (isTranslatedLyrics) {
                 expectedOriginalLyrics ?: _nowPlayingScreenData.value.lyricsData?.lyrics
@@ -1549,11 +1557,15 @@ class SharedViewModel(
             withContext(Dispatchers.Default) {
                 val decoded = if (alreadyDecoded) inputLyrics else decodeLyricsEntities(inputLyrics)
                 if (!isTranslatedLyrics) {
-                    LyricsUiPrep.warmUp(decoded)
-                } else if (baselineForWarmup != null) {
-                    LyricsUiPrep.warmUpTranslation(baselineForWarmup, decoded)
+                    val sanitized = LyricsHeaderSanitizer.sanitize(decoded, trackTitle, trackArtists)
+                    LyricsUiPrep.warmUp(sanitized)
+                    sanitized
+                } else {
+                    if (baselineForWarmup != null) {
+                        LyricsUiPrep.warmUpTranslation(baselineForWarmup, decoded)
+                    }
+                    decoded
                 }
-                decoded
             }
 
         // Re-check active track after switching dispatchers in case playback moved on mid-decode.
@@ -1880,6 +1892,31 @@ class SharedViewModel(
                     videoId = videoId,
                     originalLyrics = lyricsData.lyrics,
                     showToasts = true,
+                    bypassCache = false,
+                )
+            }
+    }
+
+    /**
+     * Forces a fresh translation pass for the current track, clearing the cached Room v2 entry
+     * (useful on long-press of the translate button).
+     */
+    fun retranslateLyrics() {
+        val videoId = _nowPlayingState.value?.songEntity?.videoId ?: return
+        val lyricsData = _nowPlayingScreenData.value.lyricsData ?: return
+        translationJob?.cancel()
+        _nowPlayingScreenData.update {
+            it.copy(lyricsData = it.lyricsData?.copy(translatedLyrics = null))
+        }
+        _lyricsTranslationUiState.value = LyricsTranslationUiState(isVisible = false, isLoading = true)
+        translationJob =
+            viewModelScope.launch {
+                makeToast(getString(Res.string.retranslating_lyrics))
+                loadLyricsTranslation(
+                    videoId = videoId,
+                    originalLyrics = lyricsData.lyrics,
+                    showToasts = true,
+                    bypassCache = true,
                 )
             }
     }
@@ -1903,6 +1940,7 @@ class SharedViewModel(
                     videoId = videoId,
                     originalLyrics = originalLyrics,
                     showToasts = false,
+                    bypassCache = false,
                 )
             }
     }
@@ -1977,36 +2015,43 @@ class SharedViewModel(
         videoId: String,
         originalLyrics: Lyrics,
         showToasts: Boolean,
+        bypassCache: Boolean = false,
     ) {
         _lyricsTranslationUiState.update { it.copy(isLoading = true) }
         try {
             val targetLanguage = dataStoreManager.translationLanguage.first().ifBlank { "pt" }
+            val cacheLanguageKey = "${targetLanguage}#v2"
 
-            // 0. Local Room cache (instant, zero network).
-            val saved =
-                lyricsCanvasRepository
-                    .getSavedTranslatedLyrics(videoId, targetLanguage)
-                    .firstOrNull()
-                    ?.toLyrics()
-            if (saved != null && !saved.lines.isNullOrEmpty()) {
-                if (!LyricsTranslationSyncValidator.isOutOfSync(originalLyrics, saved)) {
-                    val applied =
-                        updateLyrics(
-                            videoId = videoId,
-                            duration = 0,
-                            inputLyrics = saved,
-                            isTranslatedLyrics = true,
-                            lyricsProvider = LyricsProvider.TRANSLATOR,
-                            persistToCache = false,
-                            canContributeToSimpMusic = false,
-                            expectedOriginalLyrics = originalLyrics,
-                        )
-                    if (applied != null) {
-                        _lyricsTranslationUiState.update { it.copy(isVisible = true) }
-                        return
+            if (bypassCache) {
+                lyricsCanvasRepository.removeTranslatedLyrics(videoId, targetLanguage)
+                lyricsCanvasRepository.removeTranslatedLyrics(videoId, cacheLanguageKey)
+            } else {
+                // 0. Local Room cache (v2 — auto-upgrades stale v1.0.5 literal translations).
+                val saved =
+                    lyricsCanvasRepository
+                        .getSavedTranslatedLyrics(videoId, cacheLanguageKey)
+                        .firstOrNull()
+                        ?.toLyrics()
+                if (saved != null && !saved.lines.isNullOrEmpty()) {
+                    if (!LyricsTranslationSyncValidator.isOutOfSync(originalLyrics, saved)) {
+                        val applied =
+                            updateLyrics(
+                                videoId = videoId,
+                                duration = 0,
+                                inputLyrics = saved,
+                                isTranslatedLyrics = true,
+                                lyricsProvider = LyricsProvider.TRANSLATOR,
+                                persistToCache = false,
+                                canContributeToSimpMusic = false,
+                                expectedOriginalLyrics = originalLyrics,
+                            )
+                        if (applied != null) {
+                            _lyricsTranslationUiState.update { it.copy(isVisible = true) }
+                            return
+                        }
+                    } else {
+                        lyricsCanvasRepository.removeTranslatedLyrics(videoId, cacheLanguageKey)
                     }
-                } else {
-                    lyricsCanvasRepository.removeTranslatedLyrics(videoId, targetLanguage)
                 }
             }
 
@@ -2028,16 +2073,60 @@ class SharedViewModel(
                         expectedOriginalLyrics = originalLyrics,
                     )
                 if (applied != null) {
-                    _lyricsTranslationUiState.update { it.copy(isVisible = true) }
+                    _lyricsTranslationUiState.update { it.copy(isVisible = true, sourceEngine = "youtube") }
                     return
                 }
             }
 
             // 1B. Community human translation from SimpMusic Lyrics DB (for ANY lyrics provider).
             val simpCode = targetLanguage.substringBefore('-').lowercase()
-            if (simpCode.length == 2 && trySimpMusicTranslatedLyrics(videoId, originalLyrics, simpCode, targetLanguage)) {
-                _lyricsTranslationUiState.update { it.copy(isVisible = true) }
+            if (simpCode.length == 2 && trySimpMusicTranslatedLyrics(videoId, originalLyrics, simpCode, cacheLanguageKey)) {
+                _lyricsTranslationUiState.update { it.copy(isVisible = true, sourceEngine = "simpmusic") }
                 return
+            }
+
+            if (_nowPlayingState.value?.songEntity?.videoId != videoId) return
+
+            // 1C. Human Brazilian Portuguese translation from Vagalume (when target language is pt).
+            val trackState = _nowPlayingState.value
+            val songTitle = trackState?.songEntity?.title ?: trackState?.mediaItem?.metadata?.title.orEmpty()
+            val artistName =
+                trackState?.songEntity?.artistName?.firstOrNull()
+                    ?: trackState?.mediaItem?.metadata?.artist.orEmpty()
+            if (simpCode == "pt" && songTitle.isNotBlank() && artistName.isNotBlank()) {
+                val vagalumeRes =
+                    lyricsCanvasRepository
+                        .getVagalumeTranslatedLyrics(songTitle, artistName, originalLyrics, targetLanguage)
+                        .firstOrNull()
+                        ?.data
+                if (vagalumeRes != null && _nowPlayingState.value?.songEntity?.videoId == videoId) {
+                    lyricsCanvasRepository.insertTranslatedLyrics(
+                        TranslatedLyricsEntity(
+                            videoId = videoId,
+                            language = cacheLanguageKey,
+                            error = false,
+                            lines = vagalumeRes.lyrics.lines,
+                            syncType = vagalumeRes.lyrics.syncType,
+                        ),
+                    )
+                    val applied =
+                        updateLyrics(
+                            videoId = videoId,
+                            duration = 0,
+                            inputLyrics = vagalumeRes.lyrics,
+                            isTranslatedLyrics = true,
+                            lyricsProvider = LyricsProvider.TRANSLATOR,
+                            persistToCache = false,
+                            canContributeToSimpMusic = false,
+                            expectedOriginalLyrics = originalLyrics,
+                        )
+                    if (applied != null) {
+                        _lyricsTranslationUiState.update {
+                            it.copy(isVisible = true, sourceEngine = vagalumeRes.sourceEngine ?: "vagalume")
+                        }
+                        return
+                    }
+                }
             }
 
             if (_nowPlayingState.value?.songEntity?.videoId != videoId) return
@@ -2047,14 +2136,14 @@ class SharedViewModel(
             val aiEnabled =
                 (translationMode == DataStoreManager.LYRICS_TRANSLATION_MODE_AI || dataStoreManager.useAITranslation.first() == TRUE) &&
                     dataStoreManager.aiApiKey.first().isNotEmpty()
-            if (aiEnabled && tryAiTranslatedLyrics(videoId, originalLyrics, targetLanguage)) {
-                _lyricsTranslationUiState.update { it.copy(isVisible = true) }
+            if (aiEnabled && tryAiTranslatedLyrics(videoId, originalLyrics, cacheLanguageKey)) {
+                _lyricsTranslationUiState.update { it.copy(isVisible = true, sourceEngine = "ai") }
                 return
             }
 
             if (_nowPlayingState.value?.songEntity?.videoId != videoId) return
 
-            // 3. Built-in free neural translator (Microsoft Edge pt-BR HTML stanza context -> Google fallback).
+            // 3. Built-in free neural translator (Microsoft Edge public pt-BR -> Google stanza HTML fallback).
             val freeResponse =
                 lyricsCanvasRepository
                     .getFreeTranslatedLyrics(originalLyrics, targetLanguage)
@@ -2073,7 +2162,7 @@ class SharedViewModel(
                             lyricsCanvasRepository.insertTranslatedLyrics(
                                 TranslatedLyricsEntity(
                                     videoId = videoId,
-                                    language = targetLanguage,
+                                    language = cacheLanguageKey,
                                     error = false,
                                     lines = translated.lines,
                                     syncType = translated.syncType,
@@ -2091,7 +2180,9 @@ class SharedViewModel(
                                     expectedOriginalLyrics = originalLyrics,
                                 )
                             if (applied != null) {
-                                _lyricsTranslationUiState.update { it.copy(isVisible = true) }
+                                _lyricsTranslationUiState.update {
+                                    it.copy(isVisible = true, sourceEngine = result.sourceEngine ?: "microsoft")
+                                }
                             }
                         }
 
@@ -2633,6 +2724,7 @@ sealed class UIEvent {
 data class LyricsTranslationUiState(
     val isVisible: Boolean = false,
     val isLoading: Boolean = false,
+    val sourceEngine: String? = null,
 )
 
 enum class LyricsProvider {

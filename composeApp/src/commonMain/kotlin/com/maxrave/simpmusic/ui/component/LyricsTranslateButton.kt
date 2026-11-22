@@ -1,14 +1,17 @@
 package com.maxrave.simpmusic.ui.component
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -19,17 +22,25 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.maxrave.simpmusic.ui.icon.Close
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.icon.Translate
+import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.LyricsTranslationUiState
 import kotlinx.coroutines.flow.StateFlow
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.hide_translation
 import simpmusic.composeapp.generated.resources.translate_lyrics
+import simpmusic.composeapp.generated.resources.translation_source_ai
+import simpmusic.composeapp.generated.resources.translation_source_google
+import simpmusic.composeapp.generated.resources.translation_source_microsoft
+import simpmusic.composeapp.generated.resources.translation_source_simpmusic
+import simpmusic.composeapp.generated.resources.translation_source_vagalume
+import simpmusic.composeapp.generated.resources.translation_source_youtube
 
 private val InactiveCircleColor = Color.White.copy(alpha = 0.16f)
 private val LoadingCircleColor = Color.White.copy(alpha = 0.22f)
@@ -42,13 +53,15 @@ private val DarkFallbackGlyphColor = Color(0xFF1A1A1A)
  * - Active: solid white circle with dark/background-tinted `文A` icon and a top-right `×` badge.
  *
  * Collects [translationStateFlow] locally so toggling or animating the spinner never recomposes
- * the surrounding fullscreen lyrics screen or blur backdrop.
+ * the surrounding fullscreen lyrics screen or blur backdrop. Long-pressing forces retranslation.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FullscreenLyricsTranslateButton(
     translationStateFlow: StateFlow<LyricsTranslationUiState>,
     accentBackgroundColor: Color,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val uiState by translationStateFlow.collectAsStateWithLifecycle()
@@ -70,9 +83,10 @@ fun FullscreenLyricsTranslateButton(
             modifier
                 .size(48.dp)
                 .semantics { contentDescription = description }
-                .clickable(
+                .combinedClickable(
                     role = Role.Button,
                     onClick = onClick,
+                    onLongClick = onLongClick,
                 ),
         contentAlignment = Alignment.Center,
     ) {
@@ -133,11 +147,13 @@ fun FullscreenLyricsTranslateButton(
  * Compact translate toggle button for the Classic player lyrics card header.
  * Collects [translationStateFlow] locally to avoid recomposing the player screen.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CompactLyricsTranslateButton(
     translationStateFlow: StateFlow<LyricsTranslationUiState>,
     cardColor: Color,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val uiState by translationStateFlow.collectAsStateWithLifecycle()
@@ -159,9 +175,10 @@ fun CompactLyricsTranslateButton(
             modifier
                 .size(28.dp)
                 .semantics { contentDescription = description }
-                .clickable(
+                .combinedClickable(
                     role = Role.Button,
                     onClick = onClick,
+                    onLongClick = onLongClick,
                 ),
         contentAlignment = Alignment.Center,
     ) {
@@ -219,4 +236,30 @@ fun CompactLyricsTranslateButton(
             }
         }
     }
+}
+
+@Composable
+fun LyricsTranslationSourceText(
+    translationStateFlow: StateFlow<LyricsTranslationUiState>,
+    modifier: Modifier = Modifier,
+) {
+    val uiState by translationStateFlow.collectAsStateWithLifecycle()
+    if (!uiState.isVisible) return
+    val label =
+        when (uiState.sourceEngine) {
+            "vagalume" -> stringResource(Res.string.translation_source_vagalume)
+            "simpmusic" -> stringResource(Res.string.translation_source_simpmusic)
+            "youtube" -> stringResource(Res.string.translation_source_youtube)
+            "microsoft" -> stringResource(Res.string.translation_source_microsoft)
+            "google" -> stringResource(Res.string.translation_source_google)
+            "ai" -> stringResource(Res.string.translation_source_ai)
+            else -> return
+        }
+    Text(
+        text = label,
+        style = typo().bodySmall,
+        color = Color.White.copy(alpha = 0.65f),
+        textAlign = TextAlign.End,
+        modifier = modifier.fillMaxWidth(),
+    )
 }

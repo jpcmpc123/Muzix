@@ -135,6 +135,7 @@ import com.maxrave.simpmusic.ui.component.DescriptionView
 import com.maxrave.simpmusic.ui.component.ExplicitBadge
 import com.maxrave.simpmusic.ui.component.HeartCheckBox
 import com.maxrave.simpmusic.ui.component.LyricsOffsetBar
+import com.maxrave.simpmusic.ui.component.LyricsTranslationSourceText
 import com.maxrave.simpmusic.ui.component.LyricsView
 import com.maxrave.simpmusic.ui.component.PlayPauseButton
 import com.maxrave.simpmusic.ui.component.PlayerControlLayout
@@ -1378,6 +1379,7 @@ fun NowPlayingContentSpotify(
                                             translationStateFlow = state.lyricsTranslationStateFlow,
                                             cardColor = state.startColor.value,
                                             onClick = actions.onToggleLyricsTranslation,
+                                            onLongClick = actions.onRetranslateLyrics,
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
@@ -1494,6 +1496,7 @@ fun NowPlayingContentSpotify(
                                                 Modifier
                                                     .fillMaxWidth(),
                                         )
+                                        LyricsTranslationSourceText(translationStateFlow = state.lyricsTranslationStateFlow)
                                     }
                                 }
                             }
