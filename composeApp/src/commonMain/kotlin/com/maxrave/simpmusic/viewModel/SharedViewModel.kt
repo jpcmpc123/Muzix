@@ -1585,7 +1585,13 @@ class SharedViewModel(
                     if (!LyricsContentQualityGuard.isAcceptableContent(sanitized)) {
                         return@withContext null
                     }
-                    val cleaned = LyricsContentQualityGuard.stripAsrSoundCueLines(sanitized)
+                    val baseCleaned = LyricsContentQualityGuard.stripAsrSoundCueLines(sanitized)
+                    val cleaned =
+                        if (baseCleaned.syncType == "UNSYNCED") {
+                            LyricsHeaderSanitizer.sanitizeTranslatedLyrics(baseCleaned)
+                        } else {
+                            baseCleaned
+                        }
                     LyricsUiPrep.warmUp(cleaned)
                     cleaned
                 } else {
