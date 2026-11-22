@@ -198,7 +198,9 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.album_length
 import simpmusic.composeapp.generated.resources.baseline_downloaded
 import simpmusic.composeapp.generated.resources.cancel
+import simpmusic.composeapp.generated.resources.change_order
 import simpmusic.composeapp.generated.resources.created_at
+import simpmusic.composeapp.generated.resources.done
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.reload
@@ -1325,9 +1327,9 @@ fun LocalPlaylistScreen(
                                                 Text(
                                                     text =
                                                         if (changingOrder) {
-                                                            "Done"
+                                                            stringResource(Res.string.done)
                                                         } else {
-                                                            "Change order"
+                                                            stringResource(Res.string.change_order)
                                                         },
                                                     style = typo().bodySmall,
                                                     color = Color.White,

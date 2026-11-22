@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_turntable_label">Vitrola</string>
+    <string name="widget_turntable_description">Capa do álbum com reproduzir e pular</string>
+    <string name="widget_playlists_label">Playlists</string>
+    <string name="widget_playlists_description">Tocando agora com controles sobre suas adições recentes</string>
+    <string name="widget_insights_label">Estatísticas de escuta</string>
+    <string name="widget_insights_description">Tempo ouvido, reproduções e suas principais músicas e artistas nos últimos 30 dias</string>
+    <string name="widget_insights_time">tempo ouvido</string>
+    <string name="widget_insights_plays">reproduções</string>
+    <string name="widget_insights_top_songs">Mais tocadas · 30 dias</string>
+    <string name="widget_insights_top_artists">Principais artistas · 30 dias</string>
+    <string name="widget_recently_added">Adicionados recentemente</string>
+    <string name="qs_tile_recognize_song">Reconhecer música</string>
+    <string name="widget_action_previous">Anterior</string>
+    <string name="widget_action_next">Próxima</string>
+    <string name="widget_action_play">Reproduzir</string>
+    <string name="widget_action_pause">Pausar</string>
+    <string name="notification_channel_artists_name">Atualizações de artistas seguidos</string>
+    <string name="notification_channel_artists_description">Envia notificações quando artistas seguidos lançam novas músicas</string>
+    <string name="notification_channel_blog_name">Atualizações do blog</string>
+    <string name="notification_channel_blog_description">Notifica quando uma nova publicação no blog é lançada</string>
+</resources>

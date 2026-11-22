@@ -40,6 +40,7 @@ import com.maxrave.simpmusic.viewModel.LogInViewModel
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.developer_mode
 import simpmusic.composeapp.generated.resources.log_in_to_discord
 import simpmusic.composeapp.generated.resources.login_success
 
@@ -131,7 +132,7 @@ fun DiscordLoginScreen(
                 ) {
                     Icon(
                         SimpIcons.LogoDev,
-                        "Developer Mode",
+                        stringResource(Res.string.developer_mode),
                     )
                 }
             },

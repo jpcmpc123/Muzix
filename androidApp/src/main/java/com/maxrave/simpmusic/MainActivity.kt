@@ -158,24 +158,14 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             // Check if the migration has already been done or not
             if (dataStoreManager.getString(FIRST_TIME_MIGRATION).first() != STATUS_DONE) {
-                Logger.d("Locale Key", "onCreate: ${Locale.getDefault().toLanguageTag()}")
-                if (SUPPORTED_LANGUAGE.codes.contains(Locale.getDefault().toLanguageTag())) {
-                    Logger.d(
-                        "Contains",
-                        "onCreate: ${
-                            SUPPORTED_LANGUAGE.codes.contains(
-                                Locale.getDefault().toLanguageTag(),
-                            )
-                        }",
-                    )
-                    dataStoreManager.putString(SELECTED_LANGUAGE, Locale.getDefault().toLanguageTag())
-                    if (SUPPORTED_LOCATION.items.contains(Locale.getDefault().country)) {
-                        dataStoreManager.putString("location", Locale.getDefault().country)
-                    } else {
-                        dataStoreManager.putString("location", "US")
-                    }
+                val defaultLocale = Locale.getDefault()
+                Logger.d("Locale Key", "onCreate: ${defaultLocale.toLanguageTag()}")
+                val resolvedLanguage = SUPPORTED_LANGUAGE.resolveCode(defaultLocale.toLanguageTag()) ?: "en-US"
+                dataStoreManager.putString(SELECTED_LANGUAGE, resolvedLanguage)
+                if (SUPPORTED_LOCATION.items.contains(defaultLocale.country)) {
+                    dataStoreManager.putString("location", defaultLocale.country)
                 } else {
-                    dataStoreManager.putString(SELECTED_LANGUAGE, "en-US")
+                    dataStoreManager.putString("location", "US")
                 }
                 // Fetch the selected language from wherever it was stored. In this case its SharedPref
                 dataStoreManager.getString(SELECTED_LANGUAGE).first()?.let {
@@ -187,14 +177,17 @@ class MainActivity : AppCompatActivity() {
                     dataStoreManager.putString(FIRST_TIME_MIGRATION, STATUS_DONE)
                 }
             }
-            if (AppCompatDelegate.getApplicationLocales().toLanguageTags() !=
-                dataStoreManager.getString(SELECTED_LANGUAGE).first()
+            val appLocaleTags = AppCompatDelegate.getApplicationLocales().toLanguageTags()
+            val normalizedAppLocale =
+                SUPPORTED_LANGUAGE.resolveCode(appLocaleTags) ?: appLocaleTags
+            if (normalizedAppLocale.isNotEmpty() &&
+                normalizedAppLocale != dataStoreManager.getString(SELECTED_LANGUAGE).first()
             ) {
                 Logger.d(
                     "Locale Key",
-                    "onCreate: ${AppCompatDelegate.getApplicationLocales().toLanguageTags()}",
+                    "onCreate: $appLocaleTags -> $normalizedAppLocale",
                 )
-                dataStoreManager.putString(SELECTED_LANGUAGE, AppCompatDelegate.getApplicationLocales().toLanguageTags())
+                dataStoreManager.putString(SELECTED_LANGUAGE, normalizedAppLocale)
             }
         }
 

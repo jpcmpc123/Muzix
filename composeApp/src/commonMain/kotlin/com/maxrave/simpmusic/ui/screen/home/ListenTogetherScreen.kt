@@ -112,9 +112,11 @@ import simpmusic.composeapp.generated.resources.lt_cancel_join
 import simpmusic.composeapp.generated.resources.lt_connect
 import simpmusic.composeapp.generated.resources.lt_connected
 import simpmusic.composeapp.generated.resources.lt_connecting
+import simpmusic.composeapp.generated.resources.lt_controlling_playback
 import simpmusic.composeapp.generated.resources.lt_create_room
 import simpmusic.composeapp.generated.resources.lt_credit_compatible
 import simpmusic.composeapp.generated.resources.lt_credit_protocol
+import simpmusic.composeapp.generated.resources.lt_default_server_banner
 import simpmusic.composeapp.generated.resources.lt_disconnect
 import simpmusic.composeapp.generated.resources.lt_display_name
 import simpmusic.composeapp.generated.resources.lt_display_name_hint
@@ -126,16 +128,24 @@ import simpmusic.composeapp.generated.resources.lt_just_asked
 import simpmusic.composeapp.generated.resources.lt_kick
 import simpmusic.composeapp.generated.resources.lt_kick_desc
 import simpmusic.composeapp.generated.resources.lt_leave_room
+import simpmusic.composeapp.generated.resources.lt_member_disconnected
+import simpmusic.composeapp.generated.resources.lt_member_in_sync
+import simpmusic.composeapp.generated.resources.lt_member_loading
 import simpmusic.composeapp.generated.resources.lt_not_connected
 import simpmusic.composeapp.generated.resources.lt_or_join_with_code
+import simpmusic.composeapp.generated.resources.lt_playback_resumes
 import simpmusic.composeapp.generated.resources.lt_room_code
+import simpmusic.composeapp.generated.resources.lt_share_room_message
 import simpmusic.composeapp.generated.resources.lt_suggestions
 import simpmusic.composeapp.generated.resources.lt_tagline
 import simpmusic.composeapp.generated.resources.lt_transfer_host
 import simpmusic.composeapp.generated.resources.lt_transfer_host_desc
 import simpmusic.composeapp.generated.resources.lt_waiting_approval
 import simpmusic.composeapp.generated.resources.lt_waiting_approval_desc
+import simpmusic.composeapp.generated.resources.lt_waiting_everyone
+import simpmusic.composeapp.generated.resources.lt_waiting_for
 import simpmusic.composeapp.generated.resources.lt_you
+import simpmusic.composeapp.generated.resources.lt_you_are_host
 import simpmusic.composeapp.generated.resources.settings
 
 /**
@@ -203,8 +213,9 @@ fun ListenTogetherScreen(
 
         val copyCode: () -> Unit = { state.roomCode?.let { clipboard.setText(AnnotatedString(it)) } }
         val shareTitle = stringResource(Res.string.listen_together)
+        val shareMessage = state.roomCode?.let { stringResource(Res.string.lt_share_room_message, it) }
         val shareCode: () -> Unit = {
-            state.roomCode?.let { shareUrl(title = shareTitle, url = SHARE_PREFIX + it) }
+            shareMessage?.let { shareUrl(title = shareTitle, url = it) }
         }
         val openSettings: () -> Unit = { navController.navigate(ListenTogetherSettingsDestination) }
 
@@ -453,9 +464,6 @@ private fun CreditFooter() {
     }
 }
 
-/** Prefix for the share button; the code alone means nothing to the recipient. */
-private const val SHARE_PREFIX = "Join my Muzix room with code "
-
 // ───────────────────────────────── structure ─────────────────────────────────
 
 /** Status-bar inset + the 8.dp above the button + its own 48.dp. */
@@ -565,7 +573,7 @@ private fun ConnectionLine(
         Column(Modifier.weight(1f)) {
             Text(label, style = typo().bodyMedium, color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                "The Meowery · Poland",
+                stringResource(Res.string.lt_default_server_banner),
                 style = typo().bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -635,9 +643,12 @@ private fun RoomCodePoster(
             Text(
                 text =
                     if (state.isHost) {
-                        "You are the host · ${state.members.size} listening"
+                        stringResource(Res.string.lt_you_are_host, state.members.size)
                     } else {
-                        "${state.members.firstOrNull { it.isHost }?.username.orEmpty()} is controlling playback"
+                        stringResource(
+                            Res.string.lt_controlling_playback,
+                            state.members.firstOrNull { it.isHost }?.username.orEmpty(),
+                        )
                     },
                 style = typo().bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -680,12 +691,17 @@ private fun BufferBanner(names: List<String>) {
     Surface(tint = MaterialTheme.colorScheme.tertiary) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Text(
-                text = if (names.isEmpty()) "Waiting for everyone" else "Waiting for ${names.joinToString(", ")}",
+                text =
+                    if (names.isEmpty()) {
+                        stringResource(Res.string.lt_waiting_everyone)
+                    } else {
+                        stringResource(Res.string.lt_waiting_for, names.joinToString(", "))
+                    },
                 style = typo().bodyMedium,
                 color = MaterialTheme.colorScheme.tertiary,
             )
             Text(
-                "Playback resumes when everyone is ready",
+                stringResource(Res.string.lt_playback_resumes),
                 style = typo().bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -885,9 +901,9 @@ private fun Members(
                             text =
                                 when {
                                     member.userId == selfId -> stringResource(Res.string.lt_you)
-                                    member.isBuffering -> "loading…"
-                                    member.isConnected -> "in sync"
-                                    else -> "disconnected"
+                                    member.isBuffering -> stringResource(Res.string.lt_member_loading)
+                                    member.isConnected -> stringResource(Res.string.lt_member_in_sync)
+                                    else -> stringResource(Res.string.lt_member_disconnected)
                                 },
                             style = typo().bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -91,6 +91,7 @@ import simpmusic.composeapp.generated.resources.library_sync_unpair
 import simpmusic.composeapp.generated.resources.library_sync_unpair_message
 import simpmusic.composeapp.generated.resources.library_sync_unpair_title
 import simpmusic.composeapp.generated.resources.library_sync_unreachable
+import simpmusic.composeapp.generated.resources.library_sync_your_computer
 import simpmusic.composeapp.generated.resources.login_sync_allow_camera
 import simpmusic.composeapp.generated.resources.login_sync_camera_blocked
 import simpmusic.composeapp.generated.resources.login_sync_camera_needed
@@ -376,7 +377,11 @@ private fun problemText(
     desktopName: String?,
 ): String =
     when (problem) {
-        LibrarySyncProblem.UNREACHABLE -> stringResource(Res.string.library_sync_unreachable, desktopName ?: "your computer")
+        LibrarySyncProblem.UNREACHABLE ->
+            stringResource(
+                Res.string.library_sync_unreachable,
+                desktopName ?: stringResource(Res.string.library_sync_your_computer),
+            )
         LibrarySyncProblem.NEEDS_LOCAL_NETWORK_PERMISSION -> stringResource(Res.string.library_sync_needs_nearby)
         LibrarySyncProblem.REVOKED -> stringResource(Res.string.library_sync_revoked)
         else -> stringResource(Res.string.library_sync_failed, detail.orEmpty())

@@ -1,5 +1,29 @@
 package com.maxrave.simpmusic.ui.screen.home
 
+import org.jetbrains.compose.resources.StringResource
+import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.equalizer_preset_acoustic
+import simpmusic.composeapp.generated.resources.equalizer_preset_bass_booster
+import simpmusic.composeapp.generated.resources.equalizer_preset_bass_reducer
+import simpmusic.composeapp.generated.resources.equalizer_preset_classical
+import simpmusic.composeapp.generated.resources.equalizer_preset_dance
+import simpmusic.composeapp.generated.resources.equalizer_preset_deep
+import simpmusic.composeapp.generated.resources.equalizer_preset_electronic
+import simpmusic.composeapp.generated.resources.equalizer_preset_flat
+import simpmusic.composeapp.generated.resources.equalizer_preset_hiphop
+import simpmusic.composeapp.generated.resources.equalizer_preset_jazz
+import simpmusic.composeapp.generated.resources.equalizer_preset_latin
+import simpmusic.composeapp.generated.resources.equalizer_preset_loudness
+import simpmusic.composeapp.generated.resources.equalizer_preset_lounge
+import simpmusic.composeapp.generated.resources.equalizer_preset_piano
+import simpmusic.composeapp.generated.resources.equalizer_preset_pop
+import simpmusic.composeapp.generated.resources.equalizer_preset_rnb
+import simpmusic.composeapp.generated.resources.equalizer_preset_rock
+import simpmusic.composeapp.generated.resources.equalizer_preset_small_speakers
+import simpmusic.composeapp.generated.resources.equalizer_preset_spoken_word
+import simpmusic.composeapp.generated.resources.equalizer_preset_treble_booster
+import simpmusic.composeapp.generated.resources.equalizer_preset_treble_reducer
+import simpmusic.composeapp.generated.resources.equalizer_preset_vocal_booster
 import kotlin.math.abs
 
 /**
@@ -13,6 +37,7 @@ import kotlin.math.abs
  */
 data class EqualizerPreset(
     val name: String,
+    val labelRes: StringResource,
     val bandsDb: List<Float>,
 ) {
     /**
@@ -38,34 +63,35 @@ data class EqualizerPreset(
  */
 val EQUALIZER_PRESETS: List<EqualizerPreset> =
     listOf(
-        preset("Flat", 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f),
-        preset("Acoustic", 4f, 4f, 3f, 1f, 1.5f, 1.5f, 3f, 3.5f, 3f, 1.5f),
-        preset("Bass booster", 6f, 5.5f, 4.5f, 2.5f, 0.5f, 0f, 0f, 0f, 0f, 0f),
-        preset("Bass reducer", -6f, -5.5f, -4.5f, -2.5f, -0.5f, 0f, 0f, 0f, 0f, 0f),
-        preset("Classical", 4.5f, 3.5f, 3f, 2.5f, -1.5f, -1.5f, 0f, 2f, 3f, 3.5f),
-        preset("Dance", 5f, 6f, 3.5f, 0f, 2f, 3f, 4f, 4f, 3f, 0f),
-        preset("Deep", 6f, 5f, 3f, 1.5f, 3f, 2f, 0.5f, -2.5f, -4f, -5f),
-        preset("Electronic", 5f, 4.5f, 1.5f, 0f, -1.5f, 2f, 1f, 1.5f, 4.5f, 5f),
-        preset("HipHop", 6f, 5f, 1.5f, 3f, -1f, -1f, 1.5f, -1f, 2f, 3f),
-        preset("Jazz", 4f, 3f, 1.5f, 2f, -1.5f, -1.5f, 0f, 1.5f, 3f, 4f),
-        preset("Latin", 5f, 3f, 0f, 0f, -1.5f, -1.5f, -1.5f, 0f, 3f, 5f),
-        preset("Loudness", 6f, 5f, 0f, 0f, -2f, 0f, -1f, -5f, 5f, 1f),
-        preset("Lounge", -3f, -1.5f, -0.5f, 1.5f, 4f, 2.5f, 0f, -1.5f, 2f, 1f),
-        preset("Piano", 3f, 2f, 0f, 2.5f, 3f, 1f, 2f, 4f, 3f, 3f),
-        preset("Pop", -1.5f, -1f, 0f, 2f, 4f, 4f, 2f, 0f, -1f, -1.5f),
-        preset("RnB", 5.5f, 6f, 4.5f, 1f, -2.5f, -1f, 2.5f, 3f, 3.5f, 4f),
-        preset("Rock", 5f, 4f, 3f, 1.5f, -0.5f, -1f, 0.5f, 3f, 4f, 4.5f),
-        preset("Small speakers", 6f, 5f, 3.5f, 2f, 0f, -0.5f, 0f, 1.5f, 2.5f, 2f),
-        preset("Spoken word", -4f, -3.5f, -2f, 0f, 3f, 4.5f, 5f, 4f, 2f, -1f),
-        preset("Treble booster", 0f, 0f, 0f, 0f, 0f, 0f, 2.5f, 4.5f, 5.5f, 6f),
-        preset("Treble reducer", 0f, 0f, 0f, 0f, 0f, 0f, -2.5f, -4.5f, -5.5f, -6f),
-        preset("Vocal booster", -2.5f, -3f, -2.5f, 1.5f, 4f, 4f, 3.5f, 2f, 0f, -1.5f),
+        preset("Flat", Res.string.equalizer_preset_flat, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f),
+        preset("Acoustic", Res.string.equalizer_preset_acoustic, 4f, 4f, 3f, 1f, 1.5f, 1.5f, 3f, 3.5f, 3f, 1.5f),
+        preset("Bass booster", Res.string.equalizer_preset_bass_booster, 6f, 5.5f, 4.5f, 2.5f, 0.5f, 0f, 0f, 0f, 0f, 0f),
+        preset("Bass reducer", Res.string.equalizer_preset_bass_reducer, -6f, -5.5f, -4.5f, -2.5f, -0.5f, 0f, 0f, 0f, 0f, 0f),
+        preset("Classical", Res.string.equalizer_preset_classical, 4.5f, 3.5f, 3f, 2.5f, -1.5f, -1.5f, 0f, 2f, 3f, 3.5f),
+        preset("Dance", Res.string.equalizer_preset_dance, 5f, 6f, 3.5f, 0f, 2f, 3f, 4f, 4f, 3f, 0f),
+        preset("Deep", Res.string.equalizer_preset_deep, 6f, 5f, 3f, 1.5f, 3f, 2f, 0.5f, -2.5f, -4f, -5f),
+        preset("Electronic", Res.string.equalizer_preset_electronic, 5f, 4.5f, 1.5f, 0f, -1.5f, 2f, 1f, 1.5f, 4.5f, 5f),
+        preset("HipHop", Res.string.equalizer_preset_hiphop, 6f, 5f, 1.5f, 3f, -1f, -1f, 1.5f, -1f, 2f, 3f),
+        preset("Jazz", Res.string.equalizer_preset_jazz, 4f, 3f, 1.5f, 2f, -1.5f, -1.5f, 0f, 1.5f, 3f, 4f),
+        preset("Latin", Res.string.equalizer_preset_latin, 5f, 3f, 0f, 0f, -1.5f, -1.5f, -1.5f, 0f, 3f, 5f),
+        preset("Loudness", Res.string.equalizer_preset_loudness, 6f, 5f, 0f, 0f, -2f, 0f, -1f, -5f, 5f, 1f),
+        preset("Lounge", Res.string.equalizer_preset_lounge, -3f, -1.5f, -0.5f, 1.5f, 4f, 2.5f, 0f, -1.5f, 2f, 1f),
+        preset("Piano", Res.string.equalizer_preset_piano, 3f, 2f, 0f, 2.5f, 3f, 1f, 2f, 4f, 3f, 3f),
+        preset("Pop", Res.string.equalizer_preset_pop, -1.5f, -1f, 0f, 2f, 4f, 4f, 2f, 0f, -1f, -1.5f),
+        preset("RnB", Res.string.equalizer_preset_rnb, 5.5f, 6f, 4.5f, 1f, -2.5f, -1f, 2.5f, 3f, 3.5f, 4f),
+        preset("Rock", Res.string.equalizer_preset_rock, 5f, 4f, 3f, 1.5f, -0.5f, -1f, 0.5f, 3f, 4f, 4.5f),
+        preset("Small speakers", Res.string.equalizer_preset_small_speakers, 6f, 5f, 3.5f, 2f, 0f, -0.5f, 0f, 1.5f, 2.5f, 2f),
+        preset("Spoken word", Res.string.equalizer_preset_spoken_word, -4f, -3.5f, -2f, 0f, 3f, 4.5f, 5f, 4f, 2f, -1f),
+        preset("Treble booster", Res.string.equalizer_preset_treble_booster, 0f, 0f, 0f, 0f, 0f, 0f, 2.5f, 4.5f, 5.5f, 6f),
+        preset("Treble reducer", Res.string.equalizer_preset_treble_reducer, 0f, 0f, 0f, 0f, 0f, 0f, -2.5f, -4.5f, -5.5f, -6f),
+        preset("Vocal booster", Res.string.equalizer_preset_vocal_booster, -2.5f, -3f, -2.5f, 1.5f, 4f, 4f, 3.5f, 2f, 0f, -1.5f),
     )
 
 private fun preset(
     name: String,
+    labelRes: StringResource,
     vararg bandsDb: Float,
-) = EqualizerPreset(name, bandsDb.toList())
+) = EqualizerPreset(name, labelRes, bandsDb.toList())
 
 /**
  * The preset [bandsDb] currently sits on, or null once the curve has been dragged off every one.

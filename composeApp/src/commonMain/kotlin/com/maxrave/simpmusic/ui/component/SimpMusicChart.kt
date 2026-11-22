@@ -19,6 +19,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.maxrave.simpmusic.ui.theme.LocalIsDarkTheme
+import org.jetbrains.compose.resources.stringResource
+import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.introducing_muzix_chart
 
 @Composable
 fun SimpMusicChartButton(
@@ -52,7 +55,7 @@ fun SimpMusicChartButton(
 
             // Text
             Text(
-                text = "Introducing Muzix Chart",
+                text = stringResource(Res.string.introducing_muzix_chart),
                 fontSize = 13.sp,
                 color = labelColor,
                 fontWeight = FontWeight.Normal

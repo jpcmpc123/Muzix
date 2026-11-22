@@ -94,6 +94,7 @@ import simpmusic.composeapp.generated.resources.browser_login_rejected
 import simpmusic.composeapp.generated.resources.browser_login_unreadable
 import simpmusic.composeapp.generated.resources.browser_login_unsupported
 import simpmusic.composeapp.generated.resources.browser_login_youtube
+import simpmusic.composeapp.generated.resources.developer_mode
 import simpmusic.composeapp.generated.resources.spotify
 import simpmusic.composeapp.generated.resources.loading
 import simpmusic.composeapp.generated.resources.log_in
@@ -288,7 +289,7 @@ fun LoginScreen(
                 ) {
                     Icon(
                         SimpIcons.LogoDev,
-                        "Developer Mode",
+                        stringResource(Res.string.developer_mode),
                     )
                 }
             },

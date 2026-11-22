@@ -250,7 +250,7 @@ class PlaylistsWidget :
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Image(
                                     provider = ImageProvider(R.drawable.rounded_skip_previous_24),
-                                    contentDescription = "Previous",
+                                    contentDescription = context.getString(R.string.widget_action_previous),
                                     colorFilter = ColorFilter.tint(ColorProvider(Color.White)),
                                     modifier =
                                         GlanceModifier
@@ -267,7 +267,14 @@ class PlaylistsWidget :
                                         } else {
                                             ImageProvider(R.drawable.rounded_play_arrow_24)
                                         },
-                                    contentDescription = if (controllerState.isPlaying) "Pause" else "Play",
+                                    contentDescription =
+                                        context.getString(
+                                            if (controllerState.isPlaying) {
+                                                R.string.widget_action_pause
+                                            } else {
+                                                R.string.widget_action_play
+                                            },
+                                        ),
                                     colorFilter = ColorFilter.tint(ColorProvider(Color.White)),
                                     modifier =
                                         GlanceModifier
@@ -279,7 +286,7 @@ class PlaylistsWidget :
                                 Spacer(GlanceModifier.width(16.dp))
                                 Image(
                                     provider = ImageProvider(R.drawable.rounded_skip_next_24),
-                                    contentDescription = "Next",
+                                    contentDescription = context.getString(R.string.widget_action_next),
                                     colorFilter = ColorFilter.tint(ColorProvider(Color.White)),
                                     modifier =
                                         GlanceModifier

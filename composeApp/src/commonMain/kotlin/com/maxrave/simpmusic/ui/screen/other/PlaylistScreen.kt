@@ -1445,7 +1445,7 @@ fun PlaylistScreen(
             }
 
             is PlaylistUIState.Error -> {
-                viewModel.makeToast("Error: ${state.message}")
+                viewModel.makeToast("${stringResource(Res.string.error)}: ${state.message}")
                 navController.navigateUp()
             }
         }

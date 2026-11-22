@@ -146,7 +146,7 @@ fun EqualizerSection(viewModel: SettingsViewModel = koinViewModel()) {
                         // Nothing on disk records which preset is on: the name is read back off the
                         // curve, so dragging a band drops it to Custom by itself and a preset
                         // re-selects itself if the curve is ever put back on it.
-                        text = activePreset?.name ?: stringResource(Res.string.equalizer_preset_custom),
+                        text = activePreset?.let { stringResource(it.labelRes) } ?: stringResource(Res.string.equalizer_preset_custom),
                         style = typo().bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -160,7 +160,7 @@ fun EqualizerSection(viewModel: SettingsViewModel = koinViewModel()) {
                 DropdownMenu(expanded = presetMenuOpen, onDismissRequest = { presetMenuOpen = false }) {
                     EQUALIZER_PRESETS.forEach { preset ->
                         DropdownMenuItem(
-                            text = { Text(text = preset.name, style = typo().bodyMedium) },
+                            text = { Text(text = stringResource(preset.labelRes), style = typo().bodyMedium) },
                             onClick = {
                                 viewModel.applyEqualizerPreset(preset.bandsDb, preset.preampDb)
                                 presetMenuOpen = false

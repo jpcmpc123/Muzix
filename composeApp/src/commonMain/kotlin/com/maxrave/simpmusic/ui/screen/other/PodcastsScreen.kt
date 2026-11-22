@@ -98,6 +98,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.album_length
+import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.no_description
 import simpmusic.composeapp.generated.resources.podcasts
 
@@ -483,7 +484,7 @@ fun PodcastScreen(
             }
 
             is PodcastUIState.Error -> {
-                viewModel.makeToast("Error: ${state.message}")
+                viewModel.makeToast("${stringResource(Res.string.error)}: ${state.message}")
                 navController.navigateUp()
             }
         }

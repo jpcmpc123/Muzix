@@ -234,8 +234,10 @@ import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.downloading_audio
 import simpmusic.composeapp.generated.resources.downloading_video
+import simpmusic.composeapp.generated.resources.custom
 import simpmusic.composeapp.generated.resources.edit_thumbnail
 import simpmusic.composeapp.generated.resources.edit_title
+import simpmusic.composeapp.generated.resources.end_of_song
 import simpmusic.composeapp.generated.resources.endless_queue
 import simpmusic.composeapp.generated.resources.error_occurred
 import simpmusic.composeapp.generated.resources.extract_source
@@ -2450,7 +2452,7 @@ fun SleepTimerBottomSheet(
                         contentPadding = PaddingValues(vertical = 10.dp, horizontal = 4.dp),
                     ) {
                         Text(
-                            text = "End of song",
+                            text = stringResource(Res.string.end_of_song),
                             style = typo().bodySmall,
                             color = if (isEndSelected) seed else rememberSurfaceDarkColors().subtitle,
                             fontWeight = if (isEndSelected) FontWeight.SemiBold else FontWeight.Normal,
@@ -2478,7 +2480,7 @@ fun SleepTimerBottomSheet(
                         contentPadding = PaddingValues(vertical = 10.dp, horizontal = 4.dp),
                     ) {
                         Text(
-                            text = "Custom",
+                            text = stringResource(Res.string.custom),
                             style = typo().bodySmall,
                             color = if (isCustomSelected) seed else rememberSurfaceDarkColors().subtitle,
                             fontWeight = if (isCustomSelected) FontWeight.SemiBold else FontWeight.Normal,

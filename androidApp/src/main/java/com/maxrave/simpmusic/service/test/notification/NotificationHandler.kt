@@ -109,9 +109,9 @@ object NotificationHandler {
         val notificationManager: NotificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (notificationManager.getNotificationChannel(CHANNEL_ID) == null) {
-            val name = "Update Followed Artists"
+            val name = context.getString(R.string.notification_channel_artists_name)
             val descriptionText =
-                "This channel sends notification when followed artists release new music"
+                context.getString(R.string.notification_channel_artists_description)
             val importance = NotificationManager.IMPORTANCE_HIGH
             val channel =
                 NotificationChannel(CHANNEL_ID, name, importance).apply {
@@ -136,10 +136,10 @@ object NotificationHandler {
             val channel =
                 NotificationChannel(
                     BLOG_CHANNEL_ID,
-                    "Blog updates",
+                    context.getString(R.string.notification_channel_blog_name),
                     NotificationManager.IMPORTANCE_DEFAULT,
                 ).apply {
-                    description = "Notifies when a new blog post is published"
+                    description = context.getString(R.string.notification_channel_blog_description)
                 }
             notificationManager.createNotificationChannel(channel)
         }
