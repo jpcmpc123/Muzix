@@ -452,6 +452,9 @@ import simpmusic.composeapp.generated.resources.third_party_libraries
 import simpmusic.composeapp.generated.resources.thumbnail_cache
 import simpmusic.composeapp.generated.resources.auto_translate_lyrics
 import simpmusic.composeapp.generated.resources.auto_translate_lyrics_description
+import simpmusic.composeapp.generated.resources.lyrics_word_by_word
+import simpmusic.composeapp.generated.resources.lyrics_word_by_word_off_description
+import simpmusic.composeapp.generated.resources.lyrics_word_by_word_on_description
 import simpmusic.composeapp.generated.resources.lyrics_translation_provider
 import simpmusic.composeapp.generated.resources.lyrics_translation_provider_ai
 import simpmusic.composeapp.generated.resources.lyrics_translation_provider_free
@@ -593,6 +596,7 @@ fun SettingScreen(
     val translationLanguage by viewModel.translationLanguage.collectAsStateWithLifecycle()
     val autoTranslateLyrics by viewModel.autoTranslateLyrics.collectAsStateWithLifecycle()
     val lyricsTranslationMode by viewModel.lyricsTranslationMode.collectAsStateWithLifecycle()
+    val wordByWordLyrics by viewModel.wordByWordLyrics.collectAsStateWithLifecycle()
     val customModelId by viewModel.customModelId.collectAsStateWithLifecycle()
     val customOpenAIBaseUrl by viewModel.customOpenAIBaseUrl.collectAsStateWithLifecycle()
     val customOpenAIHeaders by viewModel.customOpenAIHeaders.collectAsStateWithLifecycle()
@@ -1833,6 +1837,19 @@ fun SettingScreen(
                             ),
                         )
                     },
+                )
+
+                SettingItem(
+                    title = stringResource(Res.string.lyrics_word_by_word),
+                    subtitle =
+                        stringResource(
+                            if (wordByWordLyrics) {
+                                Res.string.lyrics_word_by_word_on_description
+                            } else {
+                                Res.string.lyrics_word_by_word_off_description
+                            },
+                        ),
+                    switch = (wordByWordLyrics to { viewModel.setWordByWordLyrics(it) }),
                 )
 
                 SettingItem(

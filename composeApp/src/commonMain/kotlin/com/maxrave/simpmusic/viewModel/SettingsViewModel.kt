@@ -131,6 +131,8 @@ class SettingsViewModel(
     val autoTranslateLyrics: StateFlow<Boolean> = _autoTranslateLyrics
     private val _lyricsTranslationMode = MutableStateFlow(DataStoreManager.LYRICS_TRANSLATION_MODE_FREE)
     val lyricsTranslationMode: StateFlow<String> = _lyricsTranslationMode
+    private val _wordByWordLyrics = MutableStateFlow(true)
+    val wordByWordLyrics: StateFlow<Boolean> = _wordByWordLyrics
     private var _useTranslation: MutableStateFlow<String?> = MutableStateFlow(null)
     val useTranslation: StateFlow<String?> = _useTranslation
     private var _playerCacheLimit: MutableStateFlow<Int?> = MutableStateFlow(null)
@@ -305,6 +307,7 @@ class SettingsViewModel(
             getTranslationLanguage()
             getAutoTranslateLyrics()
             getLyricsTranslationMode()
+            getWordByWordLyrics()
             getYoutubeSubtitleLanguage()
             getLyricsProvider()
             getLyricsOffsetMs()
@@ -1072,6 +1075,20 @@ class SettingsViewModel(
     fun setLyricsTranslationMode(mode: String) {
         viewModelScope.launch {
             dataStoreManager.setLyricsTranslationMode(mode)
+        }
+    }
+
+    private fun getWordByWordLyrics() {
+        viewModelScope.launch {
+            dataStoreManager.wordByWordLyrics.collect { enabled ->
+                _wordByWordLyrics.value = enabled == DataStoreManager.TRUE
+            }
+        }
+    }
+
+    fun setWordByWordLyrics(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setWordByWordLyrics(enabled)
         }
     }
 

@@ -42,6 +42,7 @@ import com.maxrave.domain.extension.toGenericMediaItem
 import com.maxrave.domain.lyrics.LyricsContentQualityGuard
 import com.maxrave.domain.lyrics.LyricsHeaderSanitizer
 import com.maxrave.domain.lyrics.LyricsLookupRequest
+import com.maxrave.domain.lyrics.LyricsLanguageDetector
 import com.maxrave.domain.lyrics.LyricsQuality
 import com.maxrave.domain.lyrics.LyricsResolution
 import com.maxrave.domain.lyrics.LyricsResolutionEvent
@@ -497,6 +498,24 @@ class SharedViewModel(
             }
             dataStoreManager.getString("liked_guide").first().let {
                 isFirstLiked = it != STATUS_DONE
+            }
+        }
+        viewModelScope.launch {
+            combine(
+                dataStoreManager.translationLanguage,
+                dataStoreManager.language,
+            ) { translationLang, appLang ->
+                translationLang.ifBlank { appLang }.ifBlank { "pt" }
+            }.distinctUntilChanged().collect { targetLang ->
+                val activeLyrics = _nowPlayingScreenData.value.lyricsData?.lyrics ?: return@collect
+                val sameLang = LyricsLanguageDetector.isSameLanguage(activeLyrics, targetLang)
+                _lyricsTranslationUiState.update { state ->
+                    if (sameLang) {
+                        state.copy(isSameLanguage = true, isVisible = false, isLoading = false)
+                    } else {
+                        state.copy(isSameLanguage = false)
+                    }
+                }
             }
         }
         viewModelScope.launch {
@@ -1109,7 +1128,11 @@ class SharedViewModel(
                 alreadyDecoded = true,
             )
             if (_nowPlayingState.value?.songEntity?.videoId == videoId) {
-                scheduleAutoTranslationIfEnabled(videoId, decoded)
+                val sameLanguage = isLyricsInTargetLanguage(decoded)
+                _lyricsTranslationUiState.value = LyricsTranslationUiState(isSameLanguage = sameLanguage)
+                if (!sameLanguage) {
+                    scheduleAutoTranslationIfEnabled(videoId, decoded)
+                }
             }
         }
     }
@@ -1636,6 +1659,7 @@ class SharedViewModel(
             canContributeToSimpMusic &&
                 lyricsProvider != LyricsProvider.SIMPMUSIC &&
                 lyricsProvider != LyricsProvider.SPOTIFY &&
+                lyricsProvider != LyricsProvider.LETRAS &&
                 lyricsProvider != LyricsProvider.TRANSLATOR &&
                 dataStoreManager.helpBuildLyricsDatabase.first() == TRUE
         if (_nowPlayingState.value?.songEntity?.videoId != videoId) return null
@@ -1824,17 +1848,22 @@ class SharedViewModel(
                                                 resolution.simpMusicNotFoundObserved &&
                                                 resolution.source != LyricsSource.SIMPMUSIC &&
                                                 resolution.source != LyricsSource.SPOTIFY &&
+                                                resolution.source != LyricsSource.LETRAS &&
                                                 resolution.source != LyricsSource.OFFLINE,
                                     )
                                 if (appliedLyrics != null) {
                                     pendingLyricsRetryVideoId = null
                                     pendingYoutubeTranslatedLyrics =
                                         resolution.youtubeTranslatedLyrics?.let { resolution.videoId to it }
-                                    _lyricsTranslationUiState.value = LyricsTranslationUiState()
-                                    scheduleAutoTranslationIfEnabled(
-                                        videoId = resolution.videoId,
-                                        originalLyrics = appliedLyrics,
-                                    )
+                                    val sameLanguage = isLyricsInTargetLanguage(appliedLyrics)
+                                    _lyricsTranslationUiState.value =
+                                        LyricsTranslationUiState(isSameLanguage = sameLanguage)
+                                    if (!sameLanguage) {
+                                        scheduleAutoTranslationIfEnabled(
+                                            videoId = resolution.videoId,
+                                            originalLyrics = appliedLyrics,
+                                        )
+                                    }
                                 }
                             }
 
@@ -2023,6 +2052,15 @@ class SharedViewModel(
         )
     }
 
+    private suspend fun isLyricsInTargetLanguage(lyrics: Lyrics): Boolean {
+        val targetLang =
+            dataStoreManager.translationLanguage
+                .first()
+                .ifBlank { dataStoreManager.language.first() }
+                .ifBlank { "pt" }
+        return LyricsLanguageDetector.isSameLanguage(lyrics, targetLang)
+    }
+
     private fun String.toLyricsSource(): LyricsSource =
         when (this) {
             DataStoreManager.YOUTUBE -> LyricsSource.YOUTUBE
@@ -2038,6 +2076,7 @@ class SharedViewModel(
             LyricsSource.SPOTIFY -> LyricsProvider.SPOTIFY
             LyricsSource.LRCLIB -> LyricsProvider.LRCLIB
             LyricsSource.BETTER_LYRICS -> LyricsProvider.BETTER_LYRICS
+            LyricsSource.LETRAS -> LyricsProvider.LETRAS
             LyricsSource.OFFLINE -> LyricsProvider.OFFLINE
         }
 
@@ -2187,6 +2226,9 @@ class SharedViewModel(
                 is Resource.Success -> {
                     when (val result = freeResponse.data) {
                         is LyricsTranslationResult.AlreadyInTargetLanguage -> {
+                            _lyricsTranslationUiState.update {
+                                it.copy(isSameLanguage = true, isVisible = false)
+                            }
                             if (showToasts) {
                                 makeToast(getString(Res.string.lyrics_already_in_language))
                             }
@@ -2794,6 +2836,7 @@ data class LyricsTranslationUiState(
     val isVisible: Boolean = false,
     val isLoading: Boolean = false,
     val sourceEngine: String? = null,
+    val isSameLanguage: Boolean = false,
 )
 
 enum class LyricsProvider {
@@ -2802,6 +2845,7 @@ enum class LyricsProvider {
     SPOTIFY,
     LRCLIB,
     BETTER_LYRICS,
+    LETRAS,
     AI,
     TRANSLATOR,
     OFFLINE,

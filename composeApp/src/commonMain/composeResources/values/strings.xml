@@ -1213,6 +1213,10 @@
     <string name="lyrics_translation_provider_free">Built-in (Free)</string>
     <string name="lyrics_translation_provider_ai">AI (requires API key)</string>
     <string name="retranslating_lyrics">Updating translation…</string>
+    <string name="lyrics_word_by_word">Word-by-word highlight</string>
+    <string name="lyrics_word_by_word_on_description">Highlights each sung word when available</string>
+    <string name="lyrics_word_by_word_off_description">Highlights the entire line on all songs</string>
+    <string name="lyrics_provider_letras">Lyrics provided by Letras.mus.br</string>
     <string name="translation_source_letras">Human translation · Letras.mus.br</string>
     <string name="translation_source_vagalume">Human translation · Vagalume</string>
     <string name="translation_source_simpmusic">Community translation · SimpMusic</string>

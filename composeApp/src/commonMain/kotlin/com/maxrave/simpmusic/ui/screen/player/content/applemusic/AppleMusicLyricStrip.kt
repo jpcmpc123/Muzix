@@ -45,12 +45,15 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.maxrave.domain.data.model.metadata.Line
+import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.simpmusic.extension.ParsedRichSyncLine
 import com.maxrave.simpmusic.ui.component.LyricsUiPrep
 import com.maxrave.simpmusic.ui.component.rememberLyricLayoutDirection
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentState
 import com.maxrave.simpmusic.ui.screen.player.content.stripRichSyncTimestamps
+import org.koin.compose.koinInject
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToLong
@@ -75,11 +78,13 @@ internal fun AppleMusicLyricStrip(
     typography: AppleMusicTypography,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    dataStoreManager: DataStoreManager = koinInject(),
 ) {
+    val wordByWordRaw by dataStoreManager.wordByWordLyrics.collectAsStateWithLifecycle(DataStoreManager.TRUE)
     val lyrics = state.screenData.lyricsData?.lyrics
     val syncType = lyrics?.syncType
     val synced = lyrics?.lines != null && syncType != null && syncType != "UNSYNCED"
-    val richSynced = synced && syncType == "RICH_SYNCED"
+    val richSynced = synced && syncType == "RICH_SYNCED" && wordByWordRaw == DataStoreManager.TRUE
     // The index is -1 only until the first line starts: once a line has been reached it is held
     // until the next one, and the last is held to the end of the track.
     val line = if (synced) lyrics.lines?.getOrNull(state.currentLyricLineIndex) else null

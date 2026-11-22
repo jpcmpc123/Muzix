@@ -1380,8 +1380,8 @@ fun NowPlayingContentSpotify(
                                             cardColor = state.startColor.value,
                                             onClick = actions.onToggleLyricsTranslation,
                                             onLongClick = actions.onRetranslateLyrics,
+                                            trailingSpacing = 8.dp,
                                         )
-                                        Spacer(modifier = Modifier.width(8.dp))
                                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                                             IconButton(
                                                 onClick = { showShareLyricsSheet = true },

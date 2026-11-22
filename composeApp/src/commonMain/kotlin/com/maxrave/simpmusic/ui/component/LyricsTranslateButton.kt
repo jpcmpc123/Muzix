@@ -5,9 +5,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -23,6 +25,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.maxrave.simpmusic.ui.icon.Close
@@ -66,6 +69,7 @@ fun FullscreenLyricsTranslateButton(
     modifier: Modifier = Modifier,
 ) {
     val uiState by translationStateFlow.collectAsStateWithLifecycle()
+    if (uiState.isSameLanguage) return
     val glyphColor =
         if (accentBackgroundColor.luminance() < 0.55f) {
             accentBackgroundColor.copy(alpha = 1f)
@@ -155,9 +159,11 @@ fun CompactLyricsTranslateButton(
     cardColor: Color,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
+    trailingSpacing: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
     val uiState by translationStateFlow.collectAsStateWithLifecycle()
+    if (uiState.isSameLanguage) return
     val glyphColor =
         if (cardColor.luminance() < 0.55f) {
             cardColor.copy(alpha = 1f)
@@ -236,6 +242,9 @@ fun CompactLyricsTranslateButton(
                 )
             }
         }
+    }
+    if (trailingSpacing > 0.dp) {
+        Spacer(modifier = Modifier.width(trailingSpacing))
     }
 }
 

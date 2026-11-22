@@ -1193,6 +1193,10 @@
     <string name="lyrics_translation_provider_free">Integrado (Gratuito)</string>
     <string name="lyrics_translation_provider_ai">IA (requer chave de API)</string>
     <string name="retranslating_lyrics">Atualizando tradução…</string>
+    <string name="lyrics_word_by_word">Destaque palavra por palavra</string>
+    <string name="lyrics_word_by_word_on_description">Ilumina cada palavra cantada (quando disponível)</string>
+    <string name="lyrics_word_by_word_off_description">Ilumina a frase inteira em todas as músicas</string>
+    <string name="lyrics_provider_letras">Letra fornecida por Letras.mus.br</string>
     <string name="translation_source_letras">Tradução humana · Letras.mus.br</string>
     <string name="translation_source_vagalume">Tradução humana · Vagalume</string>
     <string name="translation_source_simpmusic">Tradução comunitária · SimpMusic</string>

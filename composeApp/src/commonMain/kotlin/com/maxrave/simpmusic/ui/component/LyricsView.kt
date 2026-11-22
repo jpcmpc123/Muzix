@@ -74,6 +74,7 @@ import com.maxrave.simpmusic.expect.ui.isLyricsBlurSupported
 import com.maxrave.domain.data.model.metadata.Line
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentActions
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentState
+import com.maxrave.simpmusic.ui.screen.player.content.stripRichSyncTimestamps
 import org.koin.compose.koinInject
 import androidx.navigation.NavController
 import com.maxrave.domain.data.model.streams.TimeLine
@@ -310,6 +311,15 @@ fun LyricsView(
     // carried to another device, can still hold APPLE_MUSIC on a phone that cannot draw it.
     val lyricsStyle by dataStoreManager.lyricsStyle.collectAsStateWithLifecycle(DataStoreManager.LYRICS_STYLE_CLASSIC)
     val appleStyle = lyricsStyle == DataStoreManager.LYRICS_STYLE_APPLE_MUSIC && isLyricsBlurSupported()
+    val wordByWordRaw by dataStoreManager.wordByWordLyrics.collectAsStateWithLifecycle(DataStoreManager.TRUE)
+    val wordByWordEnabled = wordByWordRaw == DataStoreManager.TRUE
+    val isSynced = lyricsData.lyrics.syncType == "LINE_SYNCED" || lyricsData.lyrics.syncType == "RICH_SYNCED"
+    val effectiveSyncType =
+        if (!wordByWordEnabled && lyricsData.lyrics.syncType == "RICH_SYNCED") {
+            "LINE_SYNCED"
+        } else {
+            lyricsData.lyrics.syncType
+        }
 
     // Read here for the same reason the style is: all four call sites want the user's one choice,
     // so threading it through each of them would be four copies of the same lookup. The stored
@@ -349,16 +359,16 @@ fun LyricsView(
     // other rather than something drawn on top of one.
     val displayLines by produceState(
         initialValue =
-            LyricsUiPrep.peekDisplayLines(lyricsData.lyrics.lines, lyricsData.lyrics.syncType)
+            LyricsUiPrep.peekDisplayLines(lyricsData.lyrics.lines, effectiveSyncType)
                 ?: DisplayLines(lyricsData.lyrics.lines.orEmpty(), emptySet()),
         key1 = lyricsData.lyrics.lines,
-        key2 = lyricsData.lyrics.syncType,
+        key2 = effectiveSyncType,
     ) {
-        val cached = LyricsUiPrep.peekDisplayLines(lyricsData.lyrics.lines, lyricsData.lyrics.syncType)
+        val cached = LyricsUiPrep.peekDisplayLines(lyricsData.lyrics.lines, effectiveSyncType)
         value =
             cached
                 ?: withContext(Dispatchers.Default) {
-                    LyricsUiPrep.getOrBuildDisplayLines(lyricsData.lyrics.lines, lyricsData.lyrics.syncType)
+                    LyricsUiPrep.getOrBuildDisplayLines(lyricsData.lyrics.lines, effectiveSyncType)
                 }
     }
 
@@ -553,9 +563,17 @@ fun LyricsView(
                         }
 
                     val renderLine: @Composable () -> Unit = {
+                        val plainDisplayWords =
+                            remember(words, lyricsData.lyrics.syncType) {
+                                if (lyricsData.lyrics.syncType == "RICH_SYNCED") {
+                                    words.stripRichSyncTimestamps()
+                                } else {
+                                    words
+                                }
+                            }
                         when {
-                            // Rich sync: parse and use RichSyncLyricsLineItem
-                            lyricsData.lyrics.syncType == "RICH_SYNCED" -> {
+                            // Rich sync: parse and use RichSyncLyricsLineItem when word-by-word highlight is enabled
+                            effectiveSyncType == "RICH_SYNCED" -> {
                                 val parsedLine =
                                     remember(words, line.startTimeMs, line.endTimeMs) {
                                         LyricsUiPrep.parseRichSyncLineCached(words, line.startTimeMs, line.endTimeMs)
@@ -602,7 +620,7 @@ fun LyricsView(
                                     // Apple-shaped one, or a single unparsable line would render
                                     // at a different size than every line around it.
                                     AppleMusicLyricsLineItem(
-                                        originalWords = words,
+                                        originalWords = plainDisplayWords,
                                         translatedWords = translatedWords,
                                         // Same clause as the line-synced branch below, and it has to
                                         // be here too: [allLinesCurrent] already lifts this line's
@@ -614,7 +632,7 @@ fun LyricsView(
                                 } else {
                                     // Fallback to regular line item if parsing fails
                                     LyricsLineItem(
-                                        originalWords = words,
+                                        originalWords = plainDisplayWords,
                                         translatedWords = translatedWords,
                                         isBold = index <= currentLineIndex,
                                         isCurrent = index == currentLineIndex,
@@ -632,10 +650,10 @@ fun LyricsView(
                                 }
                             }
 
-                            // Line sync or unsynced
+                            // Line sync (or rich sync displayed whole-line) or unsynced
                             appleStyle -> {
                                 AppleMusicLyricsLineItem(
-                                    originalWords = words,
+                                    originalWords = plainDisplayWords,
                                     translatedWords = translatedWords,
                                     romanizedWords = romanizedWords,
                                     // Strictly the sung line — NOT Classic's `|| syncType != LINE_SYNCED`.
@@ -648,17 +666,17 @@ fun LyricsView(
                                 )
                             }
 
-                            // Line sync or unsynced: use existing LyricsLineItem
+                            // Line sync (or rich sync displayed whole-line) or unsynced: use existing LyricsLineItem
                             else -> {
                                 LyricsLineItem(
-                                    originalWords = words,
+                                    originalWords = plainDisplayWords,
                                     translatedWords = translatedWords,
                                     romanizedWords = romanizedWords,
-                                    isBold = index <= currentLineIndex || lyricsData.lyrics.syncType != "LINE_SYNCED",
-                                    isCurrent = index == currentLineIndex || lyricsData.lyrics.syncType != "LINE_SYNCED",
+                                    isBold = index <= currentLineIndex || !isSynced,
+                                    isCurrent = index == currentLineIndex || !isSynced,
                                     modifier =
                                         Modifier
-                                            .clickable(enabled = lyricsData.lyrics.syncType == "LINE_SYNCED") {
+                                            .clickable(enabled = isSynced) {
                                                 val totalMs = timeLine.value.total
                                                 val targetMs = line.startTimeMs.toLongOrNull()
                                                 if (totalMs > 0L && targetMs != null) {
