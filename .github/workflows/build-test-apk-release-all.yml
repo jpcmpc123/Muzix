@@ -9,9 +9,6 @@ name: Build test APK (release, all fixes)
 # runner, only so they can be installed on a real device for testing. This file is
 # NOT part of any fix and must never be included in an upstream pull request.
 on:
-  push:
-    branches:
-      - 'test/all-fixes-release-apk'
   workflow_dispatch:
 
 jobs:
