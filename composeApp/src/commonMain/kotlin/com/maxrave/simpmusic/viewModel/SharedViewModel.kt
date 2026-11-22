@@ -2106,16 +2106,17 @@ class SharedViewModel(
         _lyricsTranslationUiState.update { it.copy(isLoading = true) }
         try {
             val targetLanguage = dataStoreManager.translationLanguage.first().ifBlank { "pt" }
-            val cacheLanguageKey = "${targetLanguage}#v5"
+            val cacheLanguageKey = "${targetLanguage}#v6"
 
             if (bypassCache) {
                 lyricsCanvasRepository.removeTranslatedLyrics(videoId, targetLanguage)
                 lyricsCanvasRepository.removeTranslatedLyrics(videoId, "${targetLanguage}#v2")
                 lyricsCanvasRepository.removeTranslatedLyrics(videoId, "${targetLanguage}#v3")
                 lyricsCanvasRepository.removeTranslatedLyrics(videoId, "${targetLanguage}#v4")
+                lyricsCanvasRepository.removeTranslatedLyrics(videoId, "${targetLanguage}#v5")
                 lyricsCanvasRepository.removeTranslatedLyrics(videoId, cacheLanguageKey)
             } else {
-                // 0. Local Room cache (v5 — auto-upgrades stale split/punctuated translations).
+                // 0. Local Room cache (v6 — auto-upgrades 1-to-N Letras verse merges like Liz).
                 val saved =
                     lyricsCanvasRepository
                         .getSavedTranslatedLyrics(videoId, cacheLanguageKey)
