@@ -610,14 +610,29 @@ private fun SheetButton(
     icon: ImageVector? = null,
     onClick: () -> Unit,
 ) {
+    val colors = rememberSurfaceDarkColors()
     Button(
         onClick = onClick,
+        colors =
+            ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                contentColor = colors.content,
+            ),
         contentPadding = if (icon != null) ButtonDefaults.ButtonWithIconContentPadding else ButtonDefaults.ContentPadding,
     ) {
         if (icon != null) {
-            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = colors.content,
+                modifier = Modifier.size(18.dp),
+            )
             Spacer(Modifier.width(8.dp))
         }
-        Text(text)
+        Text(
+            text = text,
+            color = colors.content,
+            style = typo().labelLarge.copy(fontWeight = FontWeight.SemiBold),
+        )
     }
 }
