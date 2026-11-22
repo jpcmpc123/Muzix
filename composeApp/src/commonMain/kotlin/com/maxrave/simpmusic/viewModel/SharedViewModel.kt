@@ -1798,10 +1798,14 @@ class SharedViewModel(
                     ensureUserProtectedSignaturesLoaded()
 
                     log("Resolve lyrics for ${song.videoId} (preferCache=$preferCache, forceRefresh=$forceRefresh)", LogLevel.WARN)
-                    val firstArtist = song.artistName?.firstOrNull()
+                    val validArtists =
+                        song.artistName
+                            .orEmpty()
+                            .map { it.trim() }
+                            .filter { it.isNotEmpty() && !it.contains("Various Artists", ignoreCase = true) }
                     val artist =
-                        if (!firstArtist.isNullOrBlank() && !firstArtist.contains("Various Artists")) {
-                            firstArtist
+                        if (validArtists.isNotEmpty()) {
+                            validArtists.joinToString(", ")
                         } else {
                             artistHint
                                 ?: mediaPlayerHandler.nowPlaying.first()?.metadata?.artist
@@ -1874,8 +1878,15 @@ class SharedViewModel(
                             }
 
                             is LyricsResolutionEvent.Exhausted -> {
-                                if (event.confirmedInstrumental) {
-                                    pendingLyricsRetryVideoId = null
+                                if (event.confirmedInstrumental || event.cacheInvalidated) {
+                                    if (event.confirmedInstrumental) {
+                                        pendingLyricsRetryVideoId = null
+                                    } else if (!event.definitiveNotFound) {
+                                        hadTransientExhaustion = true
+                                        pendingLyricsRetryVideoId = event.videoId
+                                    } else {
+                                        pendingLyricsRetryVideoId = null
+                                    }
                                     val currentLyrics = _nowPlayingScreenData.value.lyricsData?.lyrics
                                     val isCurrentProtected =
                                         currentLyrics != null &&
