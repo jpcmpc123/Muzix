@@ -39,6 +39,7 @@ import com.maxrave.domain.extension.decodeHtmlEntities
 import com.maxrave.domain.extension.isSong
 import com.maxrave.domain.extension.isVideo
 import com.maxrave.domain.extension.toGenericMediaItem
+import com.maxrave.domain.lyrics.LyricsContentQualityGuard
 import com.maxrave.domain.lyrics.LyricsHeaderSanitizer
 import com.maxrave.domain.lyrics.LyricsLookupRequest
 import com.maxrave.domain.lyrics.LyricsQuality
@@ -1558,15 +1559,19 @@ class SharedViewModel(
                 val decoded = if (alreadyDecoded) inputLyrics else decodeLyricsEntities(inputLyrics)
                 if (!isTranslatedLyrics) {
                     val sanitized = LyricsHeaderSanitizer.sanitize(decoded, trackTitle, trackArtists)
-                    LyricsUiPrep.warmUp(sanitized)
-                    sanitized
+                    if (!LyricsContentQualityGuard.isAcceptableContent(sanitized)) {
+                        return@withContext null
+                    }
+                    val cleaned = LyricsContentQualityGuard.stripAsrSoundCueLines(sanitized)
+                    LyricsUiPrep.warmUp(cleaned)
+                    cleaned
                 } else {
                     if (baselineForWarmup != null) {
                         LyricsUiPrep.warmUpTranslation(baselineForWarmup, decoded)
                     }
                     decoded
                 }
-            }
+            } ?: return null
 
         // Re-check active track after switching dispatchers in case playback moved on mid-decode.
         if (_nowPlayingState.value?.songEntity?.videoId != videoId) return null
@@ -1833,18 +1838,42 @@ class SharedViewModel(
                             }
 
                             is LyricsResolutionEvent.Exhausted -> {
-                                if (!event.definitiveNotFound) {
-                                    hadTransientExhaustion = true
-                                    pendingLyricsRetryVideoId = event.videoId
-                                } else {
+                                if (event.confirmedInstrumental) {
                                     pendingLyricsRetryVideoId = null
-                                }
-                                // The end of every provider and of the offline cache: the one place the app
-                                // knows this song has no lyrics, which is what offers Add lyrics.
-                                if (_nowPlayingState.value?.songEntity?.videoId == event.videoId &&
-                                    _nowPlayingScreenData.value.lyricsData == null
-                                ) {
-                                    _nowPlayingScreenData.update { it.copy(lyricsNotFound = true) }
+                                    val currentLyrics = _nowPlayingScreenData.value.lyricsData?.lyrics
+                                    val isCurrentProtected =
+                                        currentLyrics != null &&
+                                            LyricsQuality.contentSignature(currentLyrics) in userProtectedSignatures
+                                    if (!isCurrentProtected && _nowPlayingState.value?.songEntity?.videoId == event.videoId) {
+                                        pendingYoutubeTranslatedLyrics = null
+                                        translationJob?.cancel()
+                                        translationJob = null
+                                        _lyricsTranslationUiState.value = LyricsTranslationUiState()
+                                        resetLyricsVoteState()
+                                        _nowPlayingScreenData.update {
+                                            it.copy(
+                                                lyricsData = null,
+                                                lyricsNotFound = true,
+                                            )
+                                        }
+                                        viewModelScope.launch {
+                                            lyricsCanvasRepository.removeLyrics(event.videoId)
+                                        }
+                                    }
+                                } else {
+                                    if (!event.definitiveNotFound) {
+                                        hadTransientExhaustion = true
+                                        pendingLyricsRetryVideoId = event.videoId
+                                    } else {
+                                        pendingLyricsRetryVideoId = null
+                                    }
+                                    // The end of every provider and of the offline cache: the one place the app
+                                    // knows this song has no lyrics, which is what offers Add lyrics.
+                                    if (_nowPlayingState.value?.songEntity?.videoId == event.videoId &&
+                                        _nowPlayingScreenData.value.lyricsData == null
+                                    ) {
+                                        _nowPlayingScreenData.update { it.copy(lyricsNotFound = true) }
+                                    }
                                 }
                             }
                         }
