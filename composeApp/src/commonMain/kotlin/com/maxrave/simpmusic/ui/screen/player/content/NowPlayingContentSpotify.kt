@@ -1443,61 +1443,6 @@ fun NowPlayingContentSpotify(
                                             )
                                         }
                                     }
-
-                                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
-                                        Text(
-                                            text =
-                                                when (state.screenData.lyricsData?.lyrics?.syncType) {
-                                                    "LINE_SYNCED" -> stringResource(Res.string.line_synced)
-                                                    "RICH_SYNCED" -> stringResource(Res.string.rich_synced)
-                                                    else -> stringResource(Res.string.unsynced)
-                                                },
-                                            style = typo().bodySmall,
-                                            textAlign = TextAlign.End,
-                                            modifier =
-                                                Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(top = 10.dp),
-                                        )
-                                        Text(
-                                            text =
-                                                when (state.screenData.lyricsData?.lyricsProvider) {
-                                                    LyricsProvider.SIMPMUSIC -> {
-                                                        stringResource(Res.string.lyrics_provider_simpmusic)
-                                                    }
-
-                                                    LyricsProvider.LRCLIB -> {
-                                                        stringResource(Res.string.lyrics_provider_lrc)
-                                                    }
-
-                                                    LyricsProvider.YOUTUBE -> {
-                                                        stringResource(Res.string.lyrics_provider_youtube)
-                                                    }
-
-                                                    LyricsProvider.SPOTIFY -> {
-                                                        stringResource(Res.string.spotify_lyrics_provider)
-                                                    }
-
-                                                    LyricsProvider.OFFLINE -> {
-                                                        stringResource(Res.string.offline_mode)
-                                                    }
-
-                                                    LyricsProvider.BETTER_LYRICS -> {
-                                                        stringResource(Res.string.lyrics_provider_betterlyrics)
-                                                    }
-
-                                                    else -> {
-                                                        ""
-                                                    }
-                                                },
-                                            style = typo().bodySmall,
-                                            textAlign = TextAlign.End,
-                                            modifier =
-                                                Modifier
-                                                    .fillMaxWidth(),
-                                        )
-                                        LyricsTranslationSourceText(translationStateFlow = state.lyricsTranslationStateFlow)
-                                    }
                                 }
                             }
                         }

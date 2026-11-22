@@ -207,49 +207,6 @@ internal fun AppleMusicLyricsView(
                             // the full width.
                             .padding(horizontal = if (rendererOwnsGutter) 0.dp else AppleMusicLyricPaddingX),
                     backgroundColor = Color.Transparent,
-                    footerContent = {
-                        // Right-aligned, and stacked: plain text rather than the AIBadge pill the
-                        // other styles use. Classic puts that badge beside a "Lyrics" heading where
-                        // it has a row to itself; here it would sit inline with the provider
-                        // caption, which is already the quietest thing on the page — a filled pill
-                        // next to it shouts. Two right-anchored lines read as one footnote block.
-                        Column(
-                            horizontalAlignment = Alignment.End,
-                            modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 8.dp),
-                        ) {
-                            if (lyricsData.translatedLyrics?.second == LyricsProvider.AI) {
-                                Text(
-                                    text = stringResource(Res.string.ai_translated),
-                                    style = typography.footer,
-                                    textAlign = TextAlign.End,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
-                            // One line per fact, not one line joined by a bullet. "Word by word"
-                            // and "Lyrics provided by SimpMusic Lyrics" are two different things,
-                            // and glued together they make a single line long enough to run the
-                            // width of the screen.
-                            //
-                            // fillMaxWidth + TextAlign.End on each, not just the Column's
-                            // alignment: Column alignment places a whole text block, so a line that
-                            // wraps still ends up left-aligned within itself.
-                            Text(
-                                text = appleMusicLyricsSyncText(lyricsData),
-                                style = typography.footer,
-                                textAlign = TextAlign.End,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            val provider = appleMusicLyricsProviderText(lyricsData)
-                            if (provider.isNotBlank()) {
-                                Text(
-                                    text = provider,
-                                    style = typography.footer,
-                                    textAlign = TextAlign.End,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
-                        }
-                    },
                 )
                 // Bottom-start, beside the floating buttons and in their flat style, coming and going
                 // with them. Shows only what the remote config places under the lyrics.

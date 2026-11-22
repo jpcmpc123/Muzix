@@ -1566,10 +1566,11 @@ class SharedViewModel(
                     LyricsUiPrep.warmUp(cleaned)
                     cleaned
                 } else {
+                    val cleanedTranslated = LyricsHeaderSanitizer.sanitizeTranslatedLyrics(decoded)
                     if (baselineForWarmup != null) {
-                        LyricsUiPrep.warmUpTranslation(baselineForWarmup, decoded)
+                        LyricsUiPrep.warmUpTranslation(baselineForWarmup, cleanedTranslated)
                     }
-                    decoded
+                    cleanedTranslated
                 }
             } ?: return null
 
@@ -2049,14 +2050,15 @@ class SharedViewModel(
         _lyricsTranslationUiState.update { it.copy(isLoading = true) }
         try {
             val targetLanguage = dataStoreManager.translationLanguage.first().ifBlank { "pt" }
-            val cacheLanguageKey = "${targetLanguage}#v3"
+            val cacheLanguageKey = "${targetLanguage}#v4"
 
             if (bypassCache) {
                 lyricsCanvasRepository.removeTranslatedLyrics(videoId, targetLanguage)
                 lyricsCanvasRepository.removeTranslatedLyrics(videoId, "${targetLanguage}#v2")
+                lyricsCanvasRepository.removeTranslatedLyrics(videoId, "${targetLanguage}#v3")
                 lyricsCanvasRepository.removeTranslatedLyrics(videoId, cacheLanguageKey)
             } else {
-                // 0. Local Room cache (v3 — auto-upgrades stale v1.0.5/v1.0.6 translations).
+                // 0. Local Room cache (v4 — auto-upgrades stale partial/punctuated translations).
                 val saved =
                     lyricsCanvasRepository
                         .getSavedTranslatedLyrics(videoId, cacheLanguageKey)

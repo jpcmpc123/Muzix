@@ -105,6 +105,10 @@ private const val TAG = "LyricsView"
 // below is allowed to run ahead of the last real tick, so a stalled tick — paused playback, a
 // wedged player — can never drift further than the granularity we already live with.
 private const val PLAYHEAD_TICK_MS = 100L
+private const val PLAYHEAD_CEILING_MS = 180L
+internal const val PLAYHEAD_SEEK_BACK_THRESHOLD_MS = 400L
+internal const val PLAYHEAD_SEEK_FORWARD_THRESHOLD_MS = 600L
+internal const val MIN_VISUAL_WORD_SWEEP_MS = 85L
 
 // Emphasis maths ported from AMLL (applemusic-like-lyrics),
 // packages/core/src/lyric-player/dom/lyric-line.ts -> initEmphasizeAnimation. Kept to its exact
@@ -834,6 +838,46 @@ fun LyricsLineItem(
  * Drift is bounded by [PLAYHEAD_TICK_MS]: while the ticks keep coming this never runs more than one
  * tick ahead, and when they stop — paused playback — it settles one tick ahead and stays there.
  */
+internal fun computeMonotonicPlayheadMs(
+    previousPlayheadMs: Long,
+    candidateMs: Long,
+    rawMs: Long,
+): Long {
+    if (previousPlayheadMs <= 0L) return candidateMs
+    if (rawMs < previousPlayheadMs - PLAYHEAD_SEEK_BACK_THRESHOLD_MS) return candidateMs
+    if (rawMs > previousPlayheadMs + PLAYHEAD_SEEK_FORWARD_THRESHOLD_MS) return candidateMs
+    return max(previousPlayheadMs, candidateMs)
+}
+
+internal class WordProgressTracker(
+    var maxProgress: Float = 0f,
+    var lastNowMs: Long = Long.MIN_VALUE,
+)
+
+internal fun computeMonotonicWordProgress(
+    nowMs: Long,
+    wordStartTimeMs: Long,
+    wordEndTimeMs: Long,
+    tracker: WordProgressTracker,
+): Float {
+    if (tracker.lastNowMs != Long.MIN_VALUE && nowMs < tracker.lastNowMs - PLAYHEAD_SEEK_BACK_THRESHOLD_MS) {
+        tracker.maxProgress = 0f
+    }
+    tracker.lastNowMs = nowMs
+
+    val rawDurationMs = (wordEndTimeMs - wordStartTimeMs).coerceAtLeast(1L)
+    val effectiveDurationMs = max(rawDurationMs, MIN_VISUAL_WORD_SWEEP_MS)
+    val rawProgress =
+        when {
+            nowMs <= wordStartTimeMs -> 0f
+            nowMs >= wordStartTimeMs + effectiveDurationMs -> 1f
+            else -> ((nowMs - wordStartTimeMs).toFloat() / effectiveDurationMs.toFloat()).coerceIn(0f, 1f)
+        }
+    val monotonic = max(tracker.maxProgress, rawProgress)
+    tracker.maxProgress = monotonic
+    return monotonic
+}
+
 @Composable
 private fun rememberSmoothPlayhead(
     rawMs: Long,
@@ -843,16 +887,22 @@ private fun rememberSmoothPlayhead(
 ): State<Long> {
     val playhead = remember { mutableLongStateOf(rawMsState?.value ?: rawMs) }
     LaunchedEffect(rawMs, rawMsState, enabled, running) {
+        if (enabled && running) {
+            val initialRaw = rawMsState?.value ?: rawMs
+            if (playhead.longValue == 0L || abs(initialRaw - playhead.longValue) > PLAYHEAD_SEEK_BACK_THRESHOLD_MS) {
+                playhead.longValue = initialRaw
+            }
+        }
         suspend fun runTick(latestRawMs: Long) {
             if (!enabled) {
                 playhead.longValue = latestRawMs
                 return
             }
             if (!running) {
-                // Paused: stop the frame loop and freeze the playhead where the interpolation
-                // stopped — it sits within one tick of rawMs, so the sung word does not move. A
-                // seek while paused moves rawMs outside that window, and the playhead follows it.
-                if (playhead.longValue < latestRawMs || playhead.longValue > latestRawMs + PLAYHEAD_TICK_MS) {
+                // Paused: freeze within one ceiling window unless user seeked while paused.
+                if (playhead.longValue < latestRawMs - PLAYHEAD_SEEK_BACK_THRESHOLD_MS ||
+                    playhead.longValue > latestRawMs + PLAYHEAD_CEILING_MS
+                ) {
                     playhead.longValue = latestRawMs
                 }
                 return
@@ -863,8 +913,14 @@ private fun rememberSmoothPlayhead(
                 withInfiniteAnimationFrameNanos { frameNanos ->
                     if (baseNanos < 0L) baseNanos = frameNanos
                     val elapsedMs = (frameNanos - baseNanos) / 1_000_000L
-                    playhead.longValue = latestRawMs + elapsedMs.coerceIn(0L, PLAYHEAD_TICK_MS)
-                    if (elapsedMs >= PLAYHEAD_TICK_MS) {
+                    val candidateMs = latestRawMs + elapsedMs.coerceIn(0L, PLAYHEAD_CEILING_MS)
+                    playhead.longValue =
+                        computeMonotonicPlayheadMs(
+                            previousPlayheadMs = playhead.longValue,
+                            candidateMs = candidateMs,
+                            rawMs = latestRawMs,
+                        )
+                    if (elapsedMs >= PLAYHEAD_CEILING_MS) {
                         reachedCeiling = true
                     }
                 }
@@ -1057,40 +1113,23 @@ private fun AnimatedWord(
         return
     }
 
-    // Wall-clock wipe driven by an Animatable.
-    // - Future word (not active, not past): progress stays at 0.
-    // - Active word: snap to current % then animateTo(1f) over the remaining duration of the
-    //   word, in real wall-clock time. Independent of timeline emit rate, so wipe is smooth.
-    // - Past word: snap to 1f.
+    // Direct draw-phase monotonic wipe driven by the frame-interpolated playhead:
+    // avoids per-word coroutine startup delay and backward snap jitter on fast vocals.
     val wordDurationMs = (wordEndTimeMs - wordStartTimeMs).coerceAtLeast(1L)
-    val anim =
+    val progressTracker =
         remember(wordStartTimeMs, wordEndTimeMs) {
-            androidx.compose.animation.core.Animatable(if (isPast) 1f else 0f)
+            WordProgressTracker(maxProgress = if (isPast) 1f else 0f)
         }
-
-    LaunchedEffect(wordStartTimeMs, wordEndTimeMs, isActive, isPast) {
-        when {
-            isPast -> anim.snapTo(1f)
-            isActive -> {
-                val now = playheadMs.value
-                val current =
-                    ((now - wordStartTimeMs).toFloat() / wordDurationMs.toFloat())
-                        .coerceIn(0f, 1f)
-                anim.snapTo(current)
-                val remainingMs = (wordEndTimeMs - now).coerceAtLeast(0L).toInt().coerceAtLeast(1)
-                anim.animateTo(1f, tween(remainingMs, easing = LinearEasing))
-            }
-        }
-    }
 
     val readProgress: () -> Float =
-        remember(anim, isActive, isPast) {
+        remember(progressTracker, playheadMs, wordStartTimeMs, wordEndTimeMs) {
             {
-                when {
-                    isPast -> 1f
-                    isActive -> anim.value
-                    else -> 0f
-                }
+                computeMonotonicWordProgress(
+                    nowMs = playheadMs.value,
+                    wordStartTimeMs = wordStartTimeMs,
+                    wordEndTimeMs = wordEndTimeMs,
+                    tracker = progressTracker,
+                )
             }
         }
 
