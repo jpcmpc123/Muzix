@@ -2020,13 +2020,14 @@ class SharedViewModel(
         _lyricsTranslationUiState.update { it.copy(isLoading = true) }
         try {
             val targetLanguage = dataStoreManager.translationLanguage.first().ifBlank { "pt" }
-            val cacheLanguageKey = "${targetLanguage}#v2"
+            val cacheLanguageKey = "${targetLanguage}#v3"
 
             if (bypassCache) {
                 lyricsCanvasRepository.removeTranslatedLyrics(videoId, targetLanguage)
+                lyricsCanvasRepository.removeTranslatedLyrics(videoId, "${targetLanguage}#v2")
                 lyricsCanvasRepository.removeTranslatedLyrics(videoId, cacheLanguageKey)
             } else {
-                // 0. Local Room cache (v2 — auto-upgrades stale v1.0.5 literal translations).
+                // 0. Local Room cache (v3 — auto-upgrades stale v1.0.5/v1.0.6 translations).
                 val saved =
                     lyricsCanvasRepository
                         .getSavedTranslatedLyrics(videoId, cacheLanguageKey)
@@ -2087,45 +2088,47 @@ class SharedViewModel(
 
             if (_nowPlayingState.value?.songEntity?.videoId != videoId) return
 
-            // 1C. Human Brazilian Portuguese translation from Vagalume (when target language is pt).
+            // 1C. Human Brazilian Portuguese translations from Letras.mus.br -> Vagalume fallback.
             val trackState = _nowPlayingState.value
             val songTitle = trackState?.songEntity?.title ?: trackState?.mediaItem?.metadata?.title.orEmpty()
             val artistName =
                 trackState?.songEntity?.artistName?.firstOrNull()
                     ?: trackState?.mediaItem?.metadata?.artist.orEmpty()
             if (simpCode == "pt" && songTitle.isNotBlank() && artistName.isNotBlank()) {
+                val letrasRes =
+                    lyricsCanvasRepository
+                        .getLetrasTranslatedLyrics(songTitle, artistName, originalLyrics, targetLanguage)
+                        .firstOrNull()
+                        ?.data
+                if (letrasRes != null &&
+                    applyHumanPortugueseTranslationResult(
+                        videoId = videoId,
+                        originalLyrics = originalLyrics,
+                        translated = letrasRes.lyrics,
+                        cacheLanguageKey = cacheLanguageKey,
+                        sourceEngine = letrasRes.sourceEngine ?: "letras",
+                    )
+                ) {
+                    return
+                }
+
+                if (_nowPlayingState.value?.songEntity?.videoId != videoId) return
+
                 val vagalumeRes =
                     lyricsCanvasRepository
                         .getVagalumeTranslatedLyrics(songTitle, artistName, originalLyrics, targetLanguage)
                         .firstOrNull()
                         ?.data
-                if (vagalumeRes != null && _nowPlayingState.value?.songEntity?.videoId == videoId) {
-                    lyricsCanvasRepository.insertTranslatedLyrics(
-                        TranslatedLyricsEntity(
-                            videoId = videoId,
-                            language = cacheLanguageKey,
-                            error = false,
-                            lines = vagalumeRes.lyrics.lines,
-                            syncType = vagalumeRes.lyrics.syncType,
-                        ),
+                if (vagalumeRes != null &&
+                    applyHumanPortugueseTranslationResult(
+                        videoId = videoId,
+                        originalLyrics = originalLyrics,
+                        translated = vagalumeRes.lyrics,
+                        cacheLanguageKey = cacheLanguageKey,
+                        sourceEngine = vagalumeRes.sourceEngine ?: "vagalume",
                     )
-                    val applied =
-                        updateLyrics(
-                            videoId = videoId,
-                            duration = 0,
-                            inputLyrics = vagalumeRes.lyrics,
-                            isTranslatedLyrics = true,
-                            lyricsProvider = LyricsProvider.TRANSLATOR,
-                            persistToCache = false,
-                            canContributeToSimpMusic = false,
-                            expectedOriginalLyrics = originalLyrics,
-                        )
-                    if (applied != null) {
-                        _lyricsTranslationUiState.update {
-                            it.copy(isVisible = true, sourceEngine = vagalumeRes.sourceEngine ?: "vagalume")
-                        }
-                        return
-                    }
+                ) {
+                    return
                 }
             }
 
@@ -2211,6 +2214,40 @@ class SharedViewModel(
         } finally {
             _lyricsTranslationUiState.update { it.copy(isLoading = false) }
         }
+    }
+
+    private suspend fun applyHumanPortugueseTranslationResult(
+        videoId: String,
+        originalLyrics: Lyrics,
+        translated: Lyrics,
+        cacheLanguageKey: String,
+        sourceEngine: String,
+    ): Boolean {
+        if (_nowPlayingState.value?.songEntity?.videoId != videoId) return false
+        lyricsCanvasRepository.insertTranslatedLyrics(
+            TranslatedLyricsEntity(
+                videoId = videoId,
+                language = cacheLanguageKey,
+                error = false,
+                lines = translated.lines,
+                syncType = translated.syncType,
+            ),
+        )
+        val applied =
+            updateLyrics(
+                videoId = videoId,
+                duration = 0,
+                inputLyrics = translated,
+                isTranslatedLyrics = true,
+                lyricsProvider = LyricsProvider.TRANSLATOR,
+                persistToCache = false,
+                canContributeToSimpMusic = false,
+                expectedOriginalLyrics = originalLyrics,
+            ) ?: return false
+        _lyricsTranslationUiState.update {
+            it.copy(isVisible = true, sourceEngine = sourceEngine)
+        }
+        return true
     }
 
     private suspend fun trySimpMusicTranslatedLyrics(

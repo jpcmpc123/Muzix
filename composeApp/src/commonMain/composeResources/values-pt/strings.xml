@@ -1193,6 +1193,7 @@
     <string name="lyrics_translation_provider_free">Integrado (Gratuito)</string>
     <string name="lyrics_translation_provider_ai">IA (requer chave de API)</string>
     <string name="retranslating_lyrics">Atualizando tradução…</string>
+    <string name="translation_source_letras">Tradução humana · Letras.mus.br</string>
     <string name="translation_source_vagalume">Tradução humana · Vagalume</string>
     <string name="translation_source_simpmusic">Tradução comunitária · SimpMusic</string>
     <string name="translation_source_youtube">Legenda · YouTube</string>

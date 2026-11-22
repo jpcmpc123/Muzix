@@ -37,6 +37,7 @@ import simpmusic.composeapp.generated.resources.hide_translation
 import simpmusic.composeapp.generated.resources.translate_lyrics
 import simpmusic.composeapp.generated.resources.translation_source_ai
 import simpmusic.composeapp.generated.resources.translation_source_google
+import simpmusic.composeapp.generated.resources.translation_source_letras
 import simpmusic.composeapp.generated.resources.translation_source_microsoft
 import simpmusic.composeapp.generated.resources.translation_source_simpmusic
 import simpmusic.composeapp.generated.resources.translation_source_vagalume
@@ -247,6 +248,7 @@ fun LyricsTranslationSourceText(
     if (!uiState.isVisible) return
     val label =
         when (uiState.sourceEngine) {
+            "letras" -> stringResource(Res.string.translation_source_letras)
             "vagalume" -> stringResource(Res.string.translation_source_vagalume)
             "simpmusic" -> stringResource(Res.string.translation_source_simpmusic)
             "youtube" -> stringResource(Res.string.translation_source_youtube)
