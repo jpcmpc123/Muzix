@@ -1374,6 +1374,12 @@ fun NowPlayingContentSpotify(
                                             }
                                             Spacer(modifier = Modifier.width(8.dp))
                                         }
+                                        com.maxrave.simpmusic.ui.component.CompactLyricsTranslateButton(
+                                            translationStateFlow = state.lyricsTranslationStateFlow,
+                                            cardColor = state.startColor.value,
+                                            onClick = actions.onToggleLyricsTranslation,
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
                                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                                             IconButton(
                                                 onClick = { showShareLyricsSheet = true },
@@ -1431,6 +1437,7 @@ fun NowPlayingContentSpotify(
                                                 onLineClick = { f ->
                                                     actions.onUIEvent(UIEvent.UpdateProgress(f))
                                                 },
+                                                translationStateFlow = state.lyricsTranslationStateFlow,
                                             )
                                         }
                                     }

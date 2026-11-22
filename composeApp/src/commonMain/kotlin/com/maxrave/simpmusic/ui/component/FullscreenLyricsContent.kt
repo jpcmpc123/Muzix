@@ -69,6 +69,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
@@ -103,7 +104,9 @@ import com.maxrave.simpmusic.ui.component.lyrics.toShareLyricsLines
 import com.maxrave.simpmusic.ui.icon.Close
 import com.maxrave.simpmusic.ui.icon.Info
 import com.maxrave.simpmusic.ui.icon.MoreVert
+import com.maxrave.simpmusic.ui.icon.Pause
 import com.maxrave.simpmusic.ui.icon.PictureInPictureAlt
+import com.maxrave.simpmusic.ui.icon.PlayArrow
 import com.maxrave.simpmusic.ui.icon.QueueMusic
 import com.maxrave.simpmusic.ui.icon.Share
 import com.maxrave.simpmusic.ui.icon.AvTimer
@@ -489,94 +492,129 @@ fun FullscreenLyricsContent(
                                     )
                                 },
                             )
-                            LazyColumn {
-                                item {
-                                    // Control Buttons - Animated visibility
-                                    AnimatedVisibility(
-                                        visible = showControlButtons,
-                                        enter =
-                                            expandVertically(
-                                                tween(300),
-                                            ),
-                                        exit =
-                                            shrinkVertically(
-                                                tween(300),
-                                            ),
+                            AnimatedVisibility(
+                                visible = showControlButtons,
+                                enter =
+                                    expandVertically(
+                                        tween(300),
+                                    ),
+                                exit =
+                                    shrinkVertically(
+                                        tween(300),
+                                    ),
+                            ) {
+                                PlayerControlLayout(controllerState) {
+                                    sharedViewModel.onUIEvent(it)
+                                }
+                            }
+                            // Persistent bottom action bar matching the reference screenshot:
+                            // Left: circular '文A' translate toggle (with active '×' badge)
+                            // Center (when full controls collapse): circular white Play/Pause button
+                            // Right: Info + Queue when controls are expanded, Share when collapsed
+                            val playGlyphTint =
+                                if (color.luminance() < 0.55f) color.copy(alpha = 1f) else Color(0xFF1A1A1A)
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 36.dp)
+                                        .padding(top = 8.dp, bottom = 16.dp),
+                            ) {
+                                if (screenDataState.lyricsData != null) {
+                                    FullscreenLyricsTranslateButton(
+                                        translationStateFlow = sharedViewModel.lyricsTranslationUiState,
+                                        accentBackgroundColor = color,
+                                        onClick = { sharedViewModel.toggleLyricsTranslation() },
+                                        modifier = Modifier.align(Alignment.CenterStart),
+                                    )
+                                }
+
+                                if (!showControlButtons) {
+                                    Box(
+                                        modifier =
+                                            Modifier
+                                                .align(Alignment.Center)
+                                                .size(56.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.White)
+                                                .clickable {
+                                                    sharedViewModel.onUIEvent(UIEvent.PlayPause)
+                                                },
+                                        contentAlignment = Alignment.Center,
                                     ) {
-                                        PlayerControlLayout(controllerState) {
-                                            sharedViewModel.onUIEvent(it)
-                                        }
+                                        Icon(
+                                            imageVector =
+                                                if (controllerState.isPlaying) {
+                                                    SimpIcons.Pause
+                                                } else {
+                                                    SimpIcons.PlayArrow
+                                                },
+                                            contentDescription = "",
+                                            tint = playGlyphTint,
+                                            modifier = Modifier.size(30.dp),
+                                        )
                                     }
-                                    AnimatedVisibility(
-                                        visible = showControlButtons,
-                                        enter =
-                                            expandVertically(
-                                                tween(300),
-                                            ),
-                                        exit =
-                                            shrinkVertically(
-                                                tween(300),
-                                            ),
-                                    ) {
-                                        // List Bottom Buttons
-                                        Box(
+                                }
+
+                                Row(
+                                    modifier = Modifier.align(Alignment.CenterEnd),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    if (showControlButtons) {
+                                        IconButton(
                                             modifier =
                                                 Modifier
-                                                    .height(32.dp)
-                                                    .fillMaxWidth()
-                                                    .padding(horizontal = 40.dp),
+                                                    .size(36.dp)
+                                                    .clip(CircleShape),
+                                            onClick = {
+                                                showInfoBottomSheet = true
+                                                showControlButtons = true
+                                            },
                                         ) {
-                                            IconButton(
-                                                modifier =
-                                                    Modifier
-                                                        .size(24.dp)
-                                                        .aspectRatio(1f)
-                                                        .align(Alignment.CenterStart)
-                                                        .clip(
-                                                            CircleShape,
-                                                        ),
-                                                onClick = {
-                                                    showInfoBottomSheet = true
-                                                    showControlButtons = true
-                                                },
-                                            ) {
-                                                Icon(imageVector = SimpIcons.Info, tint = Color.White, contentDescription = "")
-                                            }
-                                            Row(
-                                                Modifier.align(Alignment.CenterEnd),
-                                            ) {
-                                                Spacer(modifier = Modifier.size(8.dp))
-                                                IconButton(
-                                                    modifier =
-                                                        Modifier
-                                                            .size(24.dp)
-                                                            .aspectRatio(1f)
-                                                            .clip(
-                                                                CircleShape,
-                                                            ),
-                                                    onClick = {
-                                                        showQueueBottomSheet = true
-                                                        showControlButtons = true
-                                                    },
-                                                ) {
-                                                    Icon(
-                                                        imageVector = SimpIcons.QueueMusic,
-                                                        tint = Color.White,
-                                                        contentDescription = "",
-                                                    )
-                                                }
-                                            }
+                                            Icon(
+                                                imageVector = SimpIcons.Info,
+                                                tint = Color.White,
+                                                contentDescription = "",
+                                                modifier = Modifier.size(22.dp),
+                                            )
                                         }
-                                        Spacer(modifier = Modifier.height(20.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        IconButton(
+                                            modifier =
+                                                Modifier
+                                                    .size(36.dp)
+                                                    .clip(CircleShape),
+                                            onClick = {
+                                                showQueueBottomSheet = true
+                                                showControlButtons = true
+                                            },
+                                        ) {
+                                            Icon(
+                                                imageVector = SimpIcons.QueueMusic,
+                                                tint = Color.White,
+                                                contentDescription = "",
+                                                modifier = Modifier.size(22.dp),
+                                            )
+                                        }
+                                    } else if (screenDataState.lyricsData != null) {
+                                        IconButton(
+                                            modifier =
+                                                Modifier
+                                                    .size(44.dp)
+                                                    .clip(CircleShape),
+                                            onClick = { showShareLyricsSheet = true },
+                                        ) {
+                                            Icon(
+                                                imageVector = SimpIcons.Share,
+                                                tint = Color.White,
+                                                contentDescription = stringResource(Res.string.share_lyrics),
+                                                modifier = Modifier.size(24.dp),
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-
-                    // When control buttons are hidden, add spacer to maintain proper spacing
-                    if (!showControlButtons) {
-                        Spacer(modifier = Modifier.height(20.dp))
                     }
                 }
             }
@@ -1008,6 +1046,7 @@ private fun FullscreenLyricsLandscape(
                     sharedViewModel = sharedViewModel,
                     color = color,
                     backdrop = backdrop,
+                    showFloatingTranslateButton = true,
                 )
             }
         }
@@ -1163,6 +1202,7 @@ private fun FullscreenLyricsList(
     sharedViewModel: SharedViewModel,
     color: Color,
     backdrop: PlatformBackdrop,
+    showFloatingTranslateButton: Boolean = false,
 ) {
     val lyricsOffsetMs by sharedViewModel.getLyricsOffsetMs().collectAsStateWithLifecycle(0)
     val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
@@ -1183,6 +1223,7 @@ private fun FullscreenLyricsList(
                         modifier = Modifier.fillMaxSize(),
                         showScrollShadows = true,
                         backgroundColor = color,
+                        translationStateFlow = sharedViewModel.lyricsTranslationUiState,
                     )
                 }
             } else {
@@ -1203,14 +1244,26 @@ private fun FullscreenLyricsList(
         // floating chrome. Shows only what the remote config places under the lyrics, and only over
         // lyrics, as on the Apple Music player's Lyrics tab.
         if (lyricsData != null) {
-            LyricsPromoLine(
-                backdrop = backdrop,
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 12.dp, end = 72.dp, bottom = 12.dp),
-                sharedViewModel = sharedViewModel,
-            )
+            if (showFloatingTranslateButton) {
+                FullscreenLyricsTranslateButton(
+                    translationStateFlow = sharedViewModel.lyricsTranslationUiState,
+                    accentBackgroundColor = color,
+                    onClick = { sharedViewModel.toggleLyricsTranslation() },
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 12.dp, bottom = 12.dp),
+                )
+            } else {
+                LyricsPromoLine(
+                    backdrop = backdrop,
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 12.dp, end = 72.dp, bottom = 12.dp),
+                    sharedViewModel = sharedViewModel,
+                )
+            }
         }
         // Here rather than in either layout, so portrait, landscape and Desktop all get it. Bottom-end,
         // over the dimmest lines. Glass, like the rest of this page's floating chrome.

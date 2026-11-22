@@ -15,10 +15,15 @@ import com.maxrave.domain.data.player.GenericCastState
 import com.maxrave.domain.mediaservice.handler.ControlState
 import com.maxrave.simpmusic.extension.GradientOffset
 import com.maxrave.simpmusic.viewModel.LyricsProvider
+import com.maxrave.simpmusic.viewModel.LyricsTranslationUiState
 import com.maxrave.simpmusic.viewModel.NowPlayingScreenData
 import com.maxrave.simpmusic.viewModel.UIEvent
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.roundToInt
+
+private val EmptyLyricsTranslationStateFlow: StateFlow<LyricsTranslationUiState> =
+    MutableStateFlow(LyricsTranslationUiState())
 
 /**
  * Whether the lyrics currently on screen can be rated.
@@ -152,6 +157,8 @@ data class NowPlayingContentState(
      * at startup is still being rebuilt: the same id the comments sheet uses.
      */
     val videoId: String? = null,
+    /** Isolated lyrics translation visibility/loading state flow to avoid recomposing the player. */
+    val lyricsTranslationStateFlow: StateFlow<LyricsTranslationUiState> = EmptyLyricsTranslationStateFlow,
 )
 
 /**
@@ -181,6 +188,8 @@ class NowPlayingContentActions(
     val onShowVoteDialog: () -> Unit,
     /** Writes the lyrics timing offset — the same value Settings › Lyrics edits. */
     val onLyricsOffsetChange: (Int) -> Unit,
+    /** Toggles on-demand lyrics translation visibility/fetching for the current song. */
+    val onToggleLyricsTranslation: () -> Unit = {},
     val onEnterFullscreenVideo: () -> Unit,
     val onDismiss: () -> Unit,
     val onToolbarVisibilityChange: (Boolean) -> Unit,

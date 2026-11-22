@@ -127,6 +127,10 @@ class SettingsViewModel(
 
     private var _translationLanguage: MutableStateFlow<String?> = MutableStateFlow(null)
     val translationLanguage: StateFlow<String?> = _translationLanguage
+    private val _autoTranslateLyrics = MutableStateFlow(false)
+    val autoTranslateLyrics: StateFlow<Boolean> = _autoTranslateLyrics
+    private val _lyricsTranslationMode = MutableStateFlow(DataStoreManager.LYRICS_TRANSLATION_MODE_FREE)
+    val lyricsTranslationMode: StateFlow<String> = _lyricsTranslationMode
     private var _useTranslation: MutableStateFlow<String?> = MutableStateFlow(null)
     val useTranslation: StateFlow<String?> = _useTranslation
     private var _playerCacheLimit: MutableStateFlow<Int?> = MutableStateFlow(null)
@@ -299,6 +303,8 @@ class SettingsViewModel(
             getSavedPlaybackState()
             getSendBackToGoogle()
             getTranslationLanguage()
+            getAutoTranslateLyrics()
+            getLyricsTranslationMode()
             getYoutubeSubtitleLanguage()
             getLyricsProvider()
             getLyricsOffsetMs()
@@ -1038,6 +1044,34 @@ class SettingsViewModel(
     fun setTranslationLanguage(language: String) {
         viewModelScope.launch {
             dataStoreManager.setTranslationLanguage(language)
+        }
+    }
+
+    private fun getAutoTranslateLyrics() {
+        viewModelScope.launch {
+            dataStoreManager.autoTranslateLyrics.collect { enabled ->
+                _autoTranslateLyrics.value = enabled == DataStoreManager.TRUE
+            }
+        }
+    }
+
+    fun setAutoTranslateLyrics(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setAutoTranslateLyrics(enabled)
+        }
+    }
+
+    private fun getLyricsTranslationMode() {
+        viewModelScope.launch {
+            dataStoreManager.lyricsTranslationMode.collect { mode ->
+                _lyricsTranslationMode.value = mode
+            }
+        }
+    }
+
+    fun setLyricsTranslationMode(mode: String) {
+        viewModelScope.launch {
+            dataStoreManager.setLyricsTranslationMode(mode)
         }
     }
 

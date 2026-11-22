@@ -690,6 +690,7 @@ fun NowPlayingScreenContent(
             lyricsOffsetMs = lyricsOffsetMs.toLong(),
             videoAspectRatio = rememberVideoAspectRatio(MAIN_PLAYER) ?: 16f / 9,
             videoId = commentsVideoId,
+            lyricsTranslationStateFlow = sharedViewModel.lyricsTranslationUiState,
         )
     // Remembered once: a fresh actions object per recomposition would defeat the
     // frozen content state (the contents compare both parameters). Every callback
@@ -751,6 +752,7 @@ fun NowPlayingScreenContent(
             onShowFullscreenLyrics = { showFullscreenLyrics = true },
             onShowVoteDialog = { showVoteDialog = true },
             onLyricsOffsetChange = { sharedViewModel.setLyricsOffsetMs(it) },
+            onToggleLyricsTranslation = { sharedViewModel.toggleLyricsTranslation() },
             onEnterFullscreenVideo = {
                 onDismiss()
                 navController.navigate(FullscreenDestination)

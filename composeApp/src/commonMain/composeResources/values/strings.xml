@@ -1203,4 +1203,13 @@
     <string name="equalizer_preset_treble_booster">Treble booster</string>
     <string name="equalizer_preset_treble_reducer">Treble reducer</string>
     <string name="equalizer_preset_vocal_booster">Vocal booster</string>
+    <string name="translate_lyrics">Translate lyrics</string>
+    <string name="hide_translation">Hide translation</string>
+    <string name="lyrics_already_in_language">Lyrics are already in your language</string>
+    <string name="translation_failed">Could not translate lyrics</string>
+    <string name="auto_translate_lyrics">Auto-translate lyrics</string>
+    <string name="auto_translate_lyrics_description">Automatically translate lyrics when a song starts (off by default to save battery and data)</string>
+    <string name="lyrics_translation_provider">Translation engine</string>
+    <string name="lyrics_translation_provider_free">Built-in (Free)</string>
+    <string name="lyrics_translation_provider_ai">AI (requires API key)</string>
 </resources>

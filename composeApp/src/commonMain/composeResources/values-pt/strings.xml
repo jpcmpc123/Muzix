@@ -1183,4 +1183,13 @@
     <string name="equalizer_preset_treble_booster">Reforço de agudos</string>
     <string name="equalizer_preset_treble_reducer">Redutor de agudos</string>
     <string name="equalizer_preset_vocal_booster">Reforço vocal</string>
+    <string name="translate_lyrics">Traduzir letra</string>
+    <string name="hide_translation">Ocultar tradução</string>
+    <string name="lyrics_already_in_language">A letra já está no seu idioma</string>
+    <string name="translation_failed">Não foi possível traduzir a letra</string>
+    <string name="auto_translate_lyrics">Traduzir letras automaticamente</string>
+    <string name="auto_translate_lyrics_description">Traduz a letra automaticamente ao iniciar a música (desativado por padrão para economizar bateria e dados)</string>
+    <string name="lyrics_translation_provider">Motor de tradução</string>
+    <string name="lyrics_translation_provider_free">Integrado (Gratuito)</string>
+    <string name="lyrics_translation_provider_ai">IA (requer chave de API)</string>
 </resources>

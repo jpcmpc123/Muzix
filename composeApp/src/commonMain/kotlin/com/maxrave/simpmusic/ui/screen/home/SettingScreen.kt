@@ -450,6 +450,11 @@ import simpmusic.composeapp.generated.resources.theme_mode_light
 import simpmusic.composeapp.generated.resources.theme_mode_system
 import simpmusic.composeapp.generated.resources.third_party_libraries
 import simpmusic.composeapp.generated.resources.thumbnail_cache
+import simpmusic.composeapp.generated.resources.auto_translate_lyrics
+import simpmusic.composeapp.generated.resources.auto_translate_lyrics_description
+import simpmusic.composeapp.generated.resources.lyrics_translation_provider
+import simpmusic.composeapp.generated.resources.lyrics_translation_provider_ai
+import simpmusic.composeapp.generated.resources.lyrics_translation_provider_free
 import simpmusic.composeapp.generated.resources.translation_language
 import simpmusic.composeapp.generated.resources.translation_language_message
 import simpmusic.composeapp.generated.resources.unknown
@@ -586,6 +591,8 @@ fun SettingScreen(
     val isHasApiKey by viewModel.isHasApiKey.collectAsStateWithLifecycle()
     val useAITranslation by viewModel.useAITranslation.collectAsStateWithLifecycle()
     val translationLanguage by viewModel.translationLanguage.collectAsStateWithLifecycle()
+    val autoTranslateLyrics by viewModel.autoTranslateLyrics.collectAsStateWithLifecycle()
+    val lyricsTranslationMode by viewModel.lyricsTranslationMode.collectAsStateWithLifecycle()
     val customModelId by viewModel.customModelId.collectAsStateWithLifecycle()
     val customOpenAIBaseUrl by viewModel.customOpenAIBaseUrl.collectAsStateWithLifecycle()
     val customOpenAIHeaders by viewModel.customOpenAIHeaders.collectAsStateWithLifecycle()
@@ -1854,6 +1861,49 @@ fun SettingScreen(
                         )
                     },
                     isEnable = true,
+                )
+                SettingItem(
+                    title = stringResource(Res.string.auto_translate_lyrics),
+                    subtitle = stringResource(Res.string.auto_translate_lyrics_description),
+                    switch = (autoTranslateLyrics to { viewModel.setAutoTranslateLyrics(it) }),
+                )
+                SettingItem(
+                    title = stringResource(Res.string.lyrics_translation_provider),
+                    subtitle =
+                        when (lyricsTranslationMode) {
+                            DataStoreManager.LYRICS_TRANSLATION_MODE_AI -> stringResource(Res.string.lyrics_translation_provider_ai)
+                            else -> stringResource(Res.string.lyrics_translation_provider_free)
+                        },
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.lyrics_translation_provider) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect =
+                                            listOf(
+                                                (lyricsTranslationMode != DataStoreManager.LYRICS_TRANSLATION_MODE_AI) to
+                                                    runBlocking { getString(Res.string.lyrics_translation_provider_free) },
+                                                (lyricsTranslationMode == DataStoreManager.LYRICS_TRANSLATION_MODE_AI) to
+                                                    runBlocking { getString(Res.string.lyrics_translation_provider_ai) },
+                                            ),
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        val selected = state.selectOne?.getSelected()
+                                        val aiLabel = runBlocking { getString(Res.string.lyrics_translation_provider_ai) }
+                                        viewModel.setLyricsTranslationMode(
+                                            if (selected == aiLabel) {
+                                                DataStoreManager.LYRICS_TRANSLATION_MODE_AI
+                                            } else {
+                                                DataStoreManager.LYRICS_TRANSLATION_MODE_FREE
+                                            },
+                                        )
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
                 )
                 SettingItem(
                     title = stringResource(Res.string.youtube_subtitle_language),

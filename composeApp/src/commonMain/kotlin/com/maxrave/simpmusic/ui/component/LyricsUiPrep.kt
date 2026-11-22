@@ -7,6 +7,7 @@ import com.maxrave.domain.repository.LyricsRomanizerRepository
 import com.maxrave.simpmusic.extension.ParsedRichSyncLine
 import com.maxrave.simpmusic.extension.parseRichSyncWords
 import com.maxrave.simpmusic.ui.screen.player.content.stripRichSyncTimestamps
+import kotlin.math.abs
 
 private const val INTERLUDE_MIN_GAP_MS = 3_000L
 private const val INTERLUDE_DOT_COUNT = 3
@@ -14,6 +15,7 @@ private const val INTERLUDE_DOT = "\u2022"
 private const val RICH_SYNC_CACHE_MAX_ENTRIES = 512
 private const val DISPLAY_LINES_CACHE_MAX_ENTRIES = 16
 private const val ROMANIZATION_CACHE_MAX_ENTRIES = 16
+private const val TRANSLATION_CACHE_MAX_ENTRIES = 16
 
 internal data class DisplayLines(
     val lines: List<Line>,
@@ -43,6 +45,12 @@ private data class RomanizationCacheKey(
     val japaneseReady: Boolean,
 )
 
+private data class TranslationCacheKey(
+    val originalLines: List<Line>,
+    val translatedLines: List<Line>,
+    val thresholdMs: Long,
+)
+
 internal object LyricsUiPrep {
     private val richSyncLock = Any()
     private val richSyncCache =
@@ -66,6 +74,14 @@ internal object LyricsUiPrep {
             override fun removeEldestEntry(
                 eldest: MutableMap.MutableEntry<RomanizationCacheKey, Map<Int, String>>?,
             ): Boolean = size > ROMANIZATION_CACHE_MAX_ENTRIES
+        }
+
+    private val translationLock = Any()
+    private val translationCache =
+        object : LinkedHashMap<TranslationCacheKey, Map<Int, String>>(16, 0.75f, true) {
+            override fun removeEldestEntry(
+                eldest: MutableMap.MutableEntry<TranslationCacheKey, Map<Int, String>>?,
+            ): Boolean = size > TRANSLATION_CACHE_MAX_ENTRIES
         }
 
     fun parseRichSyncLineCached(
@@ -163,6 +179,37 @@ internal object LyricsUiPrep {
         return computed
     }
 
+    fun peekTranslatedLineMap(
+        originalLines: List<Line>,
+        translatedLines: List<Line>?,
+        thresholdMs: Long = 1000L,
+    ): Map<Int, String>? {
+        val translated = translatedLines.orEmpty()
+        if (originalLines.isEmpty() || translated.isEmpty()) return emptyMap()
+        val key = TranslationCacheKey(originalLines, translated, thresholdMs)
+        synchronized(translationLock) {
+            return translationCache[key]
+        }
+    }
+
+    fun getOrBuildTranslatedLineMap(
+        originalLines: List<Line>,
+        translatedLines: List<Line>?,
+        thresholdMs: Long = 1000L,
+    ): Map<Int, String> {
+        val translated = translatedLines.orEmpty()
+        if (originalLines.isEmpty() || translated.isEmpty()) return emptyMap()
+        val key = TranslationCacheKey(originalLines, translated, thresholdMs)
+        synchronized(translationLock) {
+            translationCache[key]?.let { return it }
+        }
+        val built = computeSyncedTranslatedWordsByLineIndex(originalLines, translated, thresholdMs)
+        synchronized(translationLock) {
+            translationCache[key] = built
+        }
+        return built
+    }
+
     fun warmUp(lyrics: Lyrics) {
         val lines = lyrics.lines ?: return
         if (lyrics.syncType != "RICH_SYNCED") return
@@ -172,10 +219,114 @@ internal object LyricsUiPrep {
         }
     }
 
+    fun warmUpTranslation(
+        originalLyrics: Lyrics,
+        translatedLyrics: Lyrics,
+        thresholdMs: Long = 1000L,
+    ) {
+        val origLines = originalLyrics.lines ?: return
+        val transLines = translatedLyrics.lines ?: return
+        val display = getOrBuildDisplayLines(origLines, originalLyrics.syncType)
+        getOrBuildTranslatedLineMap(display.lines, transLines, thresholdMs)
+    }
+
     fun clearCachesForTest() {
         synchronized(richSyncLock) { richSyncCache.clear() }
         synchronized(displayLinesLock) { displayLinesCache.clear() }
         synchronized(romanizationLock) { romanizationCache.clear() }
+        synchronized(translationLock) { translationCache.clear() }
+    }
+
+    /**
+     * Maps each original line index to its closest translated line within [thresholdMs].
+     *
+     * Fast path (`O(N)`, zero sorting): when both lists have the exact same size and every entry's
+     * `startTimeMs` matches 1-to-1 (always true for Free/AI translations), maps directly in one
+     * pass. Falls back to the deterministic two-pointer alignment for community translations whose
+     * line counts or timestamps differ. Blank translated lines are omitted so Compose skips
+     * composing empty subtitle rows.
+     */
+    internal fun computeSyncedTranslatedWordsByLineIndex(
+        originalLines: List<Line>,
+        translatedLines: List<Line>,
+        thresholdMs: Long = 1000L,
+    ): Map<Int, String> {
+        if (originalLines.isEmpty() || translatedLines.isEmpty()) return emptyMap()
+
+        if (originalLines.size == translatedLines.size && isAlignedOneToOne(originalLines, translatedLines, thresholdMs)) {
+            val fastResult = HashMap<Int, String>(originalLines.size)
+            for (i in originalLines.indices) {
+                val words = translatedLines[i].words.trim()
+                if (words.isNotEmpty()) {
+                    fastResult[i] = words
+                }
+            }
+            return fastResult
+        }
+
+        val sortedTranslated =
+            translatedLines
+                .mapNotNull { line ->
+                    val words = line.words.trim()
+                    if (words.isEmpty()) return@mapNotNull null
+                    val ts = line.startTimeMs.toLongOrNull() ?: return@mapNotNull null
+                    ts to words
+                }.sortedBy { it.first }
+
+        if (sortedTranslated.isEmpty()) return emptyMap()
+
+        data class OriginalEntry(
+            val index: Int,
+            val ts: Long,
+        )
+
+        val sortedOriginal =
+            originalLines
+                .mapIndexedNotNull { index, line ->
+                    val ts = line.startTimeMs.toLongOrNull() ?: return@mapIndexedNotNull null
+                    OriginalEntry(index, ts)
+                }.sortedBy { it.ts }
+
+        if (sortedOriginal.isEmpty()) return emptyMap()
+
+        val result = HashMap<Int, String>(sortedOriginal.size)
+        var j = 0
+        for (orig in sortedOriginal) {
+            while (j + 1 < sortedTranslated.size && sortedTranslated[j + 1].first <= orig.ts) {
+                j++
+            }
+            val candA = sortedTranslated[j]
+            var bestWords = candA.second
+            var bestDiff = abs(candA.first - orig.ts)
+            if (j + 1 < sortedTranslated.size) {
+                val candB = sortedTranslated[j + 1]
+                val diffB = abs(candB.first - orig.ts)
+                if (diffB < bestDiff) {
+                    bestWords = candB.second
+                    bestDiff = diffB
+                }
+            }
+            if (bestDiff < thresholdMs) {
+                result[orig.index] = bestWords
+            }
+        }
+        return result
+    }
+
+    private fun isAlignedOneToOne(
+        originalLines: List<Line>,
+        translatedLines: List<Line>,
+        thresholdMs: Long,
+    ): Boolean {
+        for (i in originalLines.indices) {
+            val origStart = originalLines[i].startTimeMs
+            val transStart = translatedLines[i].startTimeMs
+            if (origStart == transStart) continue
+            val origMs = origStart.toLongOrNull() ?: return false
+            val transMs = transStart.toLongOrNull() ?: return false
+            if (abs(origMs - transMs) >= thresholdMs) return false
+        }
+        return true
     }
 
     /**

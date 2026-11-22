@@ -83,6 +83,7 @@ import com.maxrave.simpmusic.extension.animateScrollAndAnchorItemTop
 import com.maxrave.simpmusic.extension.animateScrollAndCentralizeItem
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.viewModel.LyricsTranslationUiState
 import com.maxrave.simpmusic.viewModel.NowPlayingScreenData
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import kotlinx.coroutines.Dispatchers
@@ -204,7 +205,8 @@ private fun empEasing(x: Float): Float =
 // Repeated lyrics palette tokens hoisted to file scope: avoids re-allocating
 // the same Color() objects on every recomposition of every line item.
 private val DimOriginalColor = Color.LightGray.copy(alpha = 0.35f)
-private val DimTranslatedColor = Color(0xFF97971A).copy(alpha = 0.3f)
+private val ClassicTranslatedColor = Color.White.copy(alpha = 0.86f)
+private val ClassicDimTranslatedColor = Color.White.copy(alpha = 0.42f)
 
 // A pronunciation guide sits BETWEEN the original and its translation in meaning, so it does the
 // same visually: neutral grey rather than the translation's yellow, dimmer than the original it
@@ -246,78 +248,6 @@ internal fun List<TimedLineIndex>.activeIndexAt(nowMs: Long): Int {
     return if (ans >= 0) this[ans].index else -1
 }
 
-/**
- * Builds a [Map] from each ORIGINAL line index to its closest synced translated `words`
- * within [thresholdMs]. Two-pointer over both sorted lists; on ties an earlier translated
- * line (smaller startTimeMs in the sorted list) wins for determinism.
- *
- * Lines with invalid `startTimeMs` on either side are skipped.
- */
-private fun buildSyncedTranslatedWordsByLineIndex(
-    originalLines: List<com.maxrave.domain.data.model.metadata.Line>,
-    translatedLines: List<com.maxrave.domain.data.model.metadata.Line>,
-    thresholdMs: Long = 1000L,
-): Map<Int, String> {
-    if (originalLines.isEmpty() || translatedLines.isEmpty()) return emptyMap()
-
-    // Sort translated entries by start time. We keep the original list order as a
-    // tie-breaker via stable sort: the FIRST translated line in the SORTED list wins
-    // when the time delta is equal.
-    val sortedTranslated =
-        translatedLines
-            .mapNotNull { line ->
-                val ts = line.startTimeMs.toLongOrNull() ?: return@mapNotNull null
-                ts to line.words
-            }.sortedBy { it.first }
-
-    if (sortedTranslated.isEmpty()) return emptyMap()
-
-    // Original lines paired with their parsed timestamp + original index, sorted by time.
-    data class OriginalEntry(val index: Int, val ts: Long)
-
-    val sortedOriginal =
-        originalLines
-            .mapIndexedNotNull { index, line ->
-                val ts = line.startTimeMs.toLongOrNull() ?: return@mapIndexedNotNull null
-                OriginalEntry(index, ts)
-            }.sortedBy { it.ts }
-
-    if (sortedOriginal.isEmpty()) return emptyMap()
-
-    val result = HashMap<Int, String>(sortedOriginal.size)
-    var j = 0
-    for (orig in sortedOriginal) {
-        // Advance j so that sortedTranslated[j] is the first translated entry with ts >= orig.ts,
-        // or the last entry if everything is smaller.
-        while (j + 1 < sortedTranslated.size && sortedTranslated[j + 1].first <= orig.ts) {
-            j++
-        }
-        // Candidate window: j and j+1 (the next one), pick whichever is closer.
-        val candA = sortedTranslated[j]
-        val diffA = abs(candA.first - orig.ts)
-        var bestTs = candA.first
-        var bestWords = candA.second
-        var bestDiff = diffA
-        if (j + 1 < sortedTranslated.size) {
-            val candB = sortedTranslated[j + 1]
-            val diffB = abs(candB.first - orig.ts)
-            // Tie-break: prefer earlier (smaller startTimeMs) translated line.
-            if (diffB < bestDiff) {
-                bestTs = candB.first
-                bestWords = candB.second
-                bestDiff = diffB
-            }
-        }
-        if (bestDiff < thresholdMs) {
-            result[orig.index] = bestWords
-            // Suppress unused warning while keeping the chosen ts visible for future tweaks.
-            @Suppress("UNUSED_VARIABLE")
-            val _bt = bestTs
-        }
-    }
-    return result
-}
-
 @Composable
 fun LyricsView(
     lyricsData: NowPlayingScreenData.LyricsData,
@@ -334,6 +264,9 @@ fun LyricsView(
     // the lyrics instead of sitting anchored below them. Null by default: every existing caller
     // renders exactly as before.
     footerContent: (@Composable () -> Unit)? = null,
+    // Optional isolated translation visibility flow: when provided, toggling translation recomposes
+    // only LyricsView and the translate button, and short-circuits translated rows when hidden.
+    translationStateFlow: StateFlow<LyricsTranslationUiState>? = null,
     dataStoreManager: DataStoreManager = koinInject(),
     romanizer: LyricsRomanizerRepository = koinInject(),
 ) {
@@ -344,6 +277,12 @@ fun LyricsView(
     // latter is also true for the player's own animated scroll, which must stay blurred.
     val isDragging by listState.interactionSource.collectIsDraggedAsState()
     val timeLineState = timeLine.collectAsStateWithLifecycle()
+    val isTranslationVisible =
+        if (translationStateFlow != null) {
+            translationStateFlow.collectAsStateWithLifecycle().value.isVisible
+        } else {
+            true
+        }
 
     // The listener's audio-delay correction, applied HERE rather than to the lyric rows: the rows
     // are cached in Room and shared with the community lyrics database, so a local correction must
@@ -489,16 +428,31 @@ fun LyricsView(
     // on its way and PRE_ROLL_LINE_ALPHA deliberately keeps the page dimmer than it.
     val allLinesCurrent = timedLineIndexes.isEmpty()
 
-    val syncedTranslatedWordsByLineIndex =
-        remember(
-            displayLines,
-            lyricsData.translatedLyrics?.first?.lines,
+    val visibleTranslatedLines = if (isTranslationVisible) lyricsData.translatedLyrics?.first?.lines else null
+    val syncedTranslatedWordsByLineIndex by
+        produceState(
+            initialValue =
+                if (visibleTranslatedLines.isNullOrEmpty()) {
+                    emptyMap()
+                } else {
+                    LyricsUiPrep.peekTranslatedLineMap(displayLines.lines, visibleTranslatedLines) ?: emptyMap()
+                },
+            key1 = displayLines,
+            key2 = visibleTranslatedLines,
         ) {
-            buildSyncedTranslatedWordsByLineIndex(
-                originalLines = displayLines.lines,
-                translatedLines = lyricsData.translatedLyrics?.first?.lines.orEmpty(),
-                thresholdMs = 1000L,
-            )
+            if (visibleTranslatedLines.isNullOrEmpty()) {
+                value = emptyMap()
+                return@produceState
+            }
+            val cached = LyricsUiPrep.peekTranslatedLineMap(displayLines.lines, visibleTranslatedLines)
+            if (cached != null) {
+                value = cached
+                return@produceState
+            }
+            value =
+                withContext(Dispatchers.Default) {
+                    LyricsUiPrep.getOrBuildTranslatedLineMap(displayLines.lines, visibleTranslatedLines)
+                }
         }
     // The Apple Music handover: rows set off one behind another instead of as one block. Per sheet,
     // so a new song's first line counts as the next line rather than as a jump.
@@ -564,15 +518,14 @@ fun LyricsView(
                 // Translated lyrics: synced -> precomputed map by line index, unsynced -> by index.
                 val translatedWords =
                     when {
-                        isInterlude -> null
+                        !isTranslationVisible || isInterlude -> null
                         lyricsData.lyrics.syncType == "LINE_SYNCED" || lyricsData.lyrics.syncType == "RICH_SYNCED" ->
                             syncedTranslatedWordsByLineIndex[index]
                         else ->
-                            lyricsData.translatedLyrics
-                                ?.first
-                                ?.lines
+                            visibleTranslatedLines
                                 ?.getOrNull(index)
                                 ?.words
+                                ?.takeIf { it.isNotBlank() }
                     }
 
                 line?.words?.let { words ->
@@ -849,13 +802,13 @@ fun LyricsLineItem(
                     color = if (bold && isCurrent) DimRomanizedCurrentColor else DimRomanizedColor,
                 )
             }
-            if (translatedWords != null) {
+            if (!translatedWords.isNullOrBlank()) {
                 LyricText(
                     text = translatedWords,
                     alignmentText = originalWords,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
                     style = typo().bodyMedium,
-                    color = if (bold && isCurrent) Color.Yellow else DimTranslatedColor,
+                    color = if (bold && isCurrent) ClassicTranslatedColor else ClassicDimTranslatedColor,
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -1047,13 +1000,13 @@ fun RichSyncLyricsLineItem(
         }
 
         // Translated lyrics (line-level, no word sync)
-        if (translatedWords != null) {
+        if (!translatedWords.isNullOrBlank()) {
             LyricText(
                 text = translatedWords,
                 alignmentText = originalWords,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
                 style = translatedStyleOverride ?: typo().bodyMedium,
-                color = translatedColorOverride ?: if (isCurrent) Color.Yellow else DimTranslatedColor,
+                color = translatedColorOverride ?: if (isCurrent) ClassicTranslatedColor else ClassicDimTranslatedColor,
             )
         }
 
