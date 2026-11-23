@@ -2106,7 +2106,7 @@ class SharedViewModel(
         _lyricsTranslationUiState.update { it.copy(isLoading = true) }
         try {
             val targetLanguage = dataStoreManager.translationLanguage.first().ifBlank { "pt" }
-            val cacheLanguageKey = "${targetLanguage}#v6"
+            val cacheLanguageKey = "${targetLanguage}#v7"
 
             if (bypassCache) {
                 lyricsCanvasRepository.removeTranslatedLyrics(videoId, targetLanguage)
@@ -2114,9 +2114,10 @@ class SharedViewModel(
                 lyricsCanvasRepository.removeTranslatedLyrics(videoId, "${targetLanguage}#v3")
                 lyricsCanvasRepository.removeTranslatedLyrics(videoId, "${targetLanguage}#v4")
                 lyricsCanvasRepository.removeTranslatedLyrics(videoId, "${targetLanguage}#v5")
+                lyricsCanvasRepository.removeTranslatedLyrics(videoId, "${targetLanguage}#v6")
                 lyricsCanvasRepository.removeTranslatedLyrics(videoId, cacheLanguageKey)
             } else {
-                // 0. Local Room cache (v6 — auto-upgrades 1-to-N Letras verse merges like Liz).
+                // 0. Local Room cache (v7 — 0% gap hybrid Letras/Vagalume + PT-BR priority).
                 val saved =
                     lyricsCanvasRepository
                         .getSavedTranslatedLyrics(videoId, cacheLanguageKey)
@@ -2168,21 +2169,24 @@ class SharedViewModel(
                 }
             }
 
-            // 1B. Community human translation from SimpMusic Lyrics DB (for ANY lyrics provider).
-            val simpCode = targetLanguage.substringBefore('-').lowercase()
-            if (simpCode.length == 2 && trySimpMusicTranslatedLyrics(videoId, originalLyrics, simpCode, cacheLanguageKey)) {
-                _lyricsTranslationUiState.update { it.copy(isVisible = true, sourceEngine = "simpmusic") }
-                return
-            }
-
             if (_nowPlayingState.value?.songEntity?.videoId != videoId) return
 
-            // 1C. Human Brazilian Portuguese translations from Letras.mus.br -> Vagalume fallback.
+            // 1B. Human Brazilian Portuguese editorial translations from Letras.mus.br -> Vagalume
+            // (with 100% hybrid gap fill) prioritized before community SimpMusic for PT targets.
+            val simpCode = targetLanguage.substringBefore('-').lowercase()
             val trackState = _nowPlayingState.value
             val songTitle = trackState?.songEntity?.title ?: trackState?.mediaItem?.metadata?.title.orEmpty()
+            val validArtists =
+                trackState?.songEntity?.artistName
+                    .orEmpty()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() && !it.contains("Various Artists", ignoreCase = true) }
             val artistName =
-                trackState?.songEntity?.artistName?.firstOrNull()
-                    ?: trackState?.mediaItem?.metadata?.artist.orEmpty()
+                if (validArtists.isNotEmpty()) {
+                    validArtists.joinToString(", ")
+                } else {
+                    trackState?.mediaItem?.metadata?.artist.orEmpty()
+                }
             if (simpCode == "pt" && songTitle.isNotBlank() && artistName.isNotBlank()) {
                 val letrasRes =
                     lyricsCanvasRepository
@@ -2219,6 +2223,14 @@ class SharedViewModel(
                 ) {
                     return
                 }
+            }
+
+            if (_nowPlayingState.value?.songEntity?.videoId != videoId) return
+
+            // 1C. Community human translation from SimpMusic Lyrics DB (for ANY lyrics provider).
+            if (simpCode.length == 2 && trySimpMusicTranslatedLyrics(videoId, originalLyrics, simpCode, cacheLanguageKey)) {
+                _lyricsTranslationUiState.update { it.copy(isVisible = true, sourceEngine = "simpmusic") }
+                return
             }
 
             if (_nowPlayingState.value?.songEntity?.videoId != videoId) return
