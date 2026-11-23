@@ -82,6 +82,18 @@ class AlbumViewModel(
                                     )
                                 }
                                 albumRepository.updateAlbumInLibrary(now(), browseId)
+                                val resolvedIds = data.tracks.map { it.videoId }
+                                if (localAlbum.tracks != resolvedIds) {
+                                    albumRepository.updateAlbumTracks(browseId, resolvedIds)
+                                    data.tracks.forEach { track ->
+                                        songRepository
+                                            .insertSong(
+                                                track.toSongEntity().copy(
+                                                    inLibrary = Config.REMOVED_SONG_DATE_TIME,
+                                                ),
+                                            ).singleOrNull()
+                                    }
+                                }
                             } else {
                                 albumRepository.insertAlbum(data.toAlbumEntity(browseId)).singleOrNull().let {
                                     log("Insert Album $it")
