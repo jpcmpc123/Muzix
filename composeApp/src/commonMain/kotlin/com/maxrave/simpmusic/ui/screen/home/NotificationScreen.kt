@@ -253,17 +253,14 @@ fun NotificationItem(
                     )
                 },
             ) {
-                val thumb = notification.thumbnail
+                val avatarRequest =
+                    com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                        rawUrl = notification.thumbnail,
+                        targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                        crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                    )
                 AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(LocalPlatformContext.current)
-                            .data(thumb)
-                            .size(256, 256)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(thumb)
-                            .crossfade(150)
-                            .build(),
+                    model = avatarRequest,
                     placeholder = rememberHolderPainter(),
                     error = rememberHolderPainter(),
                     contentDescription = null,
@@ -410,16 +407,14 @@ fun ItemAlbumNotification(
         Column(
             Modifier.padding(5.dp),
         ) {
+            val releaseRequest =
+                com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                    rawUrl = thumbnail,
+                    targetPx = com.maxrave.simpmusic.utils.THUMB_CARD_PX,
+                    crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                )
             AsyncImage(
-                model =
-                    ImageRequest
-                        .Builder(LocalPlatformContext.current)
-                        .data(thumbnail)
-                        .size(640, 640)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .diskCacheKey(thumbnail)
-                        .crossfade(150)
-                        .build(),
+                model = releaseRequest,
                 placeholder = rememberHolderPainter(),
                 error = rememberHolderPainter(),
                 contentDescription = null,

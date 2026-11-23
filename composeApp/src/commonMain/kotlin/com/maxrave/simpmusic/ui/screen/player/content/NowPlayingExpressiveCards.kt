@@ -230,15 +230,15 @@ internal fun ExpressiveArtworkCardPage(
                         )
                     }
                 } else if (isVideo == false) {
+                    val canvasRequest =
+                        com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                            rawUrl = state.screenData.canvasData?.url,
+                            targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                            crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                            preserveAspectRatio = true,
+                        )
                     AsyncImage(
-                        model =
-                            ImageRequest
-                                .Builder(LocalPlatformContext.current)
-                                .data(state.screenData.canvasData?.url)
-                                .diskCachePolicy(CachePolicy.ENABLED)
-                                .diskCacheKey(state.screenData.canvasData?.url)
-                                .crossfade(550)
-                                .build(),
+                        model = canvasRequest,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -322,15 +322,15 @@ internal fun ExpressiveArtworkCardPage(
                     var artworkUrl by remember(state.screenData.thumbnailURL) {
                         mutableStateOf(state.screenData.thumbnailURL)
                     }
+                    val artworkRequest =
+                        com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                            rawUrl = artworkUrl,
+                            targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                            crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                            preserveAspectRatio = state.screenData.isVideo,
+                        )
                     AsyncImage(
-                        model =
-                            ImageRequest
-                                .Builder(LocalPlatformContext.current)
-                                .data(artworkUrl)
-                                .diskCachePolicy(CachePolicy.ENABLED)
-                                .diskCacheKey(artworkUrl + "BIGGER")
-                                .crossfade(550)
-                                .build(),
+                        model = artworkRequest,
                         contentDescription = "",
                         onSuccess = {
                             actions.onArtworkBitmap(
@@ -522,15 +522,14 @@ internal fun ExpressiveArtworkCardPage(
                         pageTrack.thumbnails
                             ?.maxByOrNull { it.width * it.height }
                             ?.url
+                    val adjacentRequest =
+                        com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                            rawUrl = staticThumb,
+                            targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                            crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                        )
                     AsyncImage(
-                        model =
-                            ImageRequest
-                                .Builder(LocalPlatformContext.current)
-                                .data(staticThumb)
-                                .diskCachePolicy(CachePolicy.ENABLED)
-                                .diskCacheKey(staticThumb)
-                                .crossfade(300)
-                                .build(),
+                        model = adjacentRequest,
                         contentDescription = pageTrack.title,
                         contentScale = ContentScale.Crop,
                         placeholder = rememberHolderPainter(),
@@ -712,15 +711,15 @@ internal fun ExpressiveBelowTheFold(
                                 .height(250.dp),
                     ) {
                         val thumb = state.screenData.songInfoData?.authorThumbnail
+                        val authorCardRequest =
+                            com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                rawUrl = thumb,
+                                targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                                crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                                preserveAspectRatio = true,
+                            )
                         AsyncImage(
-                            model =
-                                ImageRequest
-                                    .Builder(LocalPlatformContext.current)
-                                    .data(thumb)
-                                    .diskCachePolicy(CachePolicy.ENABLED)
-                                    .diskCacheKey(thumb)
-                                    .crossfade(550)
-                                    .build(),
+                            model = authorCardRequest,
                             placeholder = rememberHolderPainter(),
                             error = rememberHolderPainter(),
                             contentDescription = null,

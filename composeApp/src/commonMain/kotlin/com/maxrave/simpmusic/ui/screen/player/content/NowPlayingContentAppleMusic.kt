@@ -735,15 +735,14 @@ private fun AppleMusicMainView(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                             ) {
+                                val trackRowThumbRequest =
+                                    com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                        rawUrl = state.screenData.thumbnailURL,
+                                        targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                                        crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                                    )
                                 AsyncImage(
-                                    model =
-                                        ImageRequest
-                                            .Builder(LocalPlatformContext.current)
-                                            .data(state.screenData.thumbnailURL)
-                                            .diskCachePolicy(CachePolicy.ENABLED)
-                                            .diskCacheKey(state.screenData.thumbnailURL)
-                                            .crossfade(300)
-                                            .build(),
+                                    model = trackRowThumbRequest,
                                     placeholder = rememberHolderPainter(),
                                     error = rememberHolderPainter(),
                                     contentDescription = null,
@@ -839,15 +838,15 @@ internal fun BoxScope.AppleMusicArtworkBackdrop(
     // exactly this reason (isLyricsBlurSupported), and Crop + fillMaxSize means the artwork is
     // scaled far past its own resolution — at this blur that costs nothing visually.
     if (!backdropUrl.isNullOrBlank()) {
+        val blurBackdropRequest =
+            com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                rawUrl = backdropUrl,
+                targetPx = com.maxrave.simpmusic.utils.THUMB_BLUR_BACKDROP_PX,
+                crossfadeMs = 0,
+                reuseExistingRamPlaceholder = false,
+            )
         AsyncImage(
-            model =
-                ImageRequest
-                    .Builder(LocalPlatformContext.current)
-                    .data(backdropUrl)
-                    .size(200, 200)
-                    .diskCachePolicy(CachePolicy.ENABLED)
-                    .diskCacheKey(backdropUrl + "BIGGER")
-                    .build(),
+            model = blurBackdropRequest,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             onSuccess = { actions.onArtworkBitmap(it.result.image.toImageBitmap()) },
@@ -963,13 +962,11 @@ private fun AppleMusicArtworkPage(
         if (isCurrentPage) {
             var artworkUrl by remember(state.screenData.thumbnailURL) { mutableStateOf(state.screenData.thumbnailURL) }
             val coverRequest =
-                ImageRequest
-                    .Builder(LocalPlatformContext.current)
-                    .data(artworkUrl)
-                    .diskCachePolicy(CachePolicy.ENABLED)
-                    .diskCacheKey(artworkUrl + "BIGGER")
-                    .crossfade(550)
-                    .build()
+                com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                    rawUrl = artworkUrl,
+                    targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                    crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                )
             val coverAlpha = if (pageShowsFullscreen) 0f else 1f - clipAlpha
             Box(
                 modifier =
@@ -1174,15 +1171,15 @@ private fun AppleMusicArtworkPage(
                                 )
                             }
                         } else if (isVideo == false) {
+                            val canvasRequest =
+                                com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                    rawUrl = state.screenData.canvasData?.url,
+                                    targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                                    crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                                    preserveAspectRatio = true,
+                                )
                             AsyncImage(
-                                model =
-                                    ImageRequest
-                                        .Builder(LocalPlatformContext.current)
-                                        .data(state.screenData.canvasData?.url)
-                                        .diskCachePolicy(CachePolicy.ENABLED)
-                                        .diskCacheKey(state.screenData.canvasData?.url)
-                                        .crossfade(550)
-                                        .build(),
+                                model = canvasRequest,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize(),
@@ -1209,13 +1206,11 @@ private fun AppleMusicArtworkPage(
         } else if (pageTrack != null) {
             val staticThumb = pageTrack.thumbnails?.maxByOrNull { it.width * it.height }?.url
             val thumbRequest =
-                ImageRequest
-                    .Builder(LocalPlatformContext.current)
-                    .data(staticThumb)
-                    .diskCachePolicy(CachePolicy.ENABLED)
-                    .diskCacheKey(staticThumb)
-                    .crossfade(300)
-                    .build()
+                com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                    rawUrl = staticThumb,
+                    targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                    crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                )
             Box(
                 modifier =
                     Modifier
@@ -1360,14 +1355,12 @@ private fun BoxScope.AnimatedArtworkFrame(
                     .alpha(alpha),
         ) {
             val stillRequest =
-                canvas.thumbUrl?.let { still ->
-                    ImageRequest
-                        .Builder(LocalPlatformContext.current)
-                        .data(still)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .diskCacheKey(still)
-                        .build()
-                }
+                com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                    rawUrl = canvas.thumbUrl,
+                    targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                    crossfadeMs = 0,
+                    preserveAspectRatio = true,
+                )
             stillRequest?.let { request ->
                 AsyncImage(
                     model = request,

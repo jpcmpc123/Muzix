@@ -291,17 +291,14 @@ fun AlbumScreen(
                                         ) {
                                             // Inner Box — backdrop SOURCE (artwork + overlays only, NO glass)
                                             Box(modifier = Modifier.fillMaxSize().layerBackdrop(artworkBackdrop)) {
+                                                val albumHeroRequest =
+                                                    com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                                        rawUrl = uiState.thumbnail,
+                                                        targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                                                        crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                                                    )
                                                 AsyncImage(
-                                                    model =
-                                                        ImageRequest
-                                                            .Builder(LocalPlatformContext.current)
-                                                            .data(uiState.thumbnail)
-                                                            .diskCachePolicy(CachePolicy.ENABLED)
-                                                            .memoryCachePolicy(CachePolicy.ENABLED)
-                                                            .diskCacheKey(uiState.thumbnail)
-                                                            .memoryCacheKey(uiState.thumbnail)
-                                                            .crossfade(550)
-                                                            .build(),
+                                                    model = albumHeroRequest,
                                                     placeholder = rememberHolderPainter(),
                                                     error = rememberHolderPainter(),
                                                     contentDescription = null,
@@ -450,17 +447,14 @@ fun AlbumScreen(
                                                     horizontalArrangement = Arrangement.spacedBy(24.dp),
                                                     verticalAlignment = Alignment.Top,
                                                 ) {
+                                                    val albumDesktopHeroRequest =
+                                                        com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                                            rawUrl = uiState.thumbnail,
+                                                            targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                                                            crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                                                        )
                                                     AsyncImage(
-                                                        model =
-                                                            ImageRequest
-                                                                .Builder(LocalPlatformContext.current)
-                                                                .data(uiState.thumbnail)
-                                                                .diskCachePolicy(CachePolicy.ENABLED)
-                                                                .memoryCachePolicy(CachePolicy.ENABLED)
-                                                                .diskCacheKey(uiState.thumbnail)
-                                                                .memoryCacheKey(uiState.thumbnail)
-                                                                .crossfade(550)
-                                                                .build(),
+                                                        model = albumDesktopHeroRequest,
                                                         placeholder = rememberHolderPainter(),
                                                         error = rememberHolderPainter(),
                                                         contentDescription = null,

@@ -79,7 +79,6 @@ kotlin {
             val koinBom = project.dependencies.platform(libs.koin.bom)
             implementation(composeBom)
             implementation(koinBom)
-            implementation(libs.commons.io)
         }
         androidMain.dependencies {
             api(project.dependencies.platform(libs.koin.bom))
@@ -155,7 +154,6 @@ kotlin {
             api(libs.coil.compose)
             api(libs.coil.network.okhttp)
             api(libs.kmpalette.core)
-            api(libs.kmpalette.network)
             implementation(libs.materialkolor)
             implementation(libs.ktor.client.cio)
 

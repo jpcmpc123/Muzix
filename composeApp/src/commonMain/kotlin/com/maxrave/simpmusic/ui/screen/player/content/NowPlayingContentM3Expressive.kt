@@ -720,15 +720,14 @@ internal fun ExpressiveTrackInfoRow(
         // verbatim (its shared NowPlayingTrackInfoRow does exactly this). Switched off by the
         // fullscreen lyrics landscape layout, which shows the full artwork right above the row.
         AnimatedVisibility(showCanvasThumbnail && state.screenData.fullscreenCanvas() != null) {
+            val miniThumbRequest =
+                com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                    rawUrl = state.screenData.thumbnailURL,
+                    targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                    crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                )
             AsyncImage(
-                model =
-                    ImageRequest
-                        .Builder(LocalPlatformContext.current)
-                        .data(state.screenData.thumbnailURL)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .diskCacheKey(state.screenData.thumbnailURL + "BIGGER")
-                        .crossfade(true)
-                        .build(),
+                model = miniThumbRequest,
                 placeholder = rememberHolderPainter(square = true),
                 error = rememberHolderPainter(square = true),
                 contentDescription = null,

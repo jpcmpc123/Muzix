@@ -3,6 +3,7 @@
 package com.maxrave.simpmusic.ui.screen.player
 
 import androidx.compose.animation.Animatable
+import com.maxrave.simpmusic.utils.sizedArtworkUrl
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -252,6 +253,38 @@ fun NowPlayingScreenContent(
                 playerOrderIndex = mediaPlayerHandler.currentOrderIndex(),
             )
         }
+    }
+    val platformContext = coil3.compose.LocalPlatformContext.current
+    LaunchedEffect(artworkQueue, currentOrderIndex, platformContext) {
+        if (currentOrderIndex < 0 || artworkQueue.isEmpty()) return@LaunchedEffect
+        val loader = coil3.SingletonImageLoader.get(platformContext)
+        listOf(currentOrderIndex + 1, currentOrderIndex - 1)
+            .distinct()
+            .filter { it in artworkQueue.indices }
+            .forEach { idx ->
+                val rawUrl =
+                    artworkQueue[idx].thumbnails?.maxByOrNull { it.width * it.height }?.url
+                        ?: return@forEach
+                val sizedUrl =
+                    rawUrl.sizedArtworkUrl(com.maxrave.simpmusic.utils.THUMB_HERO_PX)
+                        ?: return@forEach
+                loader.enqueue(
+                    coil3.request.ImageRequest
+                        .Builder(platformContext)
+                        .data(sizedUrl)
+                        .size(com.maxrave.simpmusic.utils.THUMB_HERO_PX, com.maxrave.simpmusic.utils.THUMB_HERO_PX)
+                        .precision(coil3.size.Precision.INEXACT)
+                        .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
+                        .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
+                        .diskCacheKey(sizedUrl)
+                        .memoryCacheKey(
+                            com.maxrave.simpmusic.utils.artworkMemoryCacheKey(
+                                rawUrl,
+                                com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                            ),
+                        ).build(),
+                )
+            }
     }
     // Single PagerState — the unified ArtworkPager renders BOTH the fullscreen canvas
     // background and the centered square thumbnail in each page, so we don't need two

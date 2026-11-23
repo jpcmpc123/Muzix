@@ -37,10 +37,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
-import coil3.request.CachePolicy
-import coil3.request.ImageRequest
-import coil3.request.crossfade
+import com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS
+import com.maxrave.simpmusic.utils.THUMB_CARD_PX
+import com.maxrave.simpmusic.utils.rememberOptimizedImageRequest
 import com.maxrave.common.Config
 import com.maxrave.domain.data.entities.AlbumEntity
 import com.maxrave.domain.data.entities.ArtistEntity
@@ -203,15 +202,15 @@ fun LibraryItem(
                                             )
                                         },
                                 ) {
+                                    val canvasRequest =
+                                        rememberOptimizedImageRequest(
+                                            rawUrl = item.canvasThumbUrl,
+                                            targetPx = THUMB_CARD_PX,
+                                            crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+                                            preserveAspectRatio = true,
+                                        )
                                     AsyncImage(
-                                        model =
-                                            ImageRequest
-                                                .Builder(LocalPlatformContext.current)
-                                                .data(item.canvasThumbUrl)
-                                                .diskCachePolicy(CachePolicy.ENABLED)
-                                                .diskCacheKey(item.canvasThumbUrl)
-                                                .crossfade(true)
-                                                .build(),
+                                        model = canvasRequest,
                                         placeholder = rememberHolderPainter(),
                                         error = rememberHolderPainter(),
                                         contentDescription = null,

@@ -426,17 +426,14 @@ fun PlaylistScreen(
                                             ) {
                                                 // Inner Box — backdrop SOURCE (artwork + overlays only, NO glass)
                                                 Box(modifier = Modifier.fillMaxSize().layerBackdrop(artworkBackdrop)) {
+                                                    val playlistHeroRequest =
+                                                        com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                                            rawUrl = data.thumbnail,
+                                                            targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                                                            crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                                                        )
                                                     AsyncImage(
-                                                        model =
-                                                            ImageRequest
-                                                                .Builder(LocalPlatformContext.current)
-                                                                .data(data.thumbnail.sizedThumb(720))
-                                                                .diskCachePolicy(CachePolicy.ENABLED)
-                                                                .memoryCachePolicy(CachePolicy.ENABLED)
-                                                                .diskCacheKey(data.thumbnail.sizedThumb(720))
-                                                                .memoryCacheKey(data.thumbnail.sizedThumb(720))
-                                                                .crossfade(550)
-                                                                .build(),
+                                                        model = playlistHeroRequest,
                                                         placeholder = rememberHolderPainter(),
                                                         error = rememberHolderPainter(),
                                                         contentDescription = null,
@@ -604,17 +601,14 @@ fun PlaylistScreen(
                                                         horizontalArrangement = Arrangement.spacedBy(24.dp),
                                                         verticalAlignment = Alignment.Top,
                                                     ) {
+                                                        val playlistDesktopHeroRequest =
+                                                            com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                                                rawUrl = data.thumbnail,
+                                                                targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                                                                crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                                                            )
                                                         AsyncImage(
-                                                            model =
-                                                                ImageRequest
-                                                                    .Builder(LocalPlatformContext.current)
-                                                                    .data(data.thumbnail.sizedThumb(720))
-                                                                    .diskCachePolicy(CachePolicy.ENABLED)
-                                                                    .memoryCachePolicy(CachePolicy.ENABLED)
-                                                                    .diskCacheKey(data.thumbnail.sizedThumb(720))
-                                                                    .memoryCacheKey(data.thumbnail.sizedThumb(720))
-                                                                    .crossfade(550)
-                                                                    .build(),
+                                                            model = playlistDesktopHeroRequest,
                                                             placeholder = rememberHolderPainter(),
                                                             error = rememberHolderPainter(),
                                                             contentDescription = null,

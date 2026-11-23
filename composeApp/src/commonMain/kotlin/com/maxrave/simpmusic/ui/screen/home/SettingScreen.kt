@@ -3108,14 +3108,14 @@ fun SettingScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Spacer(Modifier.width(24.dp))
+                                    val accountThumbRequest =
+                                        com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                            rawUrl = it.thumbnailUrl,
+                                            targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                                            crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                                        )
                                     AsyncImage(
-                                        model =
-                                            ImageRequest
-                                                .Builder(LocalPlatformContext.current)
-                                                .data(it.thumbnailUrl)
-                                                .size(256, 256)
-                                                .crossfade(150)
-                                                .build(),
+                                        model = accountThumbRequest,
                                         placeholder = rememberVectorPainter(SimpIcons.PeopleAlt),
                                         error = rememberVectorPainter(SimpIcons.PeopleAlt),
                                         contentDescription = it.name,

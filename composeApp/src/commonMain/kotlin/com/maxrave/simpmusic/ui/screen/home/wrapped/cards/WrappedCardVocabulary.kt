@@ -44,15 +44,14 @@ internal fun WrappedArtwork(
     url: String?,
     modifier: Modifier = Modifier,
 ) {
+    val wrappedRequest =
+        com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+            rawUrl = url,
+            targetPx = com.maxrave.simpmusic.utils.THUMB_CARD_PX,
+            crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+        )
     AsyncImage(
-        model =
-            ImageRequest
-                .Builder(LocalPlatformContext.current)
-                .data(url)
-                .diskCachePolicy(CachePolicy.ENABLED)
-                .diskCacheKey(url ?: "")
-                .crossfade(550)
-                .build(),
+        model = wrappedRequest,
         contentDescription = null,
         contentScale = ContentScale.Crop,
         modifier = modifier.wrappedScanlines(MaterialTheme.colorScheme.onSurface.copy(alpha = SCANLINE_ALPHA)),

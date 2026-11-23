@@ -33,10 +33,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
-import coil3.request.CachePolicy
-import coil3.request.ImageRequest
-import coil3.request.crossfade
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.home.HomeItem
 import com.maxrave.domain.utils.connectArtists
@@ -50,6 +46,9 @@ import com.maxrave.simpmusic.extension.smoothScrimBrush
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.theme.ForceDarkContent
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS
+import com.maxrave.simpmusic.utils.THUMB_HERO_PX
+import com.maxrave.simpmusic.utils.rememberOptimizedImageRequest
 import com.maxrave.simpmusic.viewModel.HomeViewModel
 import kotlinx.coroutines.launch
 
@@ -86,7 +85,6 @@ fun HomeDiscoverSection(
     // The carousel's own default, named so a mouse drag released on Desktop advances the same one card.
     val flingBehavior = CarouselDefaults.singleAdvanceFlingBehavior(state = state)
     val scope = rememberCoroutineScope()
-    val platformContext = LocalPlatformContext.current
     val scrimColor = MaterialTheme.colorScheme.scrim
     val discoverScrimBrush =
         remember(scrimColor) {
@@ -124,16 +122,11 @@ fun HomeDiscoverSection(
                 val (hoverModifier, hovered) = rememberCardHover(enabled = true)
                 val thumbUrl = song.thumbnails.lastOrNull()?.url
                 val imageRequest =
-                    remember(platformContext, thumbUrl) {
-                        ImageRequest
-                            .Builder(platformContext)
-                            .data(thumbUrl)
-                            .size(1080, 1080)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(thumbUrl)
-                            .crossfade(150)
-                            .build()
-                    }
+                    rememberOptimizedImageRequest(
+                        rawUrl = thumbUrl,
+                        targetPx = THUMB_HERO_PX,
+                        crossfadeMs = IMAGE_CROSSFADE_HERO_MS,
+                    )
                 Box(
                     Modifier
                         .fillMaxSize()

@@ -330,15 +330,14 @@ fun FullscreenLyricsContent(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         // Song Poster (Small, Top Left)
+                        val miniPosterRequest =
+                            com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                rawUrl = screenDataState.thumbnailURL,
+                                targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                                crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                            )
                         AsyncImage(
-                            model =
-                                ImageRequest
-                                    .Builder(LocalPlatformContext.current)
-                                    .data(screenDataState.thumbnailURL)
-                                    .crossfade(300)
-                                    .diskCachePolicy(CachePolicy.ENABLED)
-                                    .diskCacheKey(screenDataState.thumbnailURL)
-                                    .build(),
+                            model = miniPosterRequest,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier =
@@ -953,15 +952,14 @@ private fun FullscreenLyricsLandscape(
                                 .verticalScroll(rememberScrollState()),
                     ) {
                         var artworkUrl by remember(state.screenData.thumbnailURL) { mutableStateOf(state.screenData.thumbnailURL) }
+                        val heroArtRequest =
+                            com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                rawUrl = artworkUrl,
+                                targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                                crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                            )
                         AsyncImage(
-                            model =
-                                ImageRequest
-                                    .Builder(LocalPlatformContext.current)
-                                    .data(artworkUrl)
-                                    .diskCachePolicy(CachePolicy.ENABLED)
-                                    .diskCacheKey(artworkUrl)
-                                    .crossfade(300)
-                                    .build(),
+                            model = heroArtRequest,
                             placeholder = rememberHolderPainter(),
                             error = rememberHolderPainter(),
                             contentDescription = null,

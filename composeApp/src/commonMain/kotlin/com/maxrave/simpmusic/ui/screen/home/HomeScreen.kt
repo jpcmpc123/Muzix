@@ -97,13 +97,13 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
 import androidx.navigation.NavController
+import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
-import coil3.request.crossfade
+import coil3.size.Precision
 import com.eygraber.uri.Uri
-import com.kmpalette.loader.rememberNetworkLoader
 import com.kmpalette.rememberDominantColorState
 import com.maxrave.common.CHART_SUPPORTED_COUNTRY
 import com.maxrave.common.Config
@@ -181,9 +181,15 @@ import com.maxrave.simpmusic.ui.theme.ArtworkShape
 import com.maxrave.simpmusic.ui.theme.LocalLiquidGlassEnabled
 import com.maxrave.simpmusic.ui.theme.desktopPanelDark
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS
+import com.maxrave.simpmusic.utils.THUMB_BACKDROP_PX
+import com.maxrave.simpmusic.utils.THUMB_SMALL_PX
 import com.maxrave.simpmusic.utils.VersionManager
+import com.maxrave.simpmusic.utils.artworkMemoryCacheKey
 import com.maxrave.simpmusic.utils.eligiblePromos
 import com.maxrave.simpmusic.utils.osRequirementOf
+import com.maxrave.simpmusic.utils.rememberOptimizedImageRequest
+import com.maxrave.simpmusic.utils.sizedArtworkUrl
 import com.maxrave.simpmusic.viewModel.FOOTGUNS_STAR_KEY
 import com.maxrave.simpmusic.viewModel.HomeViewModel
 import com.maxrave.simpmusic.viewModel.HomeViewModel.Companion.HOME_PARAMS_COMMUTE
@@ -202,8 +208,6 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
 import io.ktor.http.Url
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -1141,18 +1145,13 @@ private fun HomeTopGlow(
     val animatedColor by animateColorAsState(topHeaderColor, tween(500), label = "homeTopGlowColor")
     var headerImageFailed by remember(headerImage) { mutableStateOf(false) }
     val bottomScrimBrush = remember(pageBackground) { artworkScrimBrush(pageBackground) }
-    val platformContext = LocalPlatformContext.current
     val headerImageRequest =
-        remember(platformContext, headerImage) {
-            headerImage?.let { url ->
-                ImageRequest
-                    .Builder(platformContext)
-                    .data(url)
-                    .size(1440, 1440)
-                    .crossfade(150)
-                    .build()
-            }
-        }
+        rememberOptimizedImageRequest(
+            rawUrl = headerImage,
+            targetPx = THUMB_BACKDROP_PX,
+            crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+            preserveAspectRatio = true,
+        )
     Box(
         modifier =
             modifier
@@ -1379,15 +1378,14 @@ private fun AccountAvatar(
             .clip(CircleShape)
             .then(modifier)
     if (signedIn && !thumbnailUrl.isNullOrBlank()) {
+        val avatarRequest =
+            rememberOptimizedImageRequest(
+                rawUrl = thumbnailUrl,
+                targetPx = THUMB_SMALL_PX,
+                crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+            )
         AsyncImage(
-            model =
-                ImageRequest
-                    .Builder(LocalPlatformContext.current)
-                    .data(thumbnailUrl)
-                    .diskCachePolicy(CachePolicy.ENABLED)
-                    .diskCacheKey(thumbnailUrl)
-                    .crossfade(true)
-                    .build(),
+            model = avatarRequest,
             placeholder = rememberHolderPainter(),
             error = rememberHolderPainter(),
             contentDescription = contentDescription,
@@ -1434,6 +1432,31 @@ fun QuickPicks(
     val isPortrait = getScreenSizeInfo().let { it.wDP < it.hDP }
     var bottomSheetShow by remember { mutableStateOf(false) }
     var track by remember { mutableStateOf<Track?>(null) }
+    val platformContext = LocalPlatformContext.current
+
+    LaunchedEffect(homeItem.contents, platformContext) {
+        val loader = SingletonImageLoader.get(platformContext)
+        homeItem.contents
+            .asSequence()
+            .filterNotNull()
+            .take(12)
+            .forEach { item ->
+                val rawUrl = item.thumbnails.lastOrNull()?.url ?: return@forEach
+                val sizedUrl = rawUrl.sizedArtworkUrl(THUMB_SMALL_PX) ?: return@forEach
+                loader.enqueue(
+                    ImageRequest
+                        .Builder(platformContext)
+                        .data(sizedUrl)
+                        .size(THUMB_SMALL_PX, THUMB_SMALL_PX)
+                        .precision(Precision.INEXACT)
+                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .memoryCachePolicy(CachePolicy.ENABLED)
+                        .diskCacheKey(sizedUrl)
+                        .memoryCacheKey(artworkMemoryCacheKey(rawUrl, THUMB_SMALL_PX))
+                        .build(),
+                )
+            }
+    }
 
     if (bottomSheetShow) {
         NowPlayingBottomSheet(

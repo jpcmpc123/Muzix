@@ -537,17 +537,14 @@ fun LocalPlaylistScreen(
                             ) {
                                 // Inner Box — backdrop SOURCE (artwork + overlays only, NO glass)
                                 Box(modifier = Modifier.fillMaxSize().layerBackdrop(artworkBackdrop)) {
+                                    val localPlaylistHeroRequest =
+                                        com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                            rawUrl = uiState.thumbnail,
+                                            targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                                            crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                                        )
                                     AsyncImage(
-                                        model =
-                                            ImageRequest
-                                                .Builder(LocalPlatformContext.current)
-                                                .data(uiState.thumbnail)
-                                                .diskCachePolicy(CachePolicy.ENABLED)
-                                                .memoryCachePolicy(CachePolicy.ENABLED)
-                                                .diskCacheKey(uiState.thumbnail)
-                                                .memoryCacheKey(uiState.thumbnail)
-                                                .crossfade(550)
-                                                .build(),
+                                        model = localPlaylistHeroRequest,
                                         placeholder = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
                                         error = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
                                         fallback = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
@@ -736,17 +733,14 @@ fun LocalPlaylistScreen(
                                         horizontalArrangement = Arrangement.spacedBy(24.dp),
                                         verticalAlignment = Alignment.Top,
                                     ) {
+                                        val localPlaylistDesktopHeroRequest =
+                                            com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                                rawUrl = uiState.thumbnail,
+                                                targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                                                crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                                            )
                                         AsyncImage(
-                                            model =
-                                                ImageRequest
-                                                    .Builder(LocalPlatformContext.current)
-                                                    .data(uiState.thumbnail)
-                                                    .diskCachePolicy(CachePolicy.ENABLED)
-                                                    .memoryCachePolicy(CachePolicy.ENABLED)
-                                                    .diskCacheKey(uiState.thumbnail)
-                                                    .memoryCacheKey(uiState.thumbnail)
-                                                    .crossfade(550)
-                                                    .build(),
+                                            model = localPlaylistDesktopHeroRequest,
                                             placeholder = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
                                             error = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
                                             fallback = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),

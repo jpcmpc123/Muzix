@@ -81,8 +81,14 @@ fun MoodCategoryCard(
                 }.clickable(onClick = onClick),
     ) {
         if (artworkUrl != null) {
+            val moodArtworkRequest =
+                com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                    rawUrl = artworkUrl,
+                    targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                    crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                )
             AsyncImage(
-                model = artworkUrl,
+                model = moodArtworkRequest,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier =

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -12,11 +13,13 @@ import android.os.SystemClock
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.lifecycleScope
@@ -50,7 +53,6 @@ import org.koin.core.context.loadKoinModules
 import org.koin.core.context.unloadKoinModules
 import org.koin.dsl.module
 import org.simpmusic.crashlytics.pushPlayerError
-import pub.devrel.easypermissions.EasyPermissions
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -63,6 +65,8 @@ class MainActivity : AppCompatActivity() {
     val mediaPlayerHandler by inject<MediaPlayerHandler>()
     val dataStoreManager: DataStoreManager by inject()
     private val librarySync: LibrarySyncPhoneRepository by inject()
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     private var mBound = false
     private var shouldUnbind = false
@@ -220,25 +224,19 @@ class MainActivity : AppCompatActivity() {
         )
         WorkManager.getInstance(this).cancelUniqueWork("Blog RSS Worker")
 
-        if (!EasyPermissions.hasPermissions(this, Manifest.permission.POST_NOTIFICATIONS)) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                lifecycleScope.launch {
-                    val doNotAsk = dataStoreManager.getString("notification_permission_do_not_ask").first()
-                    if (doNotAsk != "true") {
-                        val wasAsked = dataStoreManager.getString("notification_permission_asked").first()
-                        if (wasAsked != "true") {
-                            val rationale = ComposeResUtils.getResString(ComposeResUtils.StringType.NOTIFICATION_REQUEST)
-                            EasyPermissions.requestPermissions(
-                                this@MainActivity,
-                                rationale,
-                                1,
-                                Manifest.permission.POST_NOTIFICATIONS,
-                            )
-                            dataStoreManager.putString("notification_permission_asked", "true")
-                        } else {
-                            // Already asked before: show custom dialog with "Don't show again"
-                            viewModel.showNotificationPermissionDialog()
-                        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            lifecycleScope.launch {
+                val doNotAsk = dataStoreManager.getString("notification_permission_do_not_ask").first()
+                if (doNotAsk != "true") {
+                    val wasAsked = dataStoreManager.getString("notification_permission_asked").first()
+                    if (wasAsked != "true") {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        dataStoreManager.putString("notification_permission_asked", "true")
+                    } else {
+                        // Already asked before: show custom dialog with "Don't show again"
+                        viewModel.showNotificationPermissionDialog()
                     }
                 }
             }

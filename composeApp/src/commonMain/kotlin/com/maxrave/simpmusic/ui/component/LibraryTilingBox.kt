@@ -32,9 +32,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
-import coil3.request.ImageRequest
-import coil3.request.crossfade
+import com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS
+import com.maxrave.simpmusic.utils.THUMB_SMALL_PX
+import com.maxrave.simpmusic.utils.rememberOptimizedImageRequest
 import com.maxrave.domain.data.model.library.LibraryCollectionPreview
 import com.maxrave.domain.data.model.library.LibraryOverview
 import com.maxrave.simpmusic.Platform
@@ -272,14 +272,14 @@ private fun SleeveFan(
                 EmptySleeve(shape, placed)
             } else {
                 // Oldest first, so the newest is drawn last and lands on top.
+                val sleeveRequest =
+                    rememberOptimizedImageRequest(
+                        rawUrl = covers[count - 1 - i],
+                        targetPx = THUMB_SMALL_PX,
+                        crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+                    )
                 AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(LocalPlatformContext.current)
-                            .data(covers[count - 1 - i])
-                            .size(256, 256)
-                            .crossfade(150)
-                            .build(),
+                    model = sleeveRequest,
                     placeholder = rememberHolderPainter(),
                     error = rememberHolderPainter(),
                     contentDescription = null,

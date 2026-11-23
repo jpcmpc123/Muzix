@@ -56,10 +56,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
-import coil3.request.CachePolicy
-import coil3.request.ImageRequest
-import coil3.request.crossfade
+import com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS
+import com.maxrave.simpmusic.utils.THUMB_SMALL_PX
+import com.maxrave.simpmusic.utils.rememberOptimizedImageRequest
 import com.maxrave.domain.data.entities.AlbumEntity
 import com.maxrave.domain.data.entities.ArtistEntity
 import com.maxrave.domain.data.entities.DownloadState
@@ -156,7 +155,6 @@ fun SongFullWidthItems(
     // since, which is the only way a queue row is marked — the queue response shows no LIVE chip.
     val isLive = track?.isLive == true || songEntity?.isLive == true || storedSong?.isLive == true
     val offsetX = remember { Animatable(initialValue = 0f) }
-    val platformContext = LocalPlatformContext.current
 
     Box(
         modifier =
@@ -289,18 +287,13 @@ fun SongFullWidthItems(
                                 modifier = Modifier.fillMaxSize(),
                             )
                         } else if (index == null) {
-                            val thumb = (track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails).sizedThumb(226)
+                            val rawThumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
                             val imageRequest =
-                                remember(platformContext, thumb) {
-                                    ImageRequest
-                                        .Builder(platformContext)
-                                        .data(thumb)
-                                        .size(256, 256)
-                                        .diskCachePolicy(CachePolicy.ENABLED)
-                                        .diskCacheKey(thumb)
-                                        .crossfade(150)
-                                        .build()
-                                }
+                                rememberOptimizedImageRequest(
+                                    rawUrl = rawThumb,
+                                    targetPx = THUMB_SMALL_PX,
+                                    crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+                                )
                             AsyncImage(
                                 model = imageRequest,
                                 placeholder = rememberHolderPainter(),
@@ -433,7 +426,6 @@ fun SuggestItems(
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
-    val platformContext = LocalPlatformContext.current
     Box(
         modifier =
             Modifier
@@ -456,18 +448,12 @@ fun SuggestItems(
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {
-                        val thumb = track.thumbnails?.lastOrNull()?.url.sizedThumb(226)
                         val imageRequest =
-                            remember(platformContext, thumb) {
-                                ImageRequest
-                                    .Builder(platformContext)
-                                    .data(thumb)
-                                    .size(256, 256)
-                                    .diskCachePolicy(CachePolicy.ENABLED)
-                                    .diskCacheKey(thumb)
-                                    .crossfade(150)
-                                    .build()
-                            }
+                            rememberOptimizedImageRequest(
+                                rawUrl = track.thumbnails?.lastOrNull()?.url,
+                                targetPx = THUMB_SMALL_PX,
+                                crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+                            )
                         AsyncImage(
                             model = imageRequest,
                             placeholder = rememberHolderPainter(),
@@ -545,7 +531,6 @@ fun PlaylistFullWidthItems(
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
-    val platformContext = LocalPlatformContext.current
     Box(
         modifier =
             modifier
@@ -612,18 +597,12 @@ fun PlaylistFullWidthItems(
                 thirdRowSubtitle = data.description
             }
         }
-        val sizedThumb = thumb.sizedThumb(226)
         val imageRequest =
-            remember(platformContext, sizedThumb) {
-                ImageRequest
-                    .Builder(platformContext)
-                    .data(sizedThumb)
-                    .size(256, 256)
-                    .diskCachePolicy(CachePolicy.ENABLED)
-                    .diskCacheKey(sizedThumb)
-                    .crossfade(150)
-                    .build()
-            }
+            rememberOptimizedImageRequest(
+                rawUrl = thumb,
+                targetPx = THUMB_SMALL_PX,
+                crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+            )
         Row(
             Modifier
                 .padding(vertical = 10.dp, horizontal = 15.dp)
@@ -727,25 +706,18 @@ fun ArtistFullWidthItems(
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
-    val platformContext = LocalPlatformContext.current
     val (name: String, thumbnails: String?) =
         when (data) {
             is ArtistEntity -> Pair(data.name, data.thumbnails)
             is ArtistsResult -> Pair(data.artist, data.thumbnails.lastOrNull()?.url)
             else -> Pair("", null)
         }
-    val sizedThumbnails = thumbnails.sizedThumb(226)
     val imageRequest =
-        remember(platformContext, sizedThumbnails) {
-            ImageRequest
-                .Builder(platformContext)
-                .data(sizedThumbnails)
-                .size(256, 256)
-                .diskCachePolicy(CachePolicy.ENABLED)
-                .diskCacheKey(sizedThumbnails)
-                .crossfade(150)
-                .build()
-        }
+        rememberOptimizedImageRequest(
+            rawUrl = thumbnails,
+            targetPx = THUMB_SMALL_PX,
+            crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+        )
     Box(
         modifier
             .clickable {

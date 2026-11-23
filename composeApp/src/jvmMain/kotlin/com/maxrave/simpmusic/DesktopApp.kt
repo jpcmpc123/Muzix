@@ -27,6 +27,8 @@ import coil3.disk.DiskCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.CachePolicy
 import coil3.request.crossfade
+import coil3.request.maxBitmapSize
+import coil3.size.Size
 import com.maxrave.common.AppIdentity
 import com.maxrave.data.di.loader.loadAllModules
 import com.maxrave.domain.manager.DataStoreManager
@@ -44,6 +46,7 @@ import com.maxrave.simpmusic.ui.mini_player.MiniPlayerManager
 import com.maxrave.simpmusic.ui.mini_player.MiniPlayerWindow
 import com.maxrave.simpmusic.ui.theme.isDarkTheme
 import com.maxrave.simpmusic.utils.ComposeResUtils
+import com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS
 import com.maxrave.simpmusic.utils.NetworkFirstInterceptor
 import com.maxrave.simpmusic.utils.VersionManager
 import com.maxrave.simpmusic.viewModel.SharedViewModel
@@ -66,8 +69,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import multiplatform.network.cmptoast.ToastHost
 import multiplatform.network.cmptoast.showToast
+import okhttp3.ConnectionPool
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okio.FileSystem
+import java.util.concurrent.TimeUnit
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -478,17 +484,33 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
                 }
 
                 val context = LocalPlatformContext.current
+                val desktopImageHttpClient =
+                    remember {
+                        val dispatcher =
+                            Dispatcher().apply {
+                                maxRequests = 64
+                                maxRequestsPerHost = 16
+                            }
+                        OkHttpClient
+                            .Builder()
+                            .dispatcher(dispatcher)
+                            .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
+                            .connectTimeout(8, TimeUnit.SECONDS)
+                            .readTimeout(12, TimeUnit.SECONDS)
+                            .build()
+                    }
+                val imageRevalidateScope = remember { CoroutineScope(SupervisorJob() + Dispatchers.IO) }
                 setSingletonImageLoaderFactory {
                     lateinit var imageLoader: ImageLoader
                     imageLoader =
                         ImageLoader
                             .Builder(context)
                             .components {
-                                add(NetworkFirstInterceptor { imageLoader })
+                                add(NetworkFirstInterceptor(revalidateScope = imageRevalidateScope) { imageLoader })
                                 add(
                                     OkHttpNetworkFetcherFactory(
                                         callFactory = {
-                                            OkHttpClient()
+                                            desktopImageHttpClient
                                         },
                                     ),
                                 )
@@ -498,9 +520,10 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
                                 DiskCache
                                     .Builder()
                                     .directory(FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "image_cache")
-                                    .maxSizeBytes(512L * 1024 * 1024)
+                                    .maxSizeBytes(200L * 1024 * 1024)
                                     .build(),
-                            ).crossfade(true)
+                            ).maxBitmapSize(Size(1280, 1280))
+                            .crossfade(IMAGE_CROSSFADE_FAST_MS)
                             // CrossfadePainter otherwise sizes itself as max(placeholder, image) once and keeps it,
                             // so a square holder over a wide banner leaves the banner zoomed after the fade.
                             .preferEndFirstIntrinsicSize(true)

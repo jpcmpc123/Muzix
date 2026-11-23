@@ -1661,17 +1661,14 @@ fun NowPlayingBottomSheet(
                                 .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        val thumb = uiState.songUIState.thumbnails
+                        val thumbRequest =
+                            com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                rawUrl = uiState.songUIState.thumbnails,
+                                targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                                crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                            )
                         AsyncImage(
-                            model =
-                                ImageRequest
-                                    .Builder(LocalPlatformContext.current)
-                                    .data(thumb)
-                                    .size(256, 256)
-                                    .diskCachePolicy(CachePolicy.ENABLED)
-                                    .diskCacheKey(thumb)
-                                    .crossfade(150)
-                                    .build(),
+                            model = thumbRequest,
                             placeholder = rememberHolderPainter(),
                             error = rememberHolderPainter(),
                             contentDescription = null,

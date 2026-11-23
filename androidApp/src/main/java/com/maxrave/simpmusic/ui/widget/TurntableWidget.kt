@@ -54,6 +54,8 @@ import com.maxrave.common.Config
 import com.maxrave.simpmusic.MainActivity
 import com.maxrave.simpmusic.R
 import com.maxrave.simpmusic.extension.getColorFromPalette
+import com.maxrave.simpmusic.utils.THUMB_HERO_PX
+import com.maxrave.simpmusic.utils.sizedArtworkUrl
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.UIEvent
 import kotlinx.coroutines.CoroutineScope
@@ -133,15 +135,14 @@ class TurntableWidget :
                 }
 
                 LaunchedEffect(thumbUrl) {
+                    val sizedUrl = thumbUrl.sizedArtworkUrl(THUMB_HERO_PX)
                     val request =
                         ImageRequest
                             .Builder(context)
-                            .data(thumbUrl)
+                            .data(sizedUrl)
+                            .size(THUMB_HERO_PX, THUMB_HERO_PX)
                             .diskCachePolicy(CachePolicy.ENABLED)
-                            // Shared cache key across the widgets so they all read the identical
-                            // decoded bitmap; a separate key can hand back a differently scaled
-                            // copy, which is enough for the palette to pick another colour.
-                            .diskCacheKey(thumbUrl + "BIGGER")
+                            .diskCacheKey(sizedUrl)
                             .placeholder(R.drawable.holder)
                             .error(R.drawable.holder)
                             .allowHardware(false)

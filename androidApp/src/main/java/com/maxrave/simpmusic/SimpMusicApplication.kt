@@ -17,7 +17,10 @@ import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.CachePolicy
+import coil3.request.allowRgb565
 import coil3.request.crossfade
+import coil3.request.maxBitmapSize
+import coil3.size.Size
 import com.maxrave.common.AppIdentity
 import com.maxrave.data.di.loader.loadAllModules
 import com.maxrave.domain.manager.DataStoreManager
@@ -26,12 +29,15 @@ import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.di.viewModelModule
 import com.maxrave.simpmusic.service.backup.AutoBackupScheduler
 import com.maxrave.simpmusic.service.sync.LibrarySyncScheduler
+import com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS
 import com.maxrave.simpmusic.utils.NetworkFirstInterceptor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import multiplatform.network.cmptoast.AppContext
+import okhttp3.ConnectionPool
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 import okio.FileSystem
@@ -58,10 +64,17 @@ class SimpMusicApplication :
     private val dataStoreManager: DataStoreManager by inject()
     private lateinit var autoBackupScheduler: AutoBackupScheduler
     private val imageHttpClient: OkHttpClient by lazy {
+        val dispatcher =
+            Dispatcher().apply {
+                maxRequests = 64
+                maxRequestsPerHost = 16
+            }
         OkHttpClient
             .Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
+            .dispatcher(dispatcher)
+            .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(12, TimeUnit.SECONDS)
             .build()
     }
 
@@ -124,7 +137,7 @@ class SimpMusicApplication :
             @SuppressLint("DiscouragedPrivateApi")
             val field: Field = CursorWindow::class.java.getDeclaredField("sCursorWindowSize")
             field.isAccessible = true
-            val expectSize = 100 * 1024 * 1024
+            val expectSize = 20 * 1024 * 1024
             field.set(null, expectSize)
         } catch (e: Exception) {
             // Hidden API blocked on this Android version; keep the default cursor window size.
@@ -148,7 +161,7 @@ class SimpMusicApplication :
             ImageLoader
                 .Builder(context)
                 .components {
-                    add(NetworkFirstInterceptor { imageLoader })
+                    add(NetworkFirstInterceptor(revalidateScope = applicationScope) { imageLoader })
                     add(
                         OkHttpNetworkFetcherFactory(
                             callFactory = {
@@ -167,9 +180,11 @@ class SimpMusicApplication :
                     DiskCache
                         .Builder()
                         .directory(FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "image_cache")
-                        .maxSizeBytes(512L * 1024 * 1024)
+                        .maxSizeBytes(200L * 1024 * 1024)
                         .build(),
-                ).crossfade(true)
+                ).allowRgb565(true)
+                .maxBitmapSize(Size(1280, 1280))
+                .crossfade(IMAGE_CROSSFADE_FAST_MS)
                 // CrossfadePainter otherwise sizes itself as max(placeholder, image) once and keeps it,
                 // so a square holder over a wide banner leaves the banner zoomed after the fade.
                 .preferEndFirstIntrinsicSize(true)

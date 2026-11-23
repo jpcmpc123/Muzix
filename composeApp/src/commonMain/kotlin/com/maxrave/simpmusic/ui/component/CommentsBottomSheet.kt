@@ -420,8 +420,14 @@ private fun CommentRow(
     footer: @Composable ColumnScope.() -> Unit = {},
 ) {
     Row(modifier = modifier.fillMaxWidth()) {
+        val avatarRequest =
+            com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                rawUrl = comment.authorAvatar,
+                targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+            )
         AsyncImage(
-            model = comment.authorAvatar,
+            model = avatarRequest,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier =
@@ -621,8 +627,14 @@ private fun SignedInInput(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
+            val userAvatarRequest =
+                com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                    rawUrl = userAvatar,
+                    targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                    crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                )
             AsyncImage(
-                model = userAvatar,
+                model = userAvatarRequest,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(32.dp).clip(CircleShape).background(colors.handle),

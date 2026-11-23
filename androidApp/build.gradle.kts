@@ -118,7 +118,7 @@ android {
         buildConfig = true
     }
     packaging {
-        jniLibs.useLegacyPackaging = true
+        jniLibs.useLegacyPackaging = false
         jniLibs.excludes +=
             listOf(
                 "META-INF/META-INF/DEPENDENCIES",
@@ -141,6 +141,8 @@ android {
             // name: dropping only CONTRIBUTORS.md moves the failure to LICENSE.md on the next
             // build. Nothing here is code — these are documentation files.
             excludes += "META-INF/*.md"
+            // Post-quantum picnic/lowmc tables from BouncyCastle (~1.5 MB) are never used.
+            excludes += "org/bouncycastle/pqc/**"
             // kuromoji's ipadic dictionary is ~13 MB of .bin resources — the whole reason the APK
             // grew by 14.4 MB. Android fetches the same eight files on demand instead (see
             // KuromojiDictionary in lyricsService androidMain), so the classpath copies are
@@ -164,11 +166,6 @@ dependencies {
     // Custom Activity On Crash
     implementation(libs.customactivityoncrash)
 
-    // Easy Permissions
-    implementation(libs.easypermissions)
-
-    // Legacy Support
-    implementation(libs.legacy.support.v4)
     // Coroutines
     implementation(libs.coroutines.android)
 

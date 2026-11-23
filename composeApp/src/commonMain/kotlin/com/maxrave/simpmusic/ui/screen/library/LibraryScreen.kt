@@ -531,13 +531,14 @@ fun LibraryScreen(
                     enter = fadeIn() + expandHorizontally(),
                     exit = fadeOut() + shrinkVertically(),
                 ) {
+                    val accountRequest =
+                        com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                            rawUrl = accountThumbnail,
+                            targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                            crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                        )
                     AsyncImage(
-                        model =
-                            ImageRequest
-                                .Builder(LocalPlatformContext.current)
-                                .data(accountThumbnail)
-                                .crossfade(550)
-                                .build(),
+                        model = accountRequest,
                         placeholder = rememberVectorPainter(SimpIcons.PeopleAlt),
                         error = rememberVectorPainter(SimpIcons.PeopleAlt),
                         contentDescription = null,

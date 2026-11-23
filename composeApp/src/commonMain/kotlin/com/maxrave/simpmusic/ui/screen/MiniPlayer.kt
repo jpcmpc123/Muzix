@@ -386,14 +386,14 @@ fun MiniPlayer(
                                         isPlaying = isPlaying,
                                     )
                                 }
+                                val thumbRequest =
+                                    com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                        rawUrl = songEntity?.thumbnails,
+                                        targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                                        crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                                    )
                                 AsyncImage(
-                                    model =
-                                        ImageRequest
-                                            .Builder(LocalPlatformContext.current)
-                                            .data(songEntity?.thumbnails.sizedThumb(226))
-                                            .size(128)
-                                            .crossfade(550)
-                                            .build(),
+                                    model = thumbRequest,
                                     placeholder = rememberHolderPainter(),
                                     error = rememberHolderPainter(),
                                     contentDescription = null,
@@ -716,14 +716,14 @@ fun MiniPlayer(
                                     .hoverable(artworkInteraction),
                             contentAlignment = Alignment.Center,
                         ) {
+                            val pillThumbRequest =
+                                com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                    rawUrl = songEntity?.thumbnails,
+                                    targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                                    crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                                )
                             AsyncImage(
-                                model =
-                                    ImageRequest
-                                        .Builder(LocalPlatformContext.current)
-                                        .data(songEntity?.thumbnails.sizedThumb(226))
-                                        .size(128)
-                                        .crossfade(550)
-                                        .build(),
+                                model = pillThumbRequest,
                                 placeholder = rememberHolderPainter(),
                                 error = rememberHolderPainter(),
                                 contentDescription = null,

@@ -13,10 +13,12 @@ import coil3.request.ImageResult
 import coil3.request.SuccessResult
 import com.maxrave.logger.Logger
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -24,16 +26,22 @@ import java.util.UUID
 import kotlin.coroutines.coroutineContext
 
 /**
- * HTTP(S) images use cache for 24 hours, then try the network with stale-cache fallback.
- * Expiry never deletes an image, and a failed refresh never renews its TTL.
+ * HTTP(S) images use cache for 24 hours (7 days for immutable Google/YouTube artwork hashes),
+ * then try the network with stale-cache fallback. Expiry never deletes an image, and a failed
+ * refresh never renews its TTL.
  *
- * Coil writes network responses to disk before decoding them, including some HTTP failures.
- * Stage each response under a temporary key in the SAME disk cache and promote it only after
- * decoding succeeds. This keeps a 404 or an undecodable 200 from replacing the offline fallback.
+ * When a cached entry already exists on disk/RAM, refreshes stage under a temporary disk key and
+ * promote only after decoding succeeds so a 404 or corrupt 200 never overwrites offline fallback.
+ * Pure cache misses (no existing fallback) write directly to [diskKey] to avoid a double disk copy
+ * and remove [diskKey] if network/decode fails.
+ *
+ * When [revalidateScope] is provided, expired cache hits return immediately (stale-while-revalidate)
+ * while a deduplicated background refresh updates disk & RAM without blocking UI rendering.
  */
 class NetworkFirstInterceptor(
-    private val ttlMillis: Long = 24L * 60 * 60 * 1000,
+    private val ttlMillis: Long = DEFAULT_TTL_MILLIS,
     private val nowMillis: () -> Long = { System.currentTimeMillis() },
+    private val revalidateScope: CoroutineScope? = null,
     private val imageLoader: () -> ImageLoader,
 ) : Interceptor {
     init {
@@ -46,6 +54,7 @@ class NetworkFirstInterceptor(
     }
 
     private val requestLocks = mutableMapOf<String, RequestLock>()
+    private val revalidatingKeys = mutableSetOf<String>()
     private val registryMutex = Mutex()
 
     override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
@@ -57,7 +66,9 @@ class NetworkFirstInterceptor(
             return chain.proceed()
         }
 
-        // Fast-path for fresh in-memory bitmaps: avoid registryMutex + per-key Mutex + disk I/O
+        val diskKey = request.diskCacheKey ?: url
+
+        // Fast-path for in-memory bitmaps: avoid registryMutex + per-key Mutex + disk I/O
         // during fast scrolling and recompositions.
         if (request.memoryCachePolicy.readEnabled) {
             val ramRequest =
@@ -74,21 +85,34 @@ class NetworkFirstInterceptor(
                 val cachedValue = ramResult.memoryCacheKey?.let { loader.memoryCache?.get(it) }
                 val memoryCachedAt =
                     cachedValue?.takeIf { it.image === ramResult.image }?.extras?.get(CACHED_AT_KEY) as? Long
-                if (isFresh(memoryCachedAt)) {
+                if (isFresh(memoryCachedAt, url)) {
+                    return ramResult.copy(request = request)
+                }
+                if (revalidateScope != null) {
+                    scheduleBackgroundRevalidate(chain, request, url, diskKey)
                     return ramResult.copy(request = request)
                 }
             }
         }
 
-        val diskKey = request.diskCacheKey ?: url
+        return withPerKeyLock(diskKey) {
+            loadWithTtl(chain, request, url, diskKey)
+        }
+    }
+
+    private suspend fun <T> withPerKeyLock(
+        diskKey: String,
+        block: suspend () -> T,
+    ): T {
         // Serialize only requests for the same disk entry so promotion and RAM updates agree.
         // Remove the lock after its last user; browsing new URLs must not grow a permanent map.
-        val requestLock = registryMutex.withLock {
-            requestLocks.getOrPut(diskKey) { RequestLock() }.also { it.users++ }
-        }
+        val requestLock =
+            registryMutex.withLock {
+                requestLocks.getOrPut(diskKey) { RequestLock() }.also { it.users++ }
+            }
         try {
             return requestLock.mutex.withLock {
-                loadWithTtl(chain, request, diskKey)
+                block()
             }
         } finally {
             if (coroutineContext.isActive) {
@@ -108,21 +132,23 @@ class NetworkFirstInterceptor(
     private suspend fun loadWithTtl(
         chain: Interceptor.Chain,
         request: ImageRequest,
+        url: String,
         diskKey: String,
     ): ImageResult {
         val loader = imageLoader()
         val diskCache = loader.diskCache
-        val cacheRequest = request.newBuilder()
-            .memoryCachePolicy(
-                when {
-                    !request.memoryCachePolicy.readEnabled -> CachePolicy.DISABLED
-                    request.memoryCachePolicy.writeEnabled -> CachePolicy.ENABLED
-                    else -> CachePolicy.READ_ONLY
-                },
-            )
-            .diskCachePolicy(if (request.diskCachePolicy.readEnabled) CachePolicy.READ_ONLY else CachePolicy.DISABLED)
-            .networkCachePolicy(CachePolicy.DISABLED)
-            .build()
+        val cacheRequest =
+            request
+                .newBuilder()
+                .memoryCachePolicy(
+                    when {
+                        !request.memoryCachePolicy.readEnabled -> CachePolicy.DISABLED
+                        request.memoryCachePolicy.writeEnabled -> CachePolicy.ENABLED
+                        else -> CachePolicy.READ_ONLY
+                    },
+                ).diskCachePolicy(if (request.diskCachePolicy.readEnabled) CachePolicy.READ_ONLY else CachePolicy.DISABLED)
+                .networkCachePolicy(CachePolicy.DISABLED)
+                .build()
         val cachedResult = chain.withRequest(cacheRequest).proceed()
         if (cachedResult is SuccessResult) {
             val cachedValue = cachedResult.memoryCacheKey?.let { loader.memoryCache?.get(it) }
@@ -135,37 +161,118 @@ class NetworkFirstInterceptor(
                 // Warming RAM from disk must carry the original age, not start a new TTL.
                 updateMemoryEntry(loader.memoryCache, cachedResult, cachedAtMillis = cachedAtMillis)
             }
-            if (isFresh(cachedAtMillis)) return cachedResult.copy(request = request)
+            if (isFresh(cachedAtMillis, url)) return cachedResult.copy(request = request)
+            if (revalidateScope != null) {
+                scheduleBackgroundRevalidate(chain, request, url, diskKey)
+                return cachedResult.copy(request = request)
+            }
         }
 
-        // Keep a successfully decoded stale image alive while refreshing. A failed refresh can
-        // return it even if another request evicts its disk entry in the meantime.
+        val hasExistingFallback =
+            cachedResult is SuccessResult ||
+                (!request.diskCachePolicy.readEnabled && hasDiskEntry(diskCache, diskKey))
+
+        if (!hasExistingFallback) {
+            return fetchDirectOnMiss(chain, request, loader, diskCache, diskKey)
+        }
+
+        return refreshProtectingFallback(
+            chain = chain,
+            request = request,
+            loader = loader,
+            diskCache = diskCache,
+            diskKey = diskKey,
+            cachedResult = cachedResult as? SuccessResult,
+            cacheRequest = cacheRequest,
+        )
+    }
+
+    /**
+     * Pure cache miss: there is no existing offline fallback on disk to protect, so download and
+     * cache straight under [diskKey] without staging + byte-copy promotion. If the request fails
+     * or cannot be decoded, purge [diskKey] so HTTP error payloads are never retained.
+     */
+    private suspend fun fetchDirectOnMiss(
+        chain: Interceptor.Chain,
+        request: ImageRequest,
+        loader: ImageLoader,
+        diskCache: DiskCache?,
+        diskKey: String,
+    ): ImageResult {
+        val networkRequest =
+            request
+                .newBuilder()
+                .memoryCachePolicy(if (request.memoryCachePolicy.writeEnabled) CachePolicy.WRITE_ONLY else CachePolicy.DISABLED)
+                .diskCachePolicy(if (request.diskCachePolicy.writeEnabled) CachePolicy.WRITE_ONLY else CachePolicy.DISABLED)
+                .networkCachePolicy(CachePolicy.ENABLED)
+                .diskCacheKey(diskKey)
+                .build()
+
+        var succeeded = false
+        try {
+            val networkResult = chain.withRequest(networkRequest).proceed()
+            if (networkResult is SuccessResult) {
+                succeeded = true
+                updateMemoryEntry(
+                    memoryCache = loader.memoryCache,
+                    result = networkResult,
+                    cachedAtMillis = nowMillis(),
+                )
+                return networkResult.copy(request = request)
+            }
+
+            if (request.diskCachePolicy.writeEnabled) {
+                removeDiskEntrySafely(diskCache, diskKey)
+            }
+            return (networkResult as ErrorResult).copy(request = request)
+        } catch (cancelled: CancellationException) {
+            if (!succeeded && request.diskCachePolicy.writeEnabled) {
+                removeDiskEntrySafely(diskCache, diskKey)
+            }
+            throw cancelled
+        }
+    }
+
+    /**
+     * Refresh when an existing entry is present: stage under a unique temporary key and promote to
+     * [diskKey] only after decoding succeeds so a 404 or corrupt 200 never clobbers the fallback.
+     */
+    private suspend fun refreshProtectingFallback(
+        chain: Interceptor.Chain,
+        request: ImageRequest,
+        loader: ImageLoader,
+        diskCache: DiskCache?,
+        diskKey: String,
+        cachedResult: SuccessResult?,
+        cacheRequest: ImageRequest,
+    ): ImageResult {
         val temporaryKey = "coil-network-first:${UUID.randomUUID()}"
-        val networkRequest = request.newBuilder()
-            .memoryCachePolicy(if (request.memoryCachePolicy.writeEnabled) CachePolicy.WRITE_ONLY else CachePolicy.DISABLED)
-            .diskCachePolicy(if (request.diskCachePolicy.writeEnabled) CachePolicy.WRITE_ONLY else CachePolicy.DISABLED)
-            .networkCachePolicy(CachePolicy.ENABLED)
-            .diskCacheKey(temporaryKey)
-            .build()
+        val networkRequest =
+            request
+                .newBuilder()
+                .memoryCachePolicy(if (request.memoryCachePolicy.writeEnabled) CachePolicy.WRITE_ONLY else CachePolicy.DISABLED)
+                .diskCachePolicy(if (request.diskCachePolicy.writeEnabled) CachePolicy.WRITE_ONLY else CachePolicy.DISABLED)
+                .networkCachePolicy(CachePolicy.ENABLED)
+                .diskCacheKey(temporaryKey)
+                .build()
 
         try {
             val networkResult = chain.withRequest(networkRequest).proceed()
             if (networkResult is SuccessResult) {
-                val cachedAtMillis =
-                    readCachedAt(diskCache, networkResult.diskCacheKey ?: temporaryKey)?.takeIf { it > 0 }
-                        ?: nowMillis()
-                val savedDiskKey = if (networkResult.diskCacheKey == temporaryKey) {
-                    if (diskCache != null && promote(diskCache, temporaryKey, diskKey)) diskKey else null
-                } else {
-                    networkResult.diskCacheKey
-                }
+                val cachedAtMillis = nowMillis()
+                val savedDiskKey =
+                    if (networkResult.diskCacheKey == temporaryKey) {
+                        if (diskCache != null && promote(diskCache, temporaryKey, diskKey)) diskKey else null
+                    } else {
+                        networkResult.diskCacheKey
+                    }
                 updateMemoryEntry(loader.memoryCache, networkResult, temporaryKey, savedDiskKey, cachedAtMillis)
                 return networkResult.copy(request = request, diskCacheKey = savedDiskKey)
             }
 
             // Force the stale cache on failure without changing its age. Retry cache-only if it
             // was initially missing, in case another producer filled it during the network attempt.
-            val fallbackResult = if (cachedResult is SuccessResult) cachedResult else chain.withRequest(cacheRequest).proceed()
+            val fallbackResult = cachedResult ?: chain.withRequest(cacheRequest).proceed()
             return if (fallbackResult is SuccessResult) {
                 fallbackResult.copy(request = request)
             } else {
@@ -186,64 +293,167 @@ class NetworkFirstInterceptor(
             throw cancelled
         } finally {
             // Cancellation must propagate, but it must not leave completed staging entries behind.
-            withContext(NonCancellable + Dispatchers.IO) {
-                try {
-                    diskCache?.remove(temporaryKey)
-                } catch (error: Exception) {
-                    Logger.w("Coil", "Could not remove temporary image cache entry (${error::class.simpleName})")
+            removeDiskEntrySafely(diskCache, temporaryKey)
+        }
+    }
+
+    private fun scheduleBackgroundRevalidate(
+        chain: Interceptor.Chain,
+        request: ImageRequest,
+        url: String,
+        diskKey: String,
+    ) {
+        val scope = revalidateScope ?: return
+        scope.launch(Dispatchers.IO) {
+            val acquired =
+                registryMutex.withLock {
+                    revalidatingKeys.add(diskKey)
+                }
+            if (!acquired) return@launch
+            try {
+                withPerKeyLock(diskKey) {
+                    val loader = imageLoader()
+                    val diskCache = loader.diskCache
+                    val latestCachedAt = readCachedAt(diskCache, diskKey)
+                    if (isFresh(latestCachedAt, url)) return@withPerKeyLock
+                    val temporaryKey = "coil-network-first:${UUID.randomUUID()}"
+                    val refreshRequest =
+                        request
+                            .newBuilder()
+                            .memoryCachePolicy(if (request.memoryCachePolicy.writeEnabled) CachePolicy.WRITE_ONLY else CachePolicy.DISABLED)
+                            .diskCachePolicy(if (request.diskCachePolicy.writeEnabled) CachePolicy.WRITE_ONLY else CachePolicy.DISABLED)
+                            .networkCachePolicy(CachePolicy.ENABLED)
+                            .diskCacheKey(temporaryKey)
+                            .build()
+                    try {
+                        val result = chain.withRequest(refreshRequest).proceed()
+                        if (result is SuccessResult) {
+                            val savedDiskKey =
+                                if (result.diskCacheKey == temporaryKey) {
+                                    if (diskCache != null && promote(diskCache, temporaryKey, diskKey)) diskKey else null
+                                } else {
+                                    result.diskCacheKey
+                                }
+                            updateMemoryEntry(loader.memoryCache, result, temporaryKey, savedDiskKey, nowMillis())
+                        }
+                    } finally {
+                        removeDiskEntrySafely(diskCache, temporaryKey)
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Logger.w("Coil", "Background image revalidation failed (${error::class.simpleName})")
+            } finally {
+                withContext(NonCancellable) {
+                    registryMutex.withLock {
+                        revalidatingKeys.remove(diskKey)
+                    }
                 }
             }
         }
     }
 
-    private fun isFresh(cachedAtMillis: Long?): Boolean {
+    private fun effectiveTtlMillis(url: String): Long {
+        if (ttlMillis != DEFAULT_TTL_MILLIS) return ttlMillis
+        return if (isImmutableArtworkHost(url)) IMMUTABLE_ARTWORK_TTL_MILLIS else ttlMillis
+    }
+
+    private fun isImmutableArtworkHost(url: String): Boolean {
+        val afterScheme = url.substringAfter("://", missingDelimiterValue = "")
+        val host = afterScheme.substringBefore('/').substringBefore('?').lowercase()
+        return host.endsWith(".googleusercontent.com") ||
+            host == "googleusercontent.com" ||
+            host.endsWith(".ggpht.com") ||
+            host == "ggpht.com" ||
+            host.endsWith(".ytimg.com") ||
+            host == "ytimg.com"
+    }
+
+    private fun isFresh(
+        cachedAtMillis: Long?,
+        url: String,
+    ): Boolean {
         if (cachedAtMillis == null || cachedAtMillis <= 0) return false
         val now = nowMillis()
-        return now >= cachedAtMillis && now - cachedAtMillis < ttlMillis
+        val effectiveTtl = effectiveTtlMillis(url)
+        return now >= cachedAtMillis && now - cachedAtMillis < effectiveTtl
+    }
+
+    private suspend fun hasDiskEntry(
+        diskCache: DiskCache?,
+        key: String,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            if (diskCache == null) return@withContext false
+            try {
+                diskCache.openSnapshot(key)?.use { true } ?: false
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                false
+            }
+        }
+
+    private suspend fun removeDiskEntrySafely(
+        diskCache: DiskCache?,
+        key: String,
+    ) {
+        withContext(NonCancellable + Dispatchers.IO) {
+            try {
+                diskCache?.remove(key)
+            } catch (error: Exception) {
+                Logger.w("Coil", "Could not remove image cache entry (${error::class.simpleName})")
+            }
+        }
     }
 
     @OptIn(InternalCoilApi::class)
-    private suspend fun readCachedAt(diskCache: DiskCache?, key: String): Long? = withContext(Dispatchers.IO) {
-        if (diskCache == null) return@withContext null
-        try {
-            diskCache.openSnapshot(key)?.use { snapshot ->
-                diskCache.fileSystem.read(snapshot.metadata) { CacheNetworkResponse.readFrom(this).responseMillis }
+    private suspend fun readCachedAt(
+        diskCache: DiskCache?,
+        key: String,
+    ): Long? =
+        withContext(Dispatchers.IO) {
+            if (diskCache == null) return@withContext null
+            try {
+                diskCache.openSnapshot(key)?.use { snapshot ->
+                    diskCache.fileSystem.read(snapshot.metadata) { CacheNetworkResponse.readFrom(this).responseMillis }
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                // Unknown/older metadata is stale, not grounds to delete its still-usable image.
+                null
             }
-        } catch (error: Exception) {
-            if (error is CancellationException) throw error
-            // Unknown/older metadata is stale, not grounds to delete its still-usable image.
-            null
         }
-    }
 
     private suspend fun promote(
         diskCache: DiskCache,
         temporaryKey: String,
         diskKey: String,
-    ): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val snapshot = diskCache.openSnapshot(temporaryKey) ?: return@withContext false
-            snapshot.use {
-                val editor = diskCache.openEditor(diskKey) ?: return@withContext false
-                try {
-                    // Copy encoded bytes, not a recompressed bitmap: format and quality stay intact.
-                    diskCache.fileSystem.copy(snapshot.metadata, editor.metadata)
-                    diskCache.fileSystem.copy(snapshot.data, editor.data)
-                    coroutineContext.ensureActive()
-                    editor.commit()
-                    true
-                } catch (error: Exception) {
-                    runCatching { editor.abort() }
-                    throw error
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val snapshot = diskCache.openSnapshot(temporaryKey) ?: return@withContext false
+                snapshot.use {
+                    val editor = diskCache.openEditor(diskKey) ?: return@withContext false
+                    try {
+                        // Copy encoded bytes, not a recompressed bitmap: format and quality stay intact.
+                        diskCache.fileSystem.copy(snapshot.metadata, editor.metadata)
+                        diskCache.fileSystem.copy(snapshot.data, editor.data)
+                        coroutineContext.ensureActive()
+                        editor.commit()
+                        true
+                    } catch (error: Exception) {
+                        runCatching { editor.abort() }
+                        throw error
+                    }
                 }
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                // Cache write failure must not hide an image that was successfully downloaded.
+                Logger.w("Coil", "Could not update image cache (${error::class.simpleName})")
+                false
             }
-        } catch (error: Exception) {
-            if (error is CancellationException) throw error
-            // Cache write failure must not hide an image that was successfully downloaded.
-            Logger.w("Coil", "Could not update image cache (${error::class.simpleName})")
-            false
         }
-    }
 
     private fun updateMemoryEntry(
         memoryCache: MemoryCache?,
@@ -272,6 +482,8 @@ class NetworkFirstInterceptor(
     }
 
     private companion object {
+        const val DEFAULT_TTL_MILLIS = 24L * 60 * 60 * 1000
+        const val IMMUTABLE_ARTWORK_TTL_MILLIS = 7L * 24 * 60 * 60 * 1000
         const val CACHED_AT_KEY = "simpmusic#image_response_millis"
     }
 }

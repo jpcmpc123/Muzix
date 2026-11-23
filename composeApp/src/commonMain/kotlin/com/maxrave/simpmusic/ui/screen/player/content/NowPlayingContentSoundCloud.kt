@@ -832,13 +832,11 @@ private fun SoundCloudArtwork(
         )
         var artworkUrl by remember(thumbnailUrl) { mutableStateOf(thumbnailUrl) }
         val request =
-            ImageRequest
-                .Builder(LocalPlatformContext.current)
-                .data(artworkUrl)
-                .diskCachePolicy(CachePolicy.ENABLED)
-                .diskCacheKey(artworkUrl + "BIGGER")
-                .crossfade(550)
-                .build()
+            com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                rawUrl = artworkUrl,
+                targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+            )
         // Re-enter when a prefetched cover becomes current, even if its URL is unchanged, so the
         // memory-cache success still hands the new track's bitmap to the shell.
         key(isCurrentPage) {
@@ -1113,8 +1111,14 @@ private fun TimedCommentBubble(comment: TimedComment) {
         modifier = Modifier.padding(horizontal = 24.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val commentAvatarRequest =
+            com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                rawUrl = comment.authorAvatar,
+                targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+            )
         AsyncImage(
-            model = comment.authorAvatar,
+            model = commentAvatarRequest,
             contentDescription = null,
             placeholder = rememberHolderPainter(),
             error = rememberHolderPainter(),

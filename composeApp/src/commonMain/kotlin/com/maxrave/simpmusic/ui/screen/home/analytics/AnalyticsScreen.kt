@@ -845,15 +845,14 @@ private fun ArtworkImage(
     onBitmap: (ImageBitmap) -> Unit,
     modifier: Modifier,
 ) {
+    val artworkRequest =
+        com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+            rawUrl = url,
+            targetPx = com.maxrave.simpmusic.utils.THUMB_CARD_PX,
+            crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+        )
     AsyncImage(
-        model =
-            ImageRequest
-                .Builder(LocalPlatformContext.current)
-                .data(url)
-                .diskCachePolicy(CachePolicy.ENABLED)
-                .diskCacheKey(url ?: "")
-                .crossfade(550)
-                .build(),
+        model = artworkRequest,
         contentDescription = "",
         contentScale = ContentScale.Crop,
         onSuccess = { onBitmap(it.result.image.toImageBitmap()) },

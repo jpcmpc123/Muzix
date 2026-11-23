@@ -58,6 +58,8 @@ import coil3.request.allowHardware
 import coil3.toBitmap
 import com.kmpalette.rememberPaletteState
 import com.maxrave.common.Config
+import com.maxrave.simpmusic.utils.THUMB_HERO_PX
+import com.maxrave.simpmusic.utils.sizedArtworkUrl
 import com.maxrave.domain.data.entities.AlbumEntity
 import com.maxrave.domain.data.entities.ArtistEntity
 import com.maxrave.domain.data.entities.PlaylistEntity
@@ -162,7 +164,8 @@ class PlaylistsWidget :
                 }
 
                 LaunchedEffect(thumbUrl) {
-                    artwork = context.loadBitmap(thumbUrl, thumbUrl + "BIGGER", PLAYER_DECODE_PX)
+                    val sizedUrl = thumbUrl.sizedArtworkUrl(THUMB_HERO_PX)
+                    artwork = context.loadBitmap(sizedUrl, sizedUrl.orEmpty(), PLAYER_DECODE_PX)
                 }
 
                 LaunchedEffect(Unit) {

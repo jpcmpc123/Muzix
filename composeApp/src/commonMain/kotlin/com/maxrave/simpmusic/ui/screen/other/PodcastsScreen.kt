@@ -210,15 +210,14 @@ fun PodcastScreen(
                                 Column(
                                     horizontalAlignment = Alignment.Start,
                                 ) {
+                                    val heroRequest =
+                                        com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                            rawUrl = data.thumbnail.lastOrNull()?.url,
+                                            targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                                            crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                                        )
                                     AsyncImage(
-                                        model =
-                                            ImageRequest
-                                                .Builder(LocalPlatformContext.current)
-                                                .data(data.thumbnail.lastOrNull()?.url)
-                                                .diskCachePolicy(CachePolicy.ENABLED)
-                                                .diskCacheKey(data.thumbnail.lastOrNull()?.url)
-                                                .crossfade(true)
-                                                .build(),
+                                        model = heroRequest,
                                         placeholder = rememberHolderPainter(square = true),
                                         error = rememberHolderPainter(square = true),
                                         contentDescription = null,
@@ -251,16 +250,14 @@ fun PodcastScreen(
                                                 modifier = Modifier.padding(vertical = 8.dp),
                                             ) {
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    val authorRequest =
+                                                        com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                                            rawUrl = data.authorThumbnail,
+                                                            targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                                                            crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                                                        )
                                                     AsyncImage(
-                                                        model =
-                                                            ImageRequest
-                                                                .Builder(LocalPlatformContext.current)
-                                                                .data(data.authorThumbnail)
-                                                                .size(256, 256)
-                                                                .diskCachePolicy(CachePolicy.ENABLED)
-                                                                .diskCacheKey(data.authorThumbnail)
-                                                                .crossfade(150)
-                                                                .build(),
+                                                        model = authorRequest,
                                                         placeholder = rememberHolderPainter(),
                                                         error = rememberHolderPainter(),
                                                         contentDescription = null,

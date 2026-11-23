@@ -279,11 +279,91 @@ class NetworkFirstInterceptorTest {
         assertEquals("old", assertIs<TestImage>(result.image).label)
     }
 
+    @Test
+    fun pureMissCleansUpDiskEntryOnHttpOrDecodeError() = withFixture { fixture ->
+        fixture.client.code = 404
+        fixture.client.body = "error:404"
+        assertIs<ErrorResult>(fixture.load())
+        fixture.assertNoTemporaryEntries(expectedEntries = 0)
+
+        fixture.client.code = 200
+        fixture.client.body = "not-an-image"
+        assertIs<ErrorResult>(fixture.load())
+        fixture.assertNoTemporaryEntries(expectedEntries = 0)
+
+        fixture.client.body = "cover:ok"
+        val success = assertIs<SuccessResult>(fixture.load())
+        assertEquals("ok", assertIs<TestImage>(success.image).label)
+        assertEquals("cover:ok", fixture.diskBody())
+        fixture.assertNoTemporaryEntries(expectedEntries = 1)
+    }
+
+    @Test
+    fun immutableArtworkHostsStayFreshForSevenDays() = withFixture(ttlMillis = DAY_MS) { fixture ->
+        val googleUrl = "https://lh3.googleusercontent.com/artworkhash=w400-h400-l90-rj"
+        fixture.request = fixture.request.newBuilder().data(googleUrl).build()
+        assertIs<SuccessResult>(fixture.load())
+        fixture.client.requests.clear()
+
+        // 6 days later: still cached without hitting the network.
+        fixture.client.nowMillis += 6L * DAY_MS
+        fixture.client.body = "cover:new"
+        val cached = assertIs<SuccessResult>(fixture.load())
+        assertEquals("old", assertIs<TestImage>(cached.image).label)
+        assertEquals(0, fixture.client.requests.size)
+
+        // At 7 days: refreshes.
+        fixture.client.nowMillis += DAY_MS
+        val refreshed = assertIs<SuccessResult>(fixture.load())
+        assertEquals("new", assertIs<TestImage>(refreshed.image).label)
+        assertEquals(1, fixture.client.requests.size)
+    }
+
+    @Test
+    fun staleWhileRevalidateReturnsCachedImmediatelyAndUpdatesInBackground() {
+        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+        try {
+            withFixture(ttlMillis = DAY_MS, revalidateScope = scope) { fixture ->
+                fixture.prime()
+                fixture.loader.memoryCache?.clear()
+                fixture.client.nowMillis += DAY_MS
+                fixture.client.body = "cover:refreshed"
+
+                // Returns stale disk image immediately without blocking UI on network.
+                val immediate = assertIs<SuccessResult>(fixture.load())
+                assertEquals("old", assertIs<TestImage>(immediate.image).label)
+                assertEquals(DataSource.DISK, immediate.dataSource)
+
+                // Wait for background revalidation to promote the new image to disk.
+                val deadline = System.currentTimeMillis() + 3_000L
+                while (fixture.diskBody() != "cover:refreshed" && System.currentTimeMillis() < deadline) {
+                    kotlinx.coroutines.delay(20L)
+                }
+                assertEquals("cover:refreshed", fixture.diskBody())
+                fixture.assertNoTemporaryEntries()
+
+                // Failed background refresh leaves valid fallback intact.
+                fixture.client.nowMillis += DAY_MS
+                fixture.client.code = 404
+                fixture.client.body = "error:404"
+                fixture.loader.memoryCache?.clear()
+                val stillValid = assertIs<SuccessResult>(fixture.load())
+                assertEquals("refreshed", assertIs<TestImage>(stillValid.image).label)
+                kotlinx.coroutines.delay(100L)
+                assertEquals("cover:refreshed", fixture.diskBody())
+                fixture.assertNoTemporaryEntries()
+            }
+        } finally {
+            scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
+        }
+    }
+
     private fun withFixture(
         ttlMillis: Long = 0L,
+        revalidateScope: kotlinx.coroutines.CoroutineScope? = null,
         block: suspend (Fixture) -> Unit,
     ) = runBlocking {
-        val fixture = Fixture(ttlMillis)
+        val fixture = Fixture(ttlMillis, revalidateScope)
         try {
             block(fixture)
         } finally {
@@ -293,7 +373,10 @@ class NetworkFirstInterceptorTest {
         }
     }
 
-    private class Fixture(ttlMillis: Long) {
+    private class Fixture(
+        ttlMillis: Long,
+        revalidateScope: kotlinx.coroutines.CoroutineScope? = null,
+    ) {
         val directory = Files.createTempDirectory("coil-network-first-test")
         val diskCache = DiskCache.Builder()
             .directory(directory.resolve("cache").toString().toPath())
@@ -312,7 +395,13 @@ class NetworkFirstInterceptorTest {
                 .mainCoroutineContext(Dispatchers.Unconfined)
                 .diskCache(diskCache)
                 .components {
-                    add(NetworkFirstInterceptor(ttlMillis = ttlMillis, nowMillis = { client.nowMillis }) { loader })
+                    add(
+                        NetworkFirstInterceptor(
+                            ttlMillis = ttlMillis,
+                            nowMillis = { client.nowMillis },
+                            revalidateScope = revalidateScope,
+                        ) { loader },
+                    )
                     add(Interceptor { chain ->
                         val result = chain.proceed()
                         if (client.cancelAfterDecode && result is SuccessResult && result.dataSource == DataSource.NETWORK) {

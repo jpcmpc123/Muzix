@@ -240,15 +240,14 @@ private fun Header(
                     backgroundColor.rgbFactor(0.5f),
                 ),
     ) {
+        val heroRequest =
+            com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                rawUrl = imageUrl,
+                targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+            )
         AsyncImage(
-            model =
-                ImageRequest
-                    .Builder(LocalPlatformContext.current)
-                    .data(imageUrl)
-                    .diskCachePolicy(CachePolicy.ENABLED)
-                    .diskCacheKey(imageUrl)
-                    .crossfade(true)
-                    .build(),
+            model = heroRequest,
             onSuccess = {
                 onImageLoaded(
                     it.result.image.toImageBitmap(),

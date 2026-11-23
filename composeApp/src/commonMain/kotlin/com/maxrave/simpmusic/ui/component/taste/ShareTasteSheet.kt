@@ -28,7 +28,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kmpalette.loader.rememberNetworkLoader
 import com.kmpalette.rememberDominantColorState
 import com.maxrave.domain.data.model.taste.TasteProfile
 import com.maxrave.simpmusic.ui.component.ShareImageSheet
@@ -36,8 +35,6 @@ import com.maxrave.simpmusic.ui.component.lyrics.ShareCardSignature
 import com.maxrave.simpmusic.ui.component.lyrics.ShareLyricsCardMaxWidth
 import com.maxrave.simpmusic.ui.component.lyrics.ShareLyricsPalette
 import com.maxrave.simpmusic.ui.component.lyrics.shareCardContentColor
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
 import io.ktor.http.Url
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res

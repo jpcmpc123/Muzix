@@ -57,6 +57,8 @@ import com.maxrave.domain.repository.SongRepository
 import com.maxrave.simpmusic.MainActivity
 import com.maxrave.simpmusic.R
 import com.maxrave.simpmusic.extension.getColorFromPalette
+import com.maxrave.simpmusic.utils.THUMB_HERO_PX
+import com.maxrave.simpmusic.utils.sizedArtworkUrl
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collectLatest
@@ -180,10 +182,8 @@ class ListeningInsightsWidget :
                 }
 
                 LaunchedEffect(thumbUrl) {
-                    // The shared "BIGGER" cache key, so all three widgets decode the identical
-                    // bitmap — a different key can hand back another scaling, which is enough to
-                    // move the palette onto a different colour.
-                    paletteArtwork = context.loadBitmap(thumbUrl, thumbUrl + "BIGGER", TILE_DECODE_PX)
+                    val sizedUrl = thumbUrl.sizedArtworkUrl(THUMB_HERO_PX)
+                    paletteArtwork = context.loadBitmap(sizedUrl, sizedUrl.orEmpty(), TILE_DECODE_PX)
                 }
 
                 var listeningTime by remember { mutableStateOf<Long?>(null) }

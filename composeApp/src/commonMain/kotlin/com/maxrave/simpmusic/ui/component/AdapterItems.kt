@@ -75,10 +75,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
-import coil3.request.CachePolicy
-import coil3.request.ImageRequest
-import coil3.request.crossfade
 import com.maxrave.common.Config
 import com.maxrave.domain.data.entities.AlbumEntity
 import com.maxrave.domain.data.entities.LocalPlaylistEntity
@@ -123,6 +119,11 @@ import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.ArtworkShape
 import com.maxrave.simpmusic.ui.theme.LocalForceDarkText
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS
+import com.maxrave.simpmusic.utils.THUMB_CARD_PX
+import com.maxrave.simpmusic.utils.THUMB_SMALL_PX
+import com.maxrave.simpmusic.utils.rememberOptimizedImageRequest
+import com.maxrave.simpmusic.utils.sizedArtworkUrl
 import com.maxrave.simpmusic.viewModel.HomeViewModel
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import org.jetbrains.compose.resources.painterResource
@@ -240,21 +241,13 @@ fun HomeSectionHeader(
 ) {
     val channelId = data.channelId
     val moreEndpoint = data.moreEndpoint
-    val platformContext = LocalPlatformContext.current
     val headerThumbUrl = data.thumbnail?.lastOrNull()?.url
     val headerImageRequest =
-        remember(platformContext, headerThumbUrl) {
-            headerThumbUrl?.let { url ->
-                ImageRequest
-                    .Builder(platformContext)
-                    .data(url)
-                    .size(256, 256)
-                    .diskCachePolicy(CachePolicy.ENABLED)
-                    .diskCacheKey(url)
-                    .crossfade(150)
-                    .build()
-            }
-        }
+        rememberOptimizedImageRequest(
+            rawUrl = headerThumbUrl,
+            targetPx = THUMB_SMALL_PX,
+            crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+        )
     Row(
         modifier =
             if (channelId != null) {
@@ -689,18 +682,12 @@ fun HomeItemContentPlaylist(
                     is MonthlyRecapItem -> null
                     else -> null
                 }
-            val platformContext = LocalPlatformContext.current
             val imageRequest =
-                remember(platformContext, thumb) {
-                    ImageRequest
-                        .Builder(platformContext)
-                        .data(thumb)
-                        .size(640, 640)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .diskCacheKey(thumb)
-                        .crossfade(150)
-                        .build()
-                }
+                rememberOptimizedImageRequest(
+                    rawUrl = thumb,
+                    targetPx = THUMB_CARD_PX,
+                    crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+                )
             Box {
                 AsyncImage(
                     model = imageRequest,
@@ -939,19 +926,12 @@ fun QuickPicksItem(
                     // 44dp artwork plus this padding is the grid's cell: 64dp, or 56dp on Android.
                     .padding(horizontal = 10.dp, vertical = if (compactCards) 6.dp else 10.dp),
         ) {
-            val platformContext = LocalPlatformContext.current
-            val thumbUrl = data.thumbnails.lastOrNull()?.url.sizedThumb(226)
             val imageRequest =
-                remember(platformContext, thumbUrl) {
-                    ImageRequest
-                        .Builder(platformContext)
-                        .data(thumbUrl)
-                        .size(256, 256)
-                        .crossfade(150)
-                        .diskCacheKey(thumbUrl)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .build()
-                }
+                rememberOptimizedImageRequest(
+                    rawUrl = data.thumbnails.lastOrNull()?.url,
+                    targetPx = THUMB_SMALL_PX,
+                    crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+                )
             AsyncImage(
                 model = imageRequest,
                 placeholder = rememberHolderPainter(),
@@ -1031,10 +1011,6 @@ fun QuickPicksItem(
     }
 }
 
-private val ThumbUpgradeRegex = Regex("([wh])120")
-
-private val ThumbSizeRegex = Regex("=w\\d+-h\\d+")
-
 /**
  * googleusercontent serves the size named in the URL itself. List rows show the artwork
  * small (40-48dp) but used to download the largest thumbnail anyway (usually 540px),
@@ -1042,8 +1018,7 @@ private val ThumbSizeRegex = Regex("=w\\d+-h\\d+")
  * close to the slot instead. URLs without a size segment (e.g. video thumbnails) pass
  * through unchanged.
  */
-internal fun String?.sizedThumb(px: Int): String? =
-    this?.let { url -> ThumbSizeRegex.replace(url) { "=w$px-h$px" } }
+internal fun String?.sizedThumb(px: Int): String? = sizedArtworkUrl(px)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1058,7 +1033,6 @@ fun HomeItemSong(
 ) {
     val textWidth = if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier.width(160.dp)
     val (hoverModifier, hovered) = rememberCardHover(enabled = onPlay != null)
-    val platformContext = LocalPlatformContext.current
     Box(
         modifier =
             Modifier
@@ -1077,22 +1051,12 @@ fun HomeItemSong(
                     .padding(start = cardSidePadding, top = 10.dp, end = cardSidePadding, bottom = 6.dp)
                     .heightIn(min = if (compactCards) 160.dp + cardTextBlockFloor() else 230.dp),
         ) {
-            val rawThumb = data.thumbnails.lastOrNull()?.url
             val imageRequest =
-                remember(platformContext, rawThumb) {
-                    val thumb =
-                        rawThumb?.let {
-                            if (it.contains("w120")) ThumbUpgradeRegex.replace(it, "$1544") else it
-                        }
-                    ImageRequest
-                        .Builder(platformContext)
-                        .data(thumb)
-                        .size(640, 640)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .diskCacheKey(thumb)
-                        .crossfade(150)
-                        .build()
-                }
+                rememberOptimizedImageRequest(
+                    rawUrl = data.thumbnails.lastOrNull()?.url,
+                    targetPx = THUMB_CARD_PX,
+                    crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+                )
             Box(Modifier.align(Alignment.CenterHorizontally)) {
                 AsyncImage(
                     model = imageRequest,
@@ -1195,19 +1159,13 @@ fun HomeItemVideo(
                     .padding(start = cardSidePadding, top = 10.dp, end = cardSidePadding, bottom = 6.dp)
                     .heightIn(min = if (compactCards) 160.dp + cardTextBlockFloor() else 230.dp),
         ) {
-            val thumb = data.thumbnails.lastOrNull()?.url
-            val platformContext = LocalPlatformContext.current
             val imageRequest =
-                remember(platformContext, thumb) {
-                    ImageRequest
-                        .Builder(platformContext)
-                        .data(thumb)
-                        .size(640, 640)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .diskCacheKey(thumb)
-                        .crossfade(150)
-                        .build()
-                }
+                rememberOptimizedImageRequest(
+                    rawUrl = data.thumbnails.lastOrNull()?.url,
+                    targetPx = THUMB_CARD_PX,
+                    crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+                    preserveAspectRatio = true,
+                )
             Box(Modifier.align(Alignment.CenterHorizontally)) {
                 AsyncImage(
                     model = imageRequest,
@@ -1303,7 +1261,6 @@ fun HomeItemArtist(
 ) {
     val titleColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val textWidth = if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier.width(160.dp)
-    val platformContext = LocalPlatformContext.current
     Box(
         Modifier
             .fillMaxSize()
@@ -1319,18 +1276,12 @@ fun HomeItemArtist(
                     .padding(start = cardSidePadding, top = 10.dp, end = cardSidePadding, bottom = 6.dp)
                     .heightIn(min = if (compactCards) 160.dp + cardTextBlockFloor() else 230.dp),
         ) {
-            val thumb = data.thumbnails.lastOrNull()?.url
             val imageRequest =
-                remember(platformContext, thumb) {
-                    ImageRequest
-                        .Builder(platformContext)
-                        .data(thumb)
-                        .size(640, 640)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .diskCacheKey(thumb)
-                        .crossfade(150)
-                        .build()
-                }
+                rememberOptimizedImageRequest(
+                    rawUrl = data.thumbnails.lastOrNull()?.url,
+                    targetPx = THUMB_CARD_PX,
+                    crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+                )
             AsyncImage(
                 model = imageRequest,
                 placeholder = rememberHolderPainter(),
@@ -1441,17 +1392,15 @@ fun ItemVideoChart(
                 Modifier
                     .padding(10.dp),
         ) {
-            val thumb = data.thumbnails.lastOrNull()?.url
+            val imageRequest =
+                rememberOptimizedImageRequest(
+                    rawUrl = data.thumbnails.lastOrNull()?.url,
+                    targetPx = THUMB_CARD_PX,
+                    crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+                    preserveAspectRatio = true,
+                )
             AsyncImage(
-                model =
-                    ImageRequest
-                        .Builder(LocalPlatformContext.current)
-                        .data(thumb)
-                        .size(640, 640)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .diskCacheKey(thumb)
-                        .crossfade(150)
-                        .build(),
+                model = imageRequest,
                 placeholder = rememberHolderPainter(),
                 error = rememberHolderPainter(),
                 contentDescription = null,
@@ -1555,17 +1504,14 @@ fun ItemArtistChart(
                         .align(Alignment.CenterVertically)
                         .padding(end = 20.dp),
             )
-            val thumb = data.thumbnails.lastOrNull()?.url
+            val artistImageRequest =
+                rememberOptimizedImageRequest(
+                    rawUrl = data.thumbnails.lastOrNull()?.url,
+                    targetPx = THUMB_SMALL_PX,
+                    crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+                )
             AsyncImage(
-                model =
-                    ImageRequest
-                        .Builder(LocalPlatformContext.current)
-                        .data(thumb)
-                        .size(256, 256)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .diskCacheKey(thumb)
-                        .crossfade(150)
-                        .build(),
+                model = artistImageRequest,
                 placeholder = rememberHolderPainter(),
                 error = rememberHolderPainter(),
                 contentDescription = null,
@@ -1664,17 +1610,14 @@ fun ItemTrackChart(
                     }
                 }
             }
-            val thumb = data.thumbnails?.lastOrNull()?.url
+            val thumbRequest =
+                rememberOptimizedImageRequest(
+                    rawUrl = data.thumbnails?.lastOrNull()?.url,
+                    targetPx = THUMB_SMALL_PX,
+                    crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+                )
             AsyncImage(
-                model =
-                    ImageRequest
-                        .Builder(LocalPlatformContext.current)
-                        .data(thumb)
-                        .size(256, 256)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .diskCacheKey(thumb)
-                        .crossfade(150)
-                        .build(),
+                model = thumbRequest,
                 placeholder = rememberHolderPainter(),
                 error = rememberHolderPainter(),
                 contentDescription = null,

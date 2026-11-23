@@ -721,19 +721,18 @@ private fun SidebarCover(item: LibrarySidebarItem) {
         return
     }
     val fallback = rememberHolderPainter()
+    val sidebarRequest =
+        com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+            rawUrl = item.thumbnail,
+            targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+            crossfadeMs = 0,
+            selfAsPlaceholder = true,
+        )
     AsyncImage(
         // A row the list rebuilds (filter, sort, scroll back) must not flash the holder and fade the
         // cover in again: one size-free memory key, used as its own placeholder, puts the cover that
         // is already decoded on the very first frame, and there is no fade to replay.
-        model =
-            ImageRequest
-                .Builder(LocalPlatformContext.current)
-                .data(item.thumbnail)
-                .diskCachePolicy(CachePolicy.ENABLED)
-                .diskCacheKey(item.thumbnail)
-                .memoryCacheKey(item.thumbnail)
-                .placeholderMemoryCacheKey(item.thumbnail)
-                .build(),
+        model = sidebarRequest,
         placeholder = fallback,
         error = fallback,
         fallback = fallback,

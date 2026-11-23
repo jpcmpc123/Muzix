@@ -378,17 +378,15 @@ fun ArtistScreen(
                                                     onFirstFrame = { videoShown = true },
                                                 )
                                             }
+                                            val headerImageRequest =
+                                                com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                                    rawUrl = headerImageUrl,
+                                                    targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                                                    crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                                                    preserveAspectRatio = !isPortrait,
+                                                )
                                             AsyncImage(
-                                                model =
-                                                    ImageRequest
-                                                        .Builder(LocalPlatformContext.current)
-                                                        .data(headerImageUrl)
-                                                        .diskCachePolicy(CachePolicy.ENABLED)
-                                                        .memoryCachePolicy(CachePolicy.ENABLED)
-                                                        .diskCacheKey(headerImageUrl)
-                                                        .memoryCacheKey(headerImageUrl)
-                                                        .crossfade(550)
-                                                        .build(),
+                                                model = headerImageRequest,
                                                 placeholder = rememberHolderPainter(),
                                                 error = rememberHolderPainter(),
                                                 contentDescription = null,
@@ -418,14 +416,16 @@ fun ArtistScreen(
                                             // artwork, leaving just the colour scrim. Fades with the
                                             // artwork, and is dropped once the video has taken over.
                                             if (artworkAlpha > 0f) {
+                                                val blurredFooterRequest =
+                                                    com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                                                        rawUrl = headerImageUrl,
+                                                        targetPx = com.maxrave.simpmusic.utils.THUMB_BLUR_BACKDROP_PX,
+                                                        crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                                                        preserveAspectRatio = !isPortrait,
+                                                        reuseExistingRamPlaceholder = false,
+                                                    )
                                                 AsyncImage(
-                                                    model =
-                                                        ImageRequest
-                                                            .Builder(LocalPlatformContext.current)
-                                                            .data(headerImageUrl)
-                                                            .size(256, 256)
-                                                            .crossfade(550)
-                                                            .build(),
+                                                    model = blurredFooterRequest,
                                                     contentDescription = null,
                                                     contentScale =
                                                         if (isPortrait) ContentScale.FillWidth else ContentScale.Crop,
@@ -1384,8 +1384,14 @@ private fun LikedSongsSection(
                     .padding(horizontal = 20.dp, vertical = 8.dp),
         ) {
             Box(modifier = Modifier.size(48.dp)) {
+                val artistRowThumbRequest =
+                    com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                        rawUrl = imageUrl,
+                        targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                        crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                    )
                 AsyncImage(
-                    model = imageUrl,
+                    model = artistRowThumbRequest,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize().clip(CircleShape),

@@ -23,14 +23,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
-import coil3.request.CachePolicy
-import coil3.request.ImageRequest
-import coil3.request.crossfade
 import com.maxrave.domain.data.model.podcast.PodcastBrowse
 import com.maxrave.simpmusic.ui.icon.MoreVert
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS
+import com.maxrave.simpmusic.utils.THUMB_SMALL_PX
+import com.maxrave.simpmusic.utils.rememberOptimizedImageRequest
 import org.jetbrains.compose.resources.painterResource
 import simpmusic.composeapp.generated.resources.Res
 
@@ -54,16 +53,14 @@ fun PodcastEpisodeFullWidthItem(
         ) {
             Spacer(modifier = Modifier.width(10.dp))
             Box(modifier = Modifier.size(50.dp)) {
+                val thumbRequest =
+                    rememberOptimizedImageRequest(
+                        rawUrl = episode.thumbnail.lastOrNull()?.url,
+                        targetPx = THUMB_SMALL_PX,
+                        crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+                    )
                 AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(LocalPlatformContext.current)
-                            .data(episode.thumbnail.lastOrNull()?.url)
-                            .size(256, 256)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(episode.thumbnail.lastOrNull()?.url)
-                            .crossfade(150)
-                            .build(),
+                    model = thumbRequest,
                     placeholder = rememberHolderPainter(),
                     error = rememberHolderPainter(),
                     contentDescription = null,

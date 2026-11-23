@@ -151,15 +151,14 @@ private fun MosaicTile(
     Box(
         modifier.clickable { image.onClick() },
     ) {
+        val tileRequest =
+            com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                rawUrl = image.imageUrl,
+                targetPx = com.maxrave.simpmusic.utils.THUMB_CARD_PX,
+                crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+            )
         AsyncImage(
-            model =
-                ImageRequest
-                    .Builder(LocalPlatformContext.current)
-                    .data(image.imageUrl)
-                    .diskCachePolicy(CachePolicy.ENABLED)
-                    .diskCacheKey(image.imageUrl)
-                    .crossfade(550)
-                    .build(),
+            model = tileRequest,
             contentDescription = "",
             contentScale = ContentScale.Crop,
             modifier =

@@ -1433,16 +1433,14 @@ fun SuggestItemRow(
                     .size(40.dp)
                     .clip(RoundedCornerShape(4.dp)),
         ) {
+            val searchThumbRequest =
+                com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                    rawUrl = url,
+                    targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                    crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+                )
             AsyncImage(
-                model =
-                    ImageRequest
-                        .Builder(LocalPlatformContext.current)
-                        .data(url.sizedThumb(226))
-                        .size(256, 256)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .diskCacheKey(url.sizedThumb(226))
-                        .crossfade(150)
-                        .build(),
+                model = searchThumbRequest,
                 placeholder = rememberHolderPainter(),
                 error = rememberHolderPainter(),
                 contentDescription = null,

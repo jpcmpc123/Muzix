@@ -142,9 +142,6 @@
 -dontwarn org.openjsse.**
 -dontwarn okhttp3.internal.Util
 
--keep class com.liskovsoft.** { *; }
--keep interface com.liskovsoft.** { *; }
--keep class com.eclipsesource.v8.** { *; }
 -keep class com.maxrave.kotlinytmusicscraper.** { *; }
 
 -dontwarn javax.script.AbstractScriptEngine
@@ -176,26 +173,9 @@
 -dontwarn jdk.dynalink.linker.support.Guards
 -dontwarn jdk.dynalink.support.ChainedCallSite
 
--keep class org.apache.commons.io.** { *; }
-
-#YtDlp
--keep class com.yausername.** { *; }
 -keep class org.apache.commons.compress.archivers.zip.** { *; }
 -keepattributes SourceFile
-
-## Rules for NewPipeExtractor
--keep class org.schabi.newpipe.extractor.timeago.patterns.** { *; }
--keep class dev.maxrave.pipepipe.extractor.timeago.patterns.** { *; }
--keep class org.mozilla.javascript.** { *; }
 -keep class org.mozilla.classfile.ClassFileWriter
--dontwarn org.mozilla.javascript.tools.**
-# Please add these rules to your existing keep rules in order to suppress warning
-# This is generated automatically by the Android Gradle plugin.
--dontwarn java.beans.BeanDescriptor
--dontwarn java.beans.BeanInfo
--dontwarn java.beans.IntrospectionException
--dontwarn java.beans.Introspector
--dontwarn java.beans.PropertyDescriptor
 
 -dontwarn com.maxrave.data.di.loader.LoaderKt
 -dontwarn com.maxrave.media3.ui.MediaPlayerViewKt
@@ -204,8 +184,6 @@
 -keep class com.maxrave.data.mapping.MappingKt { *; }
 -keep class com.maxrave.data.extension.** { *; }
 -keep class com.maxrave.data.di.** { *; }
-
--keep class com.maxrave.kotlinytmusicscraper.** { *; }
 
 -keep class org.simpmusic.lyrics.parser.** { *; }
 -keep class org.simpmusic.lyrics.models.** { *; }
