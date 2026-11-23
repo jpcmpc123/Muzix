@@ -110,6 +110,8 @@ import com.maxrave.common.Config
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.home.HomeItem
 import com.maxrave.domain.data.model.home.chart.Chart
+import com.maxrave.domain.data.model.home.isQuickPicksTitle
+import com.maxrave.domain.data.model.home.prioritizeQuickPicksFirst
 import com.maxrave.domain.data.model.intent.GenericIntent
 import com.maxrave.domain.data.model.mood.Mood
 import com.maxrave.domain.extension.now
@@ -295,9 +297,7 @@ fun HomeScreen(
     val isQuickPicks: (String) -> Boolean =
         remember(quickPicksTitle) {
             { title ->
-                title.equals(quickPicksTitle, ignoreCase = true) ||
-                    title.contains("quick pick", ignoreCase = true) ||
-                    title.contains("escolha", ignoreCase = true)
+                isQuickPicksTitle(title, quickPicksTitle)
             }
         }
     // Any shelf YouTube heads with the listener's own avatar over its title (Listen again is one of
@@ -331,10 +331,7 @@ fun HomeScreen(
                     }
                 }
             // Quick picks first: joao wants it as the first shelf on Home, wherever YouTube placed it in the feed.
-            val ordered =
-                shelves.indexOfFirst { isQuickPicks(it.title) }.let { idx ->
-                    if (idx > 0) listOf(shelves[idx]) + shelves.filterIndexed { i, _ -> i != idx } else shelves
-                }
+            val ordered = shelves.prioritizeQuickPicksFirst(quickPicksTitle)
             val seen = HashMap<String, Int>(ordered.size)
             val keys =
                 ordered.map { item ->
@@ -345,6 +342,13 @@ fun HomeScreen(
                 }
             ordered to keys
         }
+    val topShelfKey = homeShelfKeys.firstOrNull()
+    val topIsQuickPicks = homeShelves.firstOrNull()?.let { isQuickPicks(it.title) } == true
+    LaunchedEffect(topShelfKey, topIsQuickPicks) {
+        if (topIsQuickPicks && scrollState.firstVisibleItemIndex <= 1) {
+            scrollState.scrollToItem(0)
+        }
+    }
     val newRelease by viewModel.newRelease.collectAsStateWithLifecycle()
     val (newReleaseItems, newReleaseKeys) =
         remember(newRelease) {

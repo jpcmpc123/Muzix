@@ -6,6 +6,7 @@ import com.maxrave.common.SUPPORTED_LANGUAGE
 import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.data.model.home.HomeItem
 import com.maxrave.domain.data.model.home.chart.Chart
+import com.maxrave.domain.data.model.home.prioritizeQuickPicksFirst
 import com.maxrave.domain.data.model.mood.Mood
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.manager.DataStoreManager.Values.TRUE
@@ -207,7 +208,7 @@ class HomeViewModel(
                         when (home) {
                             is Resource.Success -> {
                                 _continuation.value = home.data?.first
-                                _homeItemList.value = home.data?.second ?: listOf()
+                                _homeItemList.value = (home.data?.second ?: listOf()).prioritizeQuickPicksFirst()
                                 _homeBackground.value = home.data?.third
                                 _homeListState.value =
                                     if (continuation.value.isNullOrEmpty()) {
@@ -248,10 +249,10 @@ class HomeViewModel(
                         }
                         loading.value = false
                     }
+                if (includeSecondary) {
+                    loadSecondarySections()
+                }
             }
-        if (includeSecondary) {
-            loadSecondarySections()
-        }
     }
 
     private fun loadSecondarySections() {
@@ -324,7 +325,7 @@ class HomeViewModel(
                                 is Resource.Success -> {
                                     _continuation.value = home.data?.first
                                     val newItems = home.data?.second ?: listOf()
-                                    _homeItemList.update { it + newItems }
+                                    _homeItemList.update { (it + newItems).prioritizeQuickPicksFirst() }
                                     if (home.data?.first.isNullOrEmpty()) {
                                         _homeListState.value = ListState.PAGINATION_EXHAUST
                                     } else {
