@@ -255,6 +255,15 @@ fun MiniPlayer(
         job4.join()
     }
 
+    val miniPlayerContext = coil3.compose.LocalPlatformContext.current
+    LaunchedEffect(songEntity?.thumbnails, miniPlayerContext) {
+        com.maxrave.simpmusic.utils.enqueueArtworkPrefetch(
+            platformContext = miniPlayerContext,
+            rawUrl = songEntity?.thumbnails,
+            targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+        )
+    }
+
     if (getPlatform() == Platform.Android) {
         // One shape for both the Card and the clip below. They must not diverge: the clip wraps
         // the Card's own background draw, so the larger radius wins and silently becomes the
@@ -392,10 +401,14 @@ fun MiniPlayer(
                                         targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
                                         crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
                                     )
+                                val thumbHolder = rememberHolderPainter()
                                 AsyncImage(
                                     model = thumbRequest,
-                                    placeholder = rememberHolderPainter(),
-                                    error = rememberHolderPainter(),
+                                    transform =
+                                        com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                                            fallbackPlaceholder = thumbHolder,
+                                            error = thumbHolder,
+                                        ),
                                     contentDescription = null,
                                     // Crop in the circle: FillWidth would leave bands around a 16:9 video thumbnail.
                                     contentScale = if (isFlat) ContentScale.Crop else ContentScale.FillWidth,
@@ -722,10 +735,14 @@ fun MiniPlayer(
                                     targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
                                     crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
                                 )
+                            val pillHolder = rememberHolderPainter()
                             AsyncImage(
                                 model = pillThumbRequest,
-                                placeholder = rememberHolderPainter(),
-                                error = rememberHolderPainter(),
+                                transform =
+                                    com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                                        fallbackPlaceholder = pillHolder,
+                                        error = pillHolder,
+                                    ),
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize(),

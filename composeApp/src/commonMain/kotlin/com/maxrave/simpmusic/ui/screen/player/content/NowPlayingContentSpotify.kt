@@ -583,21 +583,30 @@ fun NowPlayingContentSpotify(
                                                     crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
                                                     preserveAspectRatio = state.screenData.isVideo,
                                                 )
+                                            val artworkHolder = rememberHolderPainter()
                                             AsyncImage(
                                                 model = artworkRequest,
                                                 contentDescription = "",
-                                                onSuccess = {
-                                                    actions.onArtworkBitmap(
-                                                        it.result.image.toImageBitmap(),
-                                                    )
-                                                },
-                                                onError = {
-                                                    val fallback = artworkUrl?.replace("maxresdefault", "hqdefault")
-                                                    if (fallback != null && fallback != artworkUrl) artworkUrl = fallback
+                                                onState = { imgState ->
+                                                    when (imgState) {
+                                                        is coil3.compose.AsyncImagePainter.State.Success -> {
+                                                            actions.onArtworkBitmap(
+                                                                imgState.result.image.toImageBitmap(),
+                                                            )
+                                                        }
+                                                        is coil3.compose.AsyncImagePainter.State.Error -> {
+                                                            val fallback = artworkUrl?.replace("maxresdefault", "hqdefault")
+                                                            if (fallback != null && fallback != artworkUrl) artworkUrl = fallback
+                                                        }
+                                                        else -> Unit
+                                                    }
                                                 },
                                                 contentScale = ContentScale.Crop,
-                                                placeholder = rememberHolderPainter(),
-                                                error = rememberHolderPainter(),
+                                                transform =
+                                                    com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                                                        fallbackPlaceholder = artworkHolder,
+                                                        error = artworkHolder,
+                                                    ),
                                                 modifier =
                                                     Modifier
                                                         .align(Alignment.Center)
@@ -806,20 +815,26 @@ fun NowPlayingContentSpotify(
                                                     targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
                                                     crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
                                                 )
+                                            val adjacentHolder = rememberHolderPainter()
                                             AsyncImage(
                                                 model = adjacentRequest,
                                                 contentDescription = pageTrack.title,
                                                 contentScale = ContentScale.Crop,
-                                                placeholder = rememberHolderPainter(),
-                                                error = rememberHolderPainter(),
+                                                transform =
+                                                    com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                                                        fallbackPlaceholder = adjacentHolder,
+                                                        error = adjacentHolder,
+                                                    ),
                                                 // Feed the per-page palette using the SAME bitmap
                                                 // we just rendered so the Layer 0 gradient backdrop
                                                 // matches what the user sees on screen.
-                                                onSuccess = { state ->
-                                                    palettePageScope.launch {
-                                                        pagePaletteState.generate(
-                                                            state.result.image.toImageBitmap(),
-                                                        )
+                                                onState = { imgState ->
+                                                    if (imgState is coil3.compose.AsyncImagePainter.State.Success) {
+                                                        palettePageScope.launch {
+                                                            pagePaletteState.generate(
+                                                                imgState.result.image.toImageBitmap(),
+                                                            )
+                                                        }
                                                     }
                                                 },
                                                 modifier =
@@ -1476,10 +1491,14 @@ fun NowPlayingContentSpotify(
                                                 crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
                                                 preserveAspectRatio = true,
                                             )
+                                        val artistHolder = rememberHolderPainter()
                                         AsyncImage(
                                             model = authorCardRequest,
-                                            placeholder = rememberHolderPainter(),
-                                            error = rememberHolderPainter(),
+                                            transform =
+                                                com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                                                    fallbackPlaceholder = artistHolder,
+                                                    error = artistHolder,
+                                                ),
                                             contentDescription = null,
                                             contentScale = ContentScale.Crop,
                                             // No explicit clip: the ElevatedCard already clips to
@@ -1801,10 +1820,14 @@ internal fun NowPlayingTrackInfoRow(
                     targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
                     crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
                 )
+            val miniHolder = rememberHolderPainter(square = true)
             AsyncImage(
                 model = miniThumbRequest,
-                placeholder = rememberHolderPainter(square = true),
-                error = rememberHolderPainter(square = true),
+                transform =
+                    com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                        fallbackPlaceholder = miniHolder,
+                        error = miniHolder,
+                    ),
                 contentDescription = null,
                 contentScale = ContentScale.FillWidth,
                 modifier =

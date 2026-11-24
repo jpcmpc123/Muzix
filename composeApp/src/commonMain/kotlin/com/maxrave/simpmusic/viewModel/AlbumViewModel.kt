@@ -19,6 +19,7 @@ import com.maxrave.domain.utils.toArrayListTrack
 import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.logger.LogLevel
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.album
@@ -42,88 +44,107 @@ class AlbumViewModel(
     private val _uiState: MutableStateFlow<AlbumUIState> = MutableStateFlow(AlbumUIState.initial())
     val uiState: StateFlow<AlbumUIState> = _uiState
 
+    private var updateJob: Job? = null
     private var job: Job? = null
     private var collectDownloadStateJob: Job? = null
 
     fun updateBrowseId(browseId: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(browseId = browseId) }
-            albumRepository.getAlbumData(browseId).collectLatest { res ->
-                when (res) {
-                    is Resource.Success -> {
-                        val data = res.data
-                        if (data != null) {
-                            _uiState.update {
-                                it.copy(
-                                    browseId = browseId,
-                                    audioPlaylistId = data.audioPlaylistId,
-                                    title = data.title,
-                                    thumbnail = data.thumbnails?.lastOrNull()?.url,
-                                    artist =
-                                        data.artists.firstOrNull() ?: Artist(
-                                            id = null,
-                                            name = "",
-                                        ),
-                                    year = data.year ?: now().year.toString(),
-                                    trackCount = data.trackCount,
-                                    description = data.description,
-                                    length = data.duration ?: "",
-                                    listTrack = data.tracks,
-                                    otherVersion = data.otherVersion,
-                                    loadState = LocalPlaylistState.PlaylistLoadState.Success,
-                                )
-                            }
-                            val localAlbum = albumRepository.getAlbum(browseId).lastOrNull()
-                            if (localAlbum != null) {
+        updateJob?.cancel()
+        job?.cancel()
+        collectDownloadStateJob?.cancel()
+        _uiState.value =
+            AlbumUIState.initial().copy(
+                browseId = browseId,
+                loadState = LocalPlaylistState.PlaylistLoadState.Loading,
+            )
+        updateJob =
+            viewModelScope.launch {
+                albumRepository.getAlbumData(browseId).collectLatest { res ->
+                    when (res) {
+                        is Resource.Success -> {
+                            val data = res.data
+                            if (data != null) {
+                                val localAlbum =
+                                    withContext(Dispatchers.IO) {
+                                        albumRepository.getAlbum(browseId).lastOrNull()
+                                    }
                                 _uiState.update {
                                     it.copy(
-                                        downloadState = localAlbum.downloadState,
-                                        liked = localAlbum.liked,
+                                        browseId = browseId,
+                                        audioPlaylistId = data.audioPlaylistId,
+                                        title = data.title,
+                                        thumbnail = data.thumbnails?.lastOrNull()?.url,
+                                        artist =
+                                            data.artists.firstOrNull() ?: Artist(
+                                                id = null,
+                                                name = "",
+                                            ),
+                                        year = data.year ?: now().year.toString(),
+                                        downloadState = localAlbum?.downloadState ?: DownloadState.STATE_NOT_DOWNLOADED,
+                                        liked = localAlbum?.liked == true,
+                                        trackCount = data.trackCount,
+                                        description = data.description,
+                                        length = data.duration ?: "",
+                                        listTrack = data.tracks,
+                                        otherVersion = data.otherVersion,
+                                        loadState = LocalPlaylistState.PlaylistLoadState.Success,
                                     )
                                 }
-                                albumRepository.updateAlbumInLibrary(now(), browseId)
-                                val resolvedIds = data.tracks.map { it.videoId }
-                                if (localAlbum.tracks != resolvedIds) {
-                                    albumRepository.updateAlbumTracks(browseId, resolvedIds)
-                                    data.tracks.forEach { track ->
-                                        songRepository
-                                            .insertSong(
-                                                track.toSongEntity().copy(
-                                                    inLibrary = Config.REMOVED_SONG_DATE_TIME,
-                                                ),
-                                            ).singleOrNull()
-                                    }
-                                }
-                            } else {
-                                albumRepository.insertAlbum(data.toAlbumEntity(browseId)).singleOrNull().let {
-                                    log("Insert Album $it")
-                                    data.tracks.forEach { track ->
-                                        songRepository
-                                            .insertSong(
-                                                track.toSongEntity().copy(
-                                                    inLibrary = Config.REMOVED_SONG_DATE_TIME,
-                                                ),
-                                            ).singleOrNull()
-                                            ?.let {
-                                                log("Insert Song $it")
+                                launch(Dispatchers.IO) {
+                                    if (localAlbum != null) {
+                                        albumRepository.updateAlbumInLibrary(now(), browseId)
+                                        val resolvedIds = data.tracks.map { it.videoId }
+                                        if (localAlbum.tracks != resolvedIds) {
+                                            albumRepository.updateAlbumTracks(browseId, resolvedIds)
+                                            data.tracks.forEach { track ->
+                                                songRepository
+                                                    .insertSong(
+                                                        track.toSongEntity().copy(
+                                                            inLibrary = Config.REMOVED_SONG_DATE_TIME,
+                                                        ),
+                                                    ).singleOrNull()
                                             }
+                                        }
+                                    } else {
+                                        albumRepository.insertAlbum(data.toAlbumEntity(browseId)).singleOrNull().let {
+                                            log("Insert Album $it")
+                                            data.tracks.forEach { track ->
+                                                songRepository
+                                                    .insertSong(
+                                                        track.toSongEntity().copy(
+                                                            inLibrary = Config.REMOVED_SONG_DATE_TIME,
+                                                        ),
+                                                    ).singleOrNull()
+                                                    ?.let {
+                                                        log("Insert Song $it")
+                                                    }
+                                            }
+                                        }
                                     }
                                 }
-                            }
-                            getAlbumFlow(browseId)
-                        } else {
-                            makeToast(getString(Res.string.error) + ": Null data")
-                            _uiState.update {
-                                it.copy(
-                                    loadState = LocalPlaylistState.PlaylistLoadState.Error,
-                                )
+                                getAlbumFlow(browseId)
+                            } else {
+                                makeToast(getString(Res.string.error) + ": Null data")
+                                _uiState.update {
+                                    it.copy(
+                                        loadState = LocalPlaylistState.PlaylistLoadState.Error,
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    is Resource.Error -> {
-                        albumRepository.getAlbum(browseId).singleOrNull().let { albumEntity ->
+                        is Resource.Error -> {
+                            val albumEntity =
+                                withContext(Dispatchers.IO) {
+                                    albumRepository.getAlbum(browseId).singleOrNull()
+                                }
                             if (albumEntity != null) {
+                                val cachedTracks =
+                                    withContext(Dispatchers.IO) {
+                                        songRepository
+                                            .getSongsByListVideoId(albumEntity.tracks ?: emptyList())
+                                            .singleOrNull() ?: emptyList()
+                                    }.toArrayListTrack()
                                 _uiState.update {
                                     it.copy(
                                         browseId = browseId,
@@ -136,18 +157,16 @@ class AlbumViewModel(
                                                 name = albumEntity.artistName?.firstOrNull() ?: "",
                                             ),
                                         year = albumEntity.year ?: now().year.toString(),
+                                        downloadState = albumEntity.downloadState,
+                                        liked = albumEntity.liked,
                                         trackCount = albumEntity.trackCount,
                                         description = albumEntity.description,
                                         length = albumEntity.duration ?: "",
-                                        listTrack =
-                                            (
-                                                songRepository
-                                                    .getSongsByListVideoId(albumEntity.tracks ?: emptyList())
-                                                    .singleOrNull() ?: emptyList()
-                                            ).toArrayListTrack(),
+                                        listTrack = cachedTracks,
                                         loadState = LocalPlaylistState.PlaylistLoadState.Success,
                                     )
                                 }
+                                getAlbumFlow(browseId)
                             } else {
                                 log("Error: ${res.message}", LogLevel.ERROR)
                                 makeToast(getString(Res.string.error) + ": ${res.message}")
@@ -161,7 +180,6 @@ class AlbumViewModel(
                     }
                 }
             }
-        }
     }
 
     fun setBrush(brush: List<Color>) {

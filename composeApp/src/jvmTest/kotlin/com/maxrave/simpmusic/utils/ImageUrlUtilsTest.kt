@@ -1,11 +1,19 @@
 package com.maxrave.simpmusic.utils
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
 import coil3.Canvas
 import coil3.Image
+import coil3.compose.AsyncImagePainter
 import coil3.memory.MemoryCache
+import coil3.request.ErrorResult
+import coil3.request.ImageRequest
+import coil3.request.NullRequestDataException
+import com.maxrave.simpmusic.viewModel.resolveNowPlayingThumbnailUrl
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 
 class ImageUrlUtilsTest {
     @Test
@@ -68,6 +76,75 @@ class ImageUrlUtilsTest {
 
         assertEquals(smallKey, findExistingArtworkMemoryKey(memoryCache, heroUrl, THUMB_HERO_PX))
         assertNull(findExistingArtworkMemoryKey(memoryCache, smallUrl, THUMB_SMALL_PX))
+    }
+
+    @Test
+    fun ramFirstTransformPreservesRamPainterOnLoadingAndUsesFallbackOnlyWhenNull() {
+        val ramPainter = ColorPainter(Color.Red)
+        val fallbackPainter = ColorPainter(Color.Blue)
+        val errorPainter = ColorPainter(Color.Green)
+
+        val loadingWithRam = AsyncImagePainter.State.Loading(painter = ramPainter)
+        val resultWithRam =
+            ramFirstTransform(
+                state = loadingWithRam,
+                fallbackPlaceholder = fallbackPainter,
+                error = errorPainter,
+            )
+        assertSame(ramPainter, resultWithRam.painter)
+
+        val loadingWithoutRam = AsyncImagePainter.State.Loading(painter = null)
+        val resultWithoutRam =
+            ramFirstTransform(
+                state = loadingWithoutRam,
+                fallbackPlaceholder = fallbackPainter,
+                error = errorPainter,
+            )
+        assertSame(fallbackPainter, resultWithoutRam.painter)
+
+        val errorState =
+            AsyncImagePainter.State.Error(
+                painter = null,
+                result =
+                    ErrorResult(
+                        image = null,
+                        request = ImageRequest.Builder(coil3.PlatformContext.INSTANCE).data("https://example.com/a.jpg").build(),
+                        throwable = NullRequestDataException(),
+                    ),
+            )
+        val resultError =
+            ramFirstTransform(
+                state = errorState,
+                fallbackPlaceholder = fallbackPainter,
+                error = errorPainter,
+            )
+        assertSame(errorPainter, resultError.painter)
+    }
+
+    @Test
+    fun resolveNowPlayingThumbnailUrlFallsBackToSongThumbnails() {
+        assertEquals(
+            "https://lh3.googleusercontent.com/media=w544-h544",
+            resolveNowPlayingThumbnailUrl(
+                mediaItemArtworkUri = "https://lh3.googleusercontent.com/media=w544-h544",
+                songThumbnails = "https://lh3.googleusercontent.com/song=w544-h544",
+            ),
+        )
+        assertEquals(
+            "https://lh3.googleusercontent.com/song=w544-h544",
+            resolveNowPlayingThumbnailUrl(
+                mediaItemArtworkUri = null,
+                songThumbnails = "https://lh3.googleusercontent.com/song=w544-h544",
+            ),
+        )
+        assertEquals(
+            "https://lh3.googleusercontent.com/song=w544-h544",
+            resolveNowPlayingThumbnailUrl(
+                mediaItemArtworkUri = "   ",
+                songThumbnails = "https://lh3.googleusercontent.com/song=w544-h544",
+            ),
+        )
+        assertNull(resolveNowPlayingThumbnailUrl(mediaItemArtworkUri = "", songThumbnails = null))
     }
 
     private class DummyImage : Image {

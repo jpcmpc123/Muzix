@@ -244,28 +244,32 @@ class LocalPlaylistViewModel(
     }
 
     private val modifications = MutableStateFlow<List<PagingActions<Pair<SongEntity, PairSongLocalPlaylist>>>>(emptyList())
+    private var pagingCollectJob: Job? = null
+    private var updateStateJob: Job? = null
 
     private fun getTracksPagingState(
         id: Long,
         filterState: FilterState,
     ) {
-        viewModelScope.launch {
-            Logger.w("LocalPlaylistViewModel", "getTracksPagingState: ${uiState.value}")
-            modifications.value = listOf()
-            localPlaylistRepository
-                .getTracksPaging(
-                    id,
-                    filterState,
-                ).distinctUntilChanged()
-                .cachedIn(viewModelScope)
-                .combine(modifications) { pagingData, modifications ->
-                    modifications.fold(pagingData) { data, actions ->
-                        applyActions(data, actions)
+        pagingCollectJob?.cancel()
+        pagingCollectJob =
+            viewModelScope.launch {
+                Logger.w("LocalPlaylistViewModel", "getTracksPagingState: ${uiState.value}")
+                modifications.value = listOf()
+                localPlaylistRepository
+                    .getTracksPaging(
+                        id,
+                        filterState,
+                    ).distinctUntilChanged()
+                    .cachedIn(viewModelScope)
+                    .combine(modifications) { pagingData, modifications ->
+                        modifications.fold(pagingData) { data, actions ->
+                            applyActions(data, actions)
+                        }
+                    }.collect {
+                        _tracksPagingState.value = it
                     }
-                }.collect {
-                    _tracksPagingState.value = it
-                }
-        }
+            }
     }
 
     private fun applyActions(
@@ -947,29 +951,49 @@ class LocalPlaylistViewModel(
         id: Long,
         refresh: Boolean = false,
     ) {
-        viewModelScope.launch {
-            localPlaylistRepository.getLocalPlaylist(id).collectLatestResource(
-                onSuccess = { pl ->
-                    if (pl != null) {
-                        _uiState.update {
-                            it.copy(
-                                id = pl.id,
-                                title = pl.title,
-                                thumbnail = pl.thumbnail,
-                                inLibrary = pl.inLibrary,
-                                downloadState = pl.downloadState,
-                                syncState = pl.syncState,
-                                ytPlaylistId = pl.youtubePlaylistId,
-                                trackCount = pl.tracks?.size ?: 0,
-                            )
-                        }
-                        if (refresh) {
-                            getTracksPagingState(id, _uiState.value.filterState)
-                        }
-                    }
-                },
-            )
+        updateStateJob?.cancel()
+        if (_uiState.value.id != id) {
+            _uiState.value =
+                LocalPlaylistState.initial().copy(
+                    id = id,
+                    filterState = _uiState.value.filterState,
+                    loadState = LocalPlaylistState.PlaylistLoadState.Loading,
+                )
         }
+        updateStateJob =
+            viewModelScope.launch {
+                localPlaylistRepository.getLocalPlaylist(id).collectLatestResource(
+                    onSuccess = { pl ->
+                        if (pl != null) {
+                            if (refresh) {
+                                getTracksPagingState(id, _uiState.value.filterState)
+                            }
+                            _uiState.update {
+                                it.copy(
+                                    id = pl.id,
+                                    title = pl.title,
+                                    thumbnail = pl.thumbnail,
+                                    inLibrary = pl.inLibrary,
+                                    downloadState = pl.downloadState,
+                                    syncState = pl.syncState,
+                                    ytPlaylistId = pl.youtubePlaylistId,
+                                    trackCount = pl.tracks?.size ?: 0,
+                                    loadState = LocalPlaylistState.PlaylistLoadState.Success,
+                                )
+                            }
+                        } else {
+                            _uiState.update {
+                                it.copy(loadState = LocalPlaylistState.PlaylistLoadState.Error)
+                            }
+                        }
+                    },
+                    onError = {
+                        _uiState.update {
+                            it.copy(loadState = LocalPlaylistState.PlaylistLoadState.Error)
+                        }
+                    },
+                )
+            }
     }
 
     private fun downloadTracks(listJob: List<String>) {

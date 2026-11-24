@@ -840,17 +840,28 @@ private fun SoundCloudArtwork(
         // Re-enter when a prefetched cover becomes current, even if its URL is unchanged, so the
         // memory-cache success still hands the new track's bitmap to the shell.
         key(isCurrentPage) {
+            val soundCloudHolder = rememberHolderPainter()
             AsyncImage(
                 model = request,
                 contentDescription = null,
-                onSuccess = { if (isCurrentPage) actions.onArtworkBitmap(it.result.image.toImageBitmap()) },
-                onError = {
-                    val fallback = artworkUrl?.replace("maxresdefault", "hqdefault")
-                    if (fallback != null && fallback != artworkUrl) artworkUrl = fallback
+                onState = { imgState ->
+                    when (imgState) {
+                        is coil3.compose.AsyncImagePainter.State.Success -> {
+                            if (isCurrentPage) actions.onArtworkBitmap(imgState.result.image.toImageBitmap())
+                        }
+                        is coil3.compose.AsyncImagePainter.State.Error -> {
+                            val fallback = artworkUrl?.replace("maxresdefault", "hqdefault")
+                            if (fallback != null && fallback != artworkUrl) artworkUrl = fallback
+                        }
+                        else -> Unit
+                    }
                 },
                 contentScale = ContentScale.Crop,
-                placeholder = rememberHolderPainter(),
-                error = rememberHolderPainter(),
+                transform =
+                    com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                        fallbackPlaceholder = soundCloudHolder,
+                        error = soundCloudHolder,
+                    ),
                 modifier = Modifier.fillMaxSize().alpha(coverAlpha),
             )
         }
@@ -1117,11 +1128,15 @@ private fun TimedCommentBubble(comment: TimedComment) {
                 targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
                 crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
             )
+        val avatarHolder = rememberHolderPainter()
         AsyncImage(
             model = commentAvatarRequest,
             contentDescription = null,
-            placeholder = rememberHolderPainter(),
-            error = rememberHolderPainter(),
+            transform =
+                com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                    fallbackPlaceholder = avatarHolder,
+                    error = avatarHolder,
+                ),
             contentScale = ContentScale.Crop,
             modifier = Modifier.size(28.dp).clip(CircleShape),
         )

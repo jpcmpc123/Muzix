@@ -342,6 +342,33 @@ fun PlaylistScreen(
     }
     val currentThumbnail = (uiState as? PlaylistUIState.Success)?.data?.thumbnail
 
+    var heroPrepDone by remember(id) { mutableStateOf(false) }
+    val platformContext = coil3.compose.LocalPlatformContext.current
+
+    LaunchedEffect(uiState, platformContext) {
+        val success = uiState as? PlaylistUIState.Success
+        if (success == null) {
+            if (uiState is PlaylistUIState.Loading) {
+                heroPrepDone = false
+            }
+            return@LaunchedEffect
+        }
+        val thumbUrl = success.data?.thumbnail
+        if (thumbUrl.isNullOrBlank()) {
+            heroPrepDone = true
+            return@LaunchedEffect
+        }
+        if (paletteGeneratedFor != thumbUrl) {
+            val preloaded = com.maxrave.simpmusic.utils.loadHeroArtworkBitmap(platformContext, thumbUrl)
+            if (preloaded != null) {
+                bitmap = preloaded
+                paletteState.generate(preloaded)
+                paletteGeneratedFor = thumbUrl
+            }
+        }
+        heroPrepDone = true
+    }
+
     LaunchedEffect(bitmap) {
         val bm = bitmap
         if (bm != null && currentThumbnail != null && paletteGeneratedFor != currentThumbnail) {
@@ -377,9 +404,16 @@ fun PlaylistScreen(
             showLoadingDialog.second,
         )
     }
+
+    val effectiveUiState =
+        when {
+            uiState is PlaylistUIState.Success && heroPrepDone -> uiState
+            uiState is PlaylistUIState.Error -> uiState
+            else -> PlaylistUIState.Loading
+        }
 //    Box {
     Crossfade(
-        targetState = uiState,
+        targetState = effectiveUiState,
     ) { state ->
         Logger.w(tag, "State hash: ${state.hashCode()}")
         when (state) {
@@ -432,14 +466,20 @@ fun PlaylistScreen(
                                                             targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
                                                             crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
                                                         )
+                                                    val playlistHeroHolder = rememberHolderPainter()
                                                     AsyncImage(
                                                         model = playlistHeroRequest,
-                                                        placeholder = rememberHolderPainter(),
-                                                        error = rememberHolderPainter(),
+                                                        transform =
+                                                            com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                                                                fallbackPlaceholder = playlistHeroHolder,
+                                                                error = playlistHeroHolder,
+                                                            ),
                                                         contentDescription = null,
                                                         contentScale = ContentScale.Crop,
-                                                        onSuccess = {
-                                                            bitmap = it.result.image.toImageBitmap()
+                                                        onState = { imgState ->
+                                                            if (imgState is coil3.compose.AsyncImagePainter.State.Success) {
+                                                                bitmap = imgState.result.image.toImageBitmap()
+                                                            }
                                                         },
                                                         modifier = Modifier.fillMaxSize(),
                                                     )
@@ -607,14 +647,20 @@ fun PlaylistScreen(
                                                                 targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
                                                                 crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
                                                             )
+                                                        val playlistDesktopHeroHolder = rememberHolderPainter()
                                                         AsyncImage(
                                                             model = playlistDesktopHeroRequest,
-                                                            placeholder = rememberHolderPainter(),
-                                                            error = rememberHolderPainter(),
+                                                            transform =
+                                                                com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                                                                    fallbackPlaceholder = playlistDesktopHeroHolder,
+                                                                    error = playlistDesktopHeroHolder,
+                                                                ),
                                                             contentDescription = null,
                                                             contentScale = ContentScale.Crop,
-                                                            onSuccess = {
-                                                                bitmap = it.result.image.toImageBitmap()
+                                                            onState = { imgState ->
+                                                                if (imgState is coil3.compose.AsyncImagePainter.State.Success) {
+                                                                    bitmap = imgState.result.image.toImageBitmap()
+                                                                }
                                                             },
                                                             modifier =
                                                                 Modifier
@@ -1156,31 +1202,6 @@ fun PlaylistScreen(
                         }
                     }
                     when (tracksListState) {
-                        ListState.IDLE -> {
-                            // DO NOTHING
-                            item {
-                                EndOfPage()
-                            }
-                        }
-
-                        ListState.LOADING, ListState.PAGINATING -> {
-                            item {
-                                Box(
-                                    modifier =
-                                        Modifier
-                                            .fillMaxWidth(),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    CenterLoadingBox(
-                                        modifier = Modifier.size(80.dp),
-                                    )
-                                }
-                            }
-                            item {
-                                EndOfPage()
-                            }
-                        }
-
                         ListState.ERROR -> {
                             item {
                                 Box(
@@ -1201,7 +1222,7 @@ fun PlaylistScreen(
                             }
                         }
 
-                        ListState.PAGINATION_EXHAUST -> {
+                        else -> {
                             item {
                                 EndOfPage()
                             }
@@ -1429,18 +1450,37 @@ fun PlaylistScreen(
 
             is PlaylistUIState.Loading -> {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .background(Color.Black),
                 ) {
                     CenterLoadingBox(
-                        modifier = Modifier.size(80.dp),
+                        modifier =
+                            Modifier
+                                .size(80.dp)
+                                .align(Alignment.Center),
                     )
+                    RippleIconButton(
+                        imageVector = SimpIcons.ArrowBackIosNew,
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopStart)
+                                .padding(12.dp)
+                                .windowInsetsPadding(WindowInsets.statusBars)
+                                .size(48.dp),
+                    ) {
+                        navController.navigateUp()
+                    }
                 }
             }
 
             is PlaylistUIState.Error -> {
-                viewModel.makeToast("${stringResource(Res.string.error)}: ${state.message}")
-                navController.navigateUp()
+                val errMsg = "${stringResource(Res.string.error)}: ${state.message}"
+                LaunchedEffect(state) {
+                    viewModel.makeToast(errMsg)
+                    navController.navigateUp()
+                }
             }
         }
     }

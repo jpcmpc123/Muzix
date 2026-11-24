@@ -559,49 +559,43 @@ class SharedViewModel(
                             ?: mediaPlayerHandler.getPlayerDuration().takeIf { it > 0L }
                             ?: -1L
                     _timeline.update { it.copy(total = seededTotal) }
-                    state.songEntity?.let { track ->
-                        _nowPlayingScreenData.value =
+                    val resolvedThumbnail =
+                        resolveNowPlayingThumbnailUrl(
+                            mediaItemArtworkUri = state.mediaItem.metadata.artworkUri,
+                            songThumbnails = state.songEntity?.thumbnails,
+                        )
+                    val now = state.mediaItem
+                    _canvas.value = null
+                    getLikeStatus(now.mediaId)
+                    getSongInfo(now.mediaId)
+                    getFormat(now.mediaId)
+                    state.songEntity?.let { song ->
+                        _liked.value = song.liked == true
+                    }
+                    _nowPlayingScreenData.update { prev ->
+                        val track = state.songEntity
+                        val queueData = mediaPlayerHandler.queueData.value?.data
+                        if (track != null) {
                             NowPlayingScreenData(
                                 nowPlayingTitle = track.title,
-                                artistName =
-                                    track
-                                        .artistName
-                                        ?.joinToString(", ") ?: "",
-                                isVideo = false,
-                                thumbnailURL = null,
+                                artistName = track.artistName?.joinToString(", ") ?: "",
+                                isVideo = now.isVideo(),
+                                thumbnailURL = resolvedThumbnail,
                                 canvasData = null,
                                 lyricsData = null,
                                 songInfoData = null,
-                                playlistName =
-                                    mediaPlayerHandler.queueData.value
-                                        ?.data
-                                        ?.playlistName ?: "",
-                                isRadioQueue =
-                                    mediaPlayerHandler.queueData.value
-                                        ?.data
-                                        ?.playlistId
-                                        ?.isEndlessQueueId() == true,
+                                playlistName = queueData?.playlistName ?: "",
+                                isRadioQueue = queueData?.playlistId?.isEndlessQueueId() == true,
+                                isExplicit = track.isExplicit,
                             )
-                    }
-                    state.mediaItem.let { now ->
-                        _canvas.value = null
-                        getLikeStatus(now.mediaId)
-                        getSongInfo(now.mediaId)
-                        getFormat(now.mediaId)
-                        _nowPlayingScreenData.update {
-                            it.copy(
-                                thumbnailURL = now.metadata.artworkUri,
+                        } else {
+                            prev.copy(
+                                thumbnailURL = resolvedThumbnail ?: prev.thumbnailURL,
                                 isVideo = now.isVideo(),
                             )
                         }
                     }
                     state.songEntity?.let { song ->
-                        _liked.value = song.liked == true
-                        _nowPlayingScreenData.update {
-                            it.copy(
-                                isExplicit = song.isExplicit,
-                            )
-                        }
                         val currentMediaId = state.mediaItem.mediaId.removePrefix(MERGING_DATA_TYPE.VIDEO)
                         val knownDurationSec = (seededTotal / 1000L).toInt()
                         if (song.videoId == currentMediaId &&
@@ -2958,4 +2952,11 @@ sealed class VoteState {
  * reads this is the one that restores a *cached* url, the failure only appears from the second play
  * of a track onwards.
  */
+internal fun resolveNowPlayingThumbnailUrl(
+    mediaItemArtworkUri: String?,
+    songThumbnails: String?,
+): String? =
+    mediaItemArtworkUri?.takeIf { it.isNotBlank() }
+        ?: songThumbnails?.takeIf { it.isNotBlank() }
+
 private fun String.isCanvasVideoUrl(): Boolean = contains(".mp4") || contains(".m3u8")

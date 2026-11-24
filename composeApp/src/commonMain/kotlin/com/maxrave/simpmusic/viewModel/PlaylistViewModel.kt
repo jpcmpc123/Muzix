@@ -44,6 +44,8 @@ import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.auto_created_by_youtube_music
@@ -93,6 +95,13 @@ class PlaylistViewModel(
     private var playlistEntityJob: Job? = null
     private var newUpdateJob: Job? = null
     private var checkDownloadedPlaylist: Job? = null
+    private var loadDataJob: Job? = null
+    private var continuationBgJob: Job? = null
+
+    private companion object {
+        const val MAX_PRELOAD_CONTINUATION_PAGES = 15
+        const val PLAYLIST_PRELOAD_TIMEOUT_MS = 8_000L
+    }
 
     init {
         viewModelScope.launch {
@@ -172,100 +181,230 @@ class PlaylistViewModel(
     }
 
     private fun resetData() {
+        loadDataJob?.cancel()
+        loadDataJob = null
+        continuationBgJob?.cancel()
+        continuationBgJob = null
+        playlistEntityJob?.cancel()
+        playlistEntityJob = null
+        checkDownloadedPlaylist?.cancel()
+        checkDownloadedPlaylist = null
         _uiState.value = Loading
+        _tracks.value = emptyList()
+        _continuation.value = null
+        _tracksListState.value = ListState.IDLE
         _playlistEntity.value = null
         _downloadedList.value = emptyList()
         _listColors.value = emptyList()
-        checkDownloadedPlaylist?.cancel()
-        checkDownloadedPlaylist = null
     }
 
     fun getData(id: String) {
         resetData()
-        viewModelScope.launch {
-            // Check radio
-            if (id.isRadioPlaylistId()) {
-                playlistRepository
-                    .getRadio(
-                        id,
-                        radioString = getString(Res.string.radio),
-                        defaultDescription = getString(Res.string.auto_created_by_youtube_music),
-                        viewString = getString(Res.string.view_count),
-                    ).collect { res ->
-                        val data = res.data
-                        when (res) {
-                            is Resource.Success if (data != null) -> {
-                                Logger.d(tag, "Radio data: $data")
-                                _uiState.value =
-                                    Success(
-                                        data =
-                                            PlaylistState(
-                                                id = data.first.id,
-                                                title = data.first.title,
-                                                isRadio = true,
-                                                author = data.first.author,
-                                                thumbnail =
-                                                    data.first.thumbnails
-                                                        .lastOrNull()
-                                                        ?.url,
-                                                description = data.first.description,
-                                                trackCount = data.first.trackCount,
-                                                year = data.first.year,
-                                            ),
-                                    )
-                                _tracks.value = data.first.tracks
-                                _continuation.value = data.second
-                                if (data.second.isNullOrEmpty()) _tracksListState.value = ListState.PAGINATION_EXHAUST
-                                playlistRepository.insertRadioPlaylist(data.first.toPlaylistEntity())
-                            }
+        loadDataJob =
+            viewModelScope.launch {
+                // Check radio
+                if (id.isRadioPlaylistId()) {
+                    playlistRepository
+                        .getRadio(
+                            id,
+                            radioString = getString(Res.string.radio),
+                            defaultDescription = getString(Res.string.auto_created_by_youtube_music),
+                            viewString = getString(Res.string.view_count),
+                        ).collect { res ->
+                            val data = res.data
+                            when (res) {
+                                is Resource.Success if (data != null) -> {
+                                    Logger.d(tag, "Radio data: $data")
+                                    _tracks.value = data.first.tracks
+                                    _continuation.value = data.second
+                                    _tracksListState.value =
+                                        if (data.second.isNullOrEmpty()) ListState.PAGINATION_EXHAUST else ListState.IDLE
+                                    _uiState.value =
+                                        Success(
+                                            data =
+                                                PlaylistState(
+                                                    id = data.first.id,
+                                                    title = data.first.title,
+                                                    isRadio = true,
+                                                    author = data.first.author,
+                                                    thumbnail =
+                                                        data.first.thumbnails
+                                                            .lastOrNull()
+                                                            ?.url,
+                                                    description = data.first.description,
+                                                    trackCount = data.first.trackCount,
+                                                    year = data.first.year,
+                                                ),
+                                        )
+                                    launch(Dispatchers.IO) {
+                                        playlistRepository.insertRadioPlaylist(data.first.toPlaylistEntity())
+                                    }
+                                }
 
-                            else -> {
-                                _uiState.value = Error(res.message ?: "Empty response")
+                                else -> {
+                                    _uiState.value = Error(res.message ?: "Empty response")
+                                }
                             }
                         }
-                    }
-            } else {
-                // This is an online playlist
-                playlistRepository
-                    .getPlaylistData(id, getString(Res.string.view_count))
-                    .collect { res ->
-                        val data = res.data
-                        when (res) {
-                            is Resource.Success if (data != null) -> {
-                                Logger.d(tag, "Playlist data: $data")
-                                log("Playlist endpoint: ${data.first.shuffleEndpoint}")
-                                _uiState.value =
-                                    Success(
-                                        data =
-                                            PlaylistState(
-                                                id = data.first.id,
-                                                title = data.first.title,
-                                                isRadio = false,
-                                                author = data.first.author,
-                                                thumbnail =
-                                                    data.first.thumbnails
-                                                        .lastOrNull()
-                                                        ?.url,
-                                                description = data.first.description,
-                                                trackCount = data.first.trackCount,
-                                                year = data.first.year,
-                                                shuffleEndpoint = data.first.shuffleEndpoint,
-                                                radioEndpoint = data.first.radioEndpoint,
-                                            ),
-                                    )
-                                _tracks.value = data.first.tracks
-                                _continuation.value = data.second
-                                if (data.second.isNullOrEmpty()) _tracksListState.value = ListState.PAGINATION_EXHAUST
-                                getPlaylistEntity(id = data.first.id, playlistBrowse = data.first)
-                            }
+                } else {
+                    // This is an online playlist
+                    playlistRepository
+                        .getPlaylistData(id, getString(Res.string.view_count))
+                        .collect { res ->
+                            val data = res.data
+                            when (res) {
+                                is Resource.Success if (data != null) -> {
+                                    Logger.d(tag, "Playlist data: $data")
+                                    log("Playlist endpoint: ${data.first.shuffleEndpoint}")
+                                    val allTracks = data.first.tracks.toMutableList()
+                                    var nextCont = data.second
+                                    if (!nextCont.isNullOrEmpty()) {
+                                        withTimeoutOrNull(PLAYLIST_PRELOAD_TIMEOUT_MS) {
+                                            var pagesLoaded = 0
+                                            while (!nextCont.isNullOrEmpty() && pagesLoaded < MAX_PRELOAD_CONTINUATION_PAGES) {
+                                                val contRes =
+                                                    songRepository
+                                                        .getContinueTrack(
+                                                            data.first.id,
+                                                            nextCont!!,
+                                                            fromPlaylist = true,
+                                                        ).firstOrNull() ?: break
+                                                val moreTracks = contRes.first
+                                                if (moreTracks.isNullOrEmpty()) {
+                                                    nextCont = null
+                                                    break
+                                                }
+                                                allTracks.addAll(moreTracks)
+                                                nextCont = contRes.second
+                                                pagesLoaded++
+                                            }
+                                        }
+                                    }
+                                    val resolvedCount = maxOf(data.first.trackCount, allTracks.size)
+                                    val fullBrowse =
+                                        data.first.copy(
+                                            tracks = allTracks,
+                                            trackCount = resolvedCount,
+                                        )
+                                    val existingEntity =
+                                        withContext(Dispatchers.IO) {
+                                            playlistRepository.getPlaylist(data.first.id).firstOrNull()
+                                        }
+                                    if (existingEntity == null) {
+                                        val createdEntity = fullBrowse.toPlaylistEntity()
+                                        withContext(Dispatchers.IO) {
+                                            playlistRepository.insertAndReplacePlaylist(createdEntity)
+                                        }
+                                        _playlistEntity.value = createdEntity
+                                    } else {
+                                        _playlistEntity.value = existingEntity
+                                    }
+                                    _tracks.value = allTracks
+                                    _continuation.value = nextCont
+                                    _tracksListState.value =
+                                        if (nextCont.isNullOrEmpty()) ListState.PAGINATION_EXHAUST else ListState.IDLE
+                                    _uiState.value =
+                                        Success(
+                                            data =
+                                                PlaylistState(
+                                                    id = data.first.id,
+                                                    title = data.first.title,
+                                                    isRadio = false,
+                                                    author = data.first.author,
+                                                    thumbnail =
+                                                        data.first.thumbnails
+                                                            .lastOrNull()
+                                                            ?.url,
+                                                    description = data.first.description,
+                                                    trackCount = resolvedCount,
+                                                    year = data.first.year,
+                                                    shuffleEndpoint = data.first.shuffleEndpoint,
+                                                    radioEndpoint = data.first.radioEndpoint,
+                                                ),
+                                        )
+                                    observeAndPersistPlaylistEntity(id = data.first.id, tracksToPersist = allTracks)
+                                    if (!nextCont.isNullOrEmpty()) {
+                                        preloadRemainingContinuationInBackground(data.first.id, nextCont!!)
+                                    }
+                                }
 
-                            else -> {
-                                getPlaylistEntity(id)
+                                else -> {
+                                    getPlaylistEntity(id)
+                                }
                             }
                         }
-                    }
+                }
             }
-        }
+    }
+
+    private fun observeAndPersistPlaylistEntity(
+        id: String,
+        tracksToPersist: List<Track>,
+    ) {
+        playlistEntityJob?.cancel()
+        playlistEntityJob =
+            viewModelScope.launch(Dispatchers.IO) {
+                playlistRepository.updatePlaylistInLibrary(
+                    playlistId = id,
+                    inLibrary = now(),
+                )
+                launch {
+                    tracksToPersist.forEach { track ->
+                        songRepository
+                            .insertSong(
+                                track.toSongEntity().copy(
+                                    inLibrary = Config.REMOVED_SONG_DATE_TIME,
+                                ),
+                            ).firstOrNull()
+                    }
+                }
+                playlistRepository.getPlaylist(id).collectLatest { playlist ->
+                    if (playlist != null) {
+                        _playlistEntity.value = playlist
+                    }
+                }
+            }
+    }
+
+    private fun preloadRemainingContinuationInBackground(
+        playlistId: String,
+        initialContinuation: String,
+    ) {
+        continuationBgJob?.cancel()
+        continuationBgJob =
+            viewModelScope.launch {
+                var nextCont: String? = initialContinuation
+                while (!nextCont.isNullOrEmpty()) {
+                    _tracksListState.value = ListState.PAGINATING
+                    val res =
+                        songRepository
+                            .getContinueTrack(
+                                playlistId,
+                                nextCont,
+                                fromPlaylist = true,
+                            ).firstOrNull() ?: break
+                    val moreTracks = res.first
+                    if (moreTracks.isNullOrEmpty()) {
+                        nextCont = null
+                        break
+                    }
+                    _tracks.update { existing -> existing + moreTracks }
+                    nextCont = res.second
+                    _continuation.value = nextCont
+                    launch(Dispatchers.IO) {
+                        moreTracks.forEach { track ->
+                            songRepository
+                                .insertSong(
+                                    track.toSongEntity().copy(
+                                        inLibrary = Config.REMOVED_SONG_DATE_TIME,
+                                    ),
+                                ).firstOrNull()
+                        }
+                    }
+                }
+                _continuation.value = null
+                _tracksListState.value = ListState.PAGINATION_EXHAUST
+            }
     }
 
     fun getContinuationTrack(
@@ -284,22 +423,10 @@ class PlaylistViewModel(
                         continuation,
                         fromPlaylist = true,
                     ).collectLatest { res ->
-                        res.first?.forEach { track ->
-                            songRepository
-                                .insertSong(
-                                    track
-                                        .toSongEntity()
-                                        .copy(
-                                            inLibrary = Config.REMOVED_SONG_DATE_TIME,
-                                        ),
-                                ).singleOrNull()
-                                ?.let {
-                                    log("Insert song: $it")
-                                }
-                        }
+                        val addedTracks = res.first ?: emptyList()
                         _tracks.update {
                             val newList = it.toMutableList()
-                            newList.addAll(res.first ?: emptyList())
+                            newList.addAll(addedTracks)
                             newList
                         }
                         if (res.second.isNullOrEmpty()) {
@@ -308,6 +435,20 @@ class PlaylistViewModel(
                         } else {
                             _continuation.value = res.second
                             _tracksListState.value = ListState.IDLE
+                        }
+                        if (addedTracks.isNotEmpty()) {
+                            launch(Dispatchers.IO) {
+                                addedTracks.forEach { track ->
+                                    songRepository
+                                        .insertSong(
+                                            track
+                                                .toSongEntity()
+                                                .copy(
+                                                    inLibrary = Config.REMOVED_SONG_DATE_TIME,
+                                                ),
+                                        ).singleOrNull()
+                                }
+                            }
                         }
                     }
             }
@@ -321,44 +462,24 @@ class PlaylistViewModel(
         playlistEntityJob?.cancel()
         playlistEntityJob =
             viewModelScope.launch {
-                val playlistEntity = playlistRepository.getPlaylist(id).firstOrNull()
-                if (playlistBrowse != null) {
-                    if (playlistEntity == null) {
-                        playlistRepository.insertAndReplacePlaylist(
-                            playlistBrowse.toPlaylistEntity(),
-                        )
-                        delay(500)
-                        playlistRepository.getPlaylist(id).collectLatest { playlist ->
-                            _playlistEntity.value = playlist
-                            playlistRepository.updatePlaylistInLibrary(
-                                playlistId = id,
-                                inLibrary = now(),
-                            )
+                val playlistEntity =
+                    withContext(Dispatchers.IO) {
+                        playlistRepository.getPlaylist(id).firstOrNull()
+                    }
+                if (playlistEntity != null) {
+                    val cachedSongs =
+                        withContext(Dispatchers.IO) {
+                            playlistEntity.tracks?.let { trackIds ->
+                                songRepository
+                                    .getSongsByListVideoId(trackIds)
+                                    .singleOrNull()
+                                    ?.map { it.toTrack() }
+                            } ?: emptyList()
                         }
-                    } else {
-                        _playlistEntity.value = playlistEntity
-                        playlistRepository.updatePlaylistInLibrary(
-                            playlistId = id,
-                            inLibrary = now(),
-                        )
-                    }
-                    playlistBrowse.tracks.forEach { tracks ->
-                        songRepository
-                            .insertSong(
-                                tracks.toSongEntity().copy(
-                                    inLibrary = Config.REMOVED_SONG_DATE_TIME,
-                                ),
-                            ).firstOrNull()
-                            ?.let {
-                                log("Insert song: $it")
-                            }
-                    }
-                } else if (playlistEntity != null) {
                     _playlistEntity.value = playlistEntity
-                    playlistRepository.updatePlaylistInLibrary(
-                        playlistId = id,
-                        inLibrary = now(),
-                    )
+                    _tracks.value = cachedSongs
+                    _continuation.value = null
+                    _tracksListState.value = ListState.PAGINATION_EXHAUST
                     _uiState.value =
                         Success(
                             data =
@@ -377,19 +498,15 @@ class PlaylistViewModel(
                                     year = playlistEntity.year ?: now().year.toString(),
                                 ),
                         )
-                    _tracksListState.value = ListState.LOADING
-                    playlistEntity.tracks?.let {
-                        songRepository
-                            .getSongsByListVideoId(it)
-                            .singleOrNull()
-                            ?.let { song ->
-                                _tracks.value = song.map { it.toTrack() }
-                            }
+                    launch(Dispatchers.IO) {
+                        playlistRepository.updatePlaylistInLibrary(
+                            playlistId = id,
+                            inLibrary = now(),
+                        )
                     }
-                    _tracksListState.value = ListState.PAGINATION_EXHAUST
                     if (playlistEntity.downloadState != STATE_DOWNLOADED) {
                         checkDownloadedPlaylist =
-                            launch {
+                            launch(Dispatchers.IO) {
                                 val listSong =
                                     songRepository
                                         .getSongsByListVideoId(

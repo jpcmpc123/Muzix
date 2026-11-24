@@ -165,6 +165,7 @@ import com.maxrave.simpmusic.ui.theme.ArtworkShape
 import com.maxrave.simpmusic.ui.theme.LocalIsDarkTheme
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.viewModel.LocalPlaylistState
 import com.maxrave.simpmusic.viewModel.LocalPlaylistUIEvent
 import com.maxrave.simpmusic.viewModel.LocalPlaylistViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
@@ -385,6 +386,32 @@ fun LocalPlaylistScreen(
     }
     val currentThumbnail = uiState.thumbnail
 
+    var heroPrepDone by remember(id) { mutableStateOf(false) }
+    val platformContext = coil3.compose.LocalPlatformContext.current
+
+    LaunchedEffect(uiState.id, uiState.loadState, uiState.thumbnail, platformContext) {
+        if (uiState.id != id || uiState.loadState != LocalPlaylistState.PlaylistLoadState.Success) {
+            if (uiState.id != id || uiState.loadState == LocalPlaylistState.PlaylistLoadState.Loading) {
+                heroPrepDone = false
+            }
+            return@LaunchedEffect
+        }
+        val thumbUrl = uiState.thumbnail
+        if (thumbUrl.isNullOrBlank()) {
+            heroPrepDone = true
+            return@LaunchedEffect
+        }
+        if (paletteGeneratedFor != thumbUrl) {
+            val preloaded = com.maxrave.simpmusic.utils.loadHeroArtworkBitmap(platformContext, thumbUrl)
+            if (preloaded != null) {
+                bitmap = preloaded
+                paletteState.generate(preloaded)
+                paletteGeneratedFor = thumbUrl
+            }
+        }
+        heroPrepDone = true
+    }
+
     LaunchedEffect(bitmap) {
         val bm = bitmap
         if (bm != null && paletteGeneratedFor != currentThumbnail) {
@@ -444,6 +471,57 @@ fun LocalPlaylistScreen(
     var showSearchBar by rememberSaveable { mutableStateOf(false) }
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+
+    val isPagingReady =
+        uiState.trackCount == 0 ||
+            trackPagingItems.itemCount > 0 ||
+            trackPagingItems.loadState.refresh !is LoadState.Loading
+    val localEffectiveLoadState =
+        when {
+            uiState.id == id && uiState.loadState == LocalPlaylistState.PlaylistLoadState.Error ->
+                LocalPlaylistState.PlaylistLoadState.Error
+            uiState.id == id &&
+                uiState.loadState == LocalPlaylistState.PlaylistLoadState.Success &&
+                isPagingReady &&
+                heroPrepDone ->
+                LocalPlaylistState.PlaylistLoadState.Success
+            else -> LocalPlaylistState.PlaylistLoadState.Loading
+        }
+
+    Crossfade(targetState = localEffectiveLoadState) { loadState ->
+        when (loadState) {
+            LocalPlaylistState.PlaylistLoadState.Error -> {
+                LaunchedEffect(Unit) { navController.navigateUp() }
+            }
+
+            LocalPlaylistState.PlaylistLoadState.Loading -> {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .background(Color.Black),
+                ) {
+                    CenterLoadingBox(
+                        modifier =
+                            Modifier
+                                .size(80.dp)
+                                .align(Alignment.Center),
+                    )
+                    RippleIconButton(
+                        imageVector = SimpIcons.ArrowBackIosNew,
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopStart)
+                                .padding(12.dp)
+                                .windowInsetsPadding(WindowInsets.statusBars)
+                                .size(48.dp),
+                    ) {
+                        navController.navigateUp()
+                    }
+                }
+            }
+
+            LocalPlaylistState.PlaylistLoadState.Success -> {
 //    Box {
     LazyColumn(
         modifier =
@@ -543,18 +621,33 @@ fun LocalPlaylistScreen(
                                             targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
                                             crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
                                         )
-                                    AsyncImage(
-                                        model = localPlaylistHeroRequest,
-                                        placeholder = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
-                                        error = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
-                                        fallback = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        onSuccess = {
-                                            bitmap = it.result.image.toImageBitmap()
-                                        },
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
+                                    val thumbFallbackPainter =
+                                        painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp)
+                                    if (localPlaylistHeroRequest == null) {
+                                        androidx.compose.foundation.Image(
+                                            painter = thumbFallbackPainter,
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                    } else {
+                                        AsyncImage(
+                                            model = localPlaylistHeroRequest,
+                                            transform =
+                                                com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                                                    fallbackPlaceholder = thumbFallbackPainter,
+                                                    error = thumbFallbackPainter,
+                                                ),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            onState = { imgState ->
+                                                if (imgState is coil3.compose.AsyncImagePainter.State.Success) {
+                                                    bitmap = imgState.result.image.toImageBitmap()
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                    }
                                     // Scrim spans 70% of the artwork (not a fixed 200dp): the shorter the
                                     // ramp, the steeper the alpha, and a steep ramp is what makes the fade
                                     // read as an edge. See artworkScrimBrush for the curve itself.
@@ -739,21 +832,39 @@ fun LocalPlaylistScreen(
                                                 targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
                                                 crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
                                             )
-                                        AsyncImage(
-                                            model = localPlaylistDesktopHeroRequest,
-                                            placeholder = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
-                                            error = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
-                                            fallback = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            onSuccess = {
-                                                bitmap = it.result.image.toImageBitmap()
-                                            },
-                                            modifier =
-                                                Modifier
-                                                    .size(280.dp)
-                                                    .clip(ArtworkShape),
-                                        )
+                                        val desktopThumbFallbackPainter =
+                                            painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp)
+                                        if (localPlaylistDesktopHeroRequest == null) {
+                                            androidx.compose.foundation.Image(
+                                                painter = desktopThumbFallbackPainter,
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                modifier =
+                                                    Modifier
+                                                        .size(280.dp)
+                                                        .clip(ArtworkShape),
+                                            )
+                                        } else {
+                                            AsyncImage(
+                                                model = localPlaylistDesktopHeroRequest,
+                                                transform =
+                                                    com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                                                        fallbackPlaceholder = desktopThumbFallbackPainter,
+                                                        error = desktopThumbFallbackPainter,
+                                                    ),
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                onState = { imgState ->
+                                                    if (imgState is coil3.compose.AsyncImagePainter.State.Success) {
+                                                        bitmap = imgState.result.image.toImageBitmap()
+                                                    }
+                                                },
+                                                modifier =
+                                                    Modifier
+                                                        .size(280.dp)
+                                                        .clip(ArtworkShape),
+                                            )
+                                        }
                                         Column(
                                             modifier = Modifier.weight(1f),
                                         ) {
@@ -1418,17 +1529,6 @@ fun LocalPlaylistScreen(
                 }
             }
         }
-        trackPagingItems.apply {
-            item {
-                AnimatedVisibility(loadState.refresh is LoadState.Loading || loadState.append is LoadState.Loading) {
-                    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Spacer(modifier = Modifier.height(15.dp))
-                        CenterLoadingBox(modifier = Modifier.size(80.dp))
-                        Spacer(modifier = Modifier.height(15.dp))
-                    }
-                }
-            }
-        }
         item {
             EndOfPage()
         }
@@ -1510,7 +1610,7 @@ fun LocalPlaylistScreen(
         )
     }
     if (itemBottomSheetShow && currentItem != null) {
-        val track = currentItem ?: return
+        val track = currentItem ?: return@Crossfade
         NowPlayingBottomSheet(
             onDelete = { viewModel.deleteItem(uiState.id, track) },
             onDismiss = {
@@ -1756,5 +1856,8 @@ fun LocalPlaylistScreen(
             modifier =
                 Modifier.tintedBarBlur(hazeState, mutedPaletteBg, 0.55f),
         )
+    }
+            }
+        }
     }
 }

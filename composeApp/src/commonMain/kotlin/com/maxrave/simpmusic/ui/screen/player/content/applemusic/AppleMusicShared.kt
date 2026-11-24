@@ -426,17 +426,20 @@ internal fun AppleMusicCompactHeader(
             AppleMusicFloatingCircleButton(icon = SimpIcons.ArrowBackIosNew, onClick = onBack)
             Spacer(modifier = Modifier.width(12.dp))
         }
+        val headerThumbRequest =
+            com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
+                rawUrl = state.screenData.thumbnailURL,
+                targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
+                crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
+            )
+        val holderPainter = rememberHolderPainter()
         AsyncImage(
-            model =
-                ImageRequest
-                    .Builder(LocalPlatformContext.current)
-                    .data(state.screenData.thumbnailURL)
-                    .diskCachePolicy(CachePolicy.ENABLED)
-                    .diskCacheKey(state.screenData.thumbnailURL)
-                    .crossfade(300)
-                    .build(),
-            placeholder = rememberHolderPainter(),
-            error = rememberHolderPainter(),
+            model = headerThumbRequest,
+            transform =
+                com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                    fallbackPlaceholder = holderPainter,
+                    error = holderPainter,
+                ),
             contentDescription = null,
             modifier = Modifier.size(55.dp).clip(ArtworkShape),
         )

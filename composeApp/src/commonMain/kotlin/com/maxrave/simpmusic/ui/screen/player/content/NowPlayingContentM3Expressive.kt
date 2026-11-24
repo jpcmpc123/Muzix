@@ -726,10 +726,14 @@ internal fun ExpressiveTrackInfoRow(
                     targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
                     crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
                 )
+            val squareHolderPainter = rememberHolderPainter(square = true)
             AsyncImage(
                 model = miniThumbRequest,
-                placeholder = rememberHolderPainter(square = true),
-                error = rememberHolderPainter(square = true),
+                transform =
+                    com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                        fallbackPlaceholder = squareHolderPainter,
+                        error = squareHolderPainter,
+                    ),
                 contentDescription = null,
                 contentScale = ContentScale.FillWidth,
                 modifier =

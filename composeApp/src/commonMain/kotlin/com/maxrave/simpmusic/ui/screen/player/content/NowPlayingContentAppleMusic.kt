@@ -741,10 +741,14 @@ private fun AppleMusicMainView(
                                         targetPx = com.maxrave.simpmusic.utils.THUMB_SMALL_PX,
                                         crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS,
                                     )
+                                val trackRowHolder = rememberHolderPainter()
                                 AsyncImage(
                                     model = trackRowThumbRequest,
-                                    placeholder = rememberHolderPainter(),
-                                    error = rememberHolderPainter(),
+                                    transform =
+                                        com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                                            fallbackPlaceholder = trackRowHolder,
+                                            error = trackRowHolder,
+                                        ),
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.size(55.dp).clip(ArtworkShape),
@@ -976,21 +980,30 @@ private fun AppleMusicArtworkPage(
                         .fillMaxWidth()
                         .height(artworkHeight),
             ) {
+                val coverHolder = rememberHolderPainter()
                 AsyncImage(
                     model = coverRequest,
                     contentDescription = "",
-                    onSuccess = {
-                        val bitmap = it.result.image.toImageBitmap()
-                        actions.onArtworkBitmap(bitmap)
-                        onCoverBitmap(bitmap)
-                    },
-                    onError = {
-                        val fallback = artworkUrl?.replace("maxresdefault", "hqdefault")
-                        if (fallback != null && fallback != artworkUrl) artworkUrl = fallback
+                    onState = { imgState ->
+                        when (imgState) {
+                            is coil3.compose.AsyncImagePainter.State.Success -> {
+                                val bitmap = imgState.result.image.toImageBitmap()
+                                actions.onArtworkBitmap(bitmap)
+                                onCoverBitmap(bitmap)
+                            }
+                            is coil3.compose.AsyncImagePainter.State.Error -> {
+                                val fallback = artworkUrl?.replace("maxresdefault", "hqdefault")
+                                if (fallback != null && fallback != artworkUrl) artworkUrl = fallback
+                            }
+                            else -> Unit
+                        }
                     },
                     contentScale = ContentScale.Crop,
-                    placeholder = rememberHolderPainter(),
-                    error = rememberHolderPainter(),
+                    transform =
+                        com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                            fallbackPlaceholder = coverHolder,
+                            error = coverHolder,
+                        ),
                     // The artwork DISSOLVES (alpha mask) instead of being covered by a colour
                     // overlay: that overlay had to land on exactly the page's colour at that Y,
                     // and any drift drew a hard horizontal line across the screen. Masking lets
@@ -1219,12 +1232,16 @@ private fun AppleMusicArtworkPage(
                         .fillMaxWidth()
                         .height(artworkHeight),
             ) {
+                val adjacentHolder = rememberHolderPainter()
                 AsyncImage(
                     model = thumbRequest,
                     contentDescription = pageTrack.title,
                     contentScale = ContentScale.Crop,
-                    placeholder = rememberHolderPainter(),
-                    error = rememberHolderPainter(),
+                    transform =
+                        com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                            fallbackPlaceholder = adjacentHolder,
+                            error = adjacentHolder,
+                        ),
                     // Faded like the current page's, or its top edge would turn sharp mid-swipe.
                     modifier = Modifier.fillMaxSize().appleMusicVerticalFadeEdges(topFade = topFade, bottomFade = artworkFade),
                 )

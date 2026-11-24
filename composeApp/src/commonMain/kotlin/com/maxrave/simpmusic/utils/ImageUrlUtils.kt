@@ -2,13 +2,21 @@ package com.maxrave.simpmusic.utils
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.painter.Painter
+import coil3.PlatformContext
 import coil3.SingletonImageLoader
+import coil3.compose.AsyncImagePainter
 import coil3.compose.LocalPlatformContext
 import coil3.memory.MemoryCache
 import coil3.request.CachePolicy
+import coil3.request.ErrorResult
 import coil3.request.ImageRequest
+import coil3.request.SuccessResult
 import coil3.request.crossfade
 import coil3.size.Precision
+import com.maxrave.simpmusic.expect.ui.toImageBitmap
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 
 const val THUMB_SMALL_PX = 240
@@ -19,6 +27,7 @@ const val THUMB_BLUR_BACKDROP_PX = 128
 
 const val IMAGE_CROSSFADE_FAST_MS = 120
 const val IMAGE_CROSSFADE_HERO_MS = 150
+const val HERO_ARTWORK_PREP_TIMEOUT_MS = 1_500L
 
 private val GOOGLE_WH_REGEX = Regex("(^|-)w(\\d+)-h(\\d+)(?=-|$)")
 private val GOOGLE_S_REGEX = Regex("(^|-)s(\\d+)(?=-|$)")
@@ -115,6 +124,114 @@ internal fun findExistingArtworkMemoryKey(
     return null
 }
 
+/**
+ * Keeps any RAM placeholder painter supplied via `placeholderMemoryCacheKey` while loading
+ * instead of overwriting it unconditionally with [fallbackPlaceholder] (which Coil 3's built-in
+ * `placeholder` parameter does). Falls back to [fallbackPlaceholder] only when RAM had nothing.
+ */
+internal fun ramFirstTransform(
+    state: AsyncImagePainter.State,
+    fallbackPlaceholder: Painter? = null,
+    error: Painter? = null,
+): AsyncImagePainter.State =
+    when (state) {
+        is AsyncImagePainter.State.Loading ->
+            if (state.painter == null && fallbackPlaceholder != null) {
+                state.copy(painter = fallbackPlaceholder)
+            } else {
+                state
+            }
+        is AsyncImagePainter.State.Error ->
+            if (error != null) state.copy(painter = error) else state
+        else -> state
+    }
+
+@Composable
+internal fun rememberRamFirstTransform(
+    fallbackPlaceholder: Painter? = null,
+    error: Painter? = null,
+): (AsyncImagePainter.State) -> AsyncImagePainter.State =
+    remember(fallbackPlaceholder, error) {
+        { state -> ramFirstTransform(state, fallbackPlaceholder = fallbackPlaceholder, error = error) }
+    }
+
+internal fun buildOptimizedImageRequest(
+    platformContext: PlatformContext,
+    rawUrl: String?,
+    targetPx: Int,
+    crossfadeMs: Int = IMAGE_CROSSFADE_FAST_MS,
+    preserveAspectRatio: Boolean = false,
+    reuseExistingRamPlaceholder: Boolean = true,
+    selfAsPlaceholder: Boolean = false,
+): ImageRequest? {
+    val cleanUrl = rawUrl?.takeIf { it.isNotBlank() } ?: return null
+    val dataUrl = cleanUrl.sizedArtworkUrl(targetPx, preserveAspectRatio = preserveAspectRatio) ?: return null
+    val memKey = artworkMemoryCacheKey(cleanUrl, targetPx, preserveAspectRatio)
+    val imageLoader = SingletonImageLoader.get(platformContext)
+    val placeholderRamKey =
+        when {
+            selfAsPlaceholder -> memKey
+            reuseExistingRamPlaceholder -> findExistingArtworkMemoryKey(imageLoader.memoryCache, cleanUrl, targetPx)
+            else -> null
+        }
+    return ImageRequest
+        .Builder(platformContext)
+        .data(dataUrl)
+        .size(targetPx, targetPx)
+        .precision(Precision.INEXACT)
+        .diskCachePolicy(CachePolicy.ENABLED)
+        .memoryCachePolicy(CachePolicy.ENABLED)
+        .diskCacheKey(dataUrl)
+        .memoryCacheKey(memKey)
+        .apply {
+            if (placeholderRamKey != null) {
+                placeholderMemoryCacheKey(placeholderRamKey)
+            }
+        }.crossfade(crossfadeMs)
+        .build()
+}
+
+internal fun enqueueArtworkPrefetch(
+    platformContext: PlatformContext,
+    rawUrl: String?,
+    targetPx: Int = THUMB_HERO_PX,
+    preserveAspectRatio: Boolean = false,
+) {
+    val request =
+        buildOptimizedImageRequest(
+            platformContext = platformContext,
+            rawUrl = rawUrl,
+            targetPx = targetPx,
+            crossfadeMs = 0,
+            preserveAspectRatio = preserveAspectRatio,
+            reuseExistingRamPlaceholder = false,
+        ) ?: return
+    SingletonImageLoader.get(platformContext).enqueue(request)
+}
+
+internal suspend fun loadHeroArtworkBitmap(
+    platformContext: PlatformContext,
+    rawUrl: String?,
+    targetPx: Int = THUMB_HERO_PX,
+    timeoutMs: Long = HERO_ARTWORK_PREP_TIMEOUT_MS,
+): ImageBitmap? {
+    val request =
+        buildOptimizedImageRequest(
+            platformContext = platformContext,
+            rawUrl = rawUrl,
+            targetPx = targetPx,
+            crossfadeMs = 0,
+            preserveAspectRatio = false,
+            reuseExistingRamPlaceholder = false,
+        ) ?: return null
+    return withTimeoutOrNull(timeoutMs) {
+        when (val result = SingletonImageLoader.get(platformContext).execute(request)) {
+            is SuccessResult -> result.image.toImageBitmap()
+            is ErrorResult -> null
+        }
+    }
+}
+
 @Composable
 internal fun rememberOptimizedImageRequest(
     rawUrl: String?,
@@ -125,34 +242,15 @@ internal fun rememberOptimizedImageRequest(
     selfAsPlaceholder: Boolean = false,
 ): ImageRequest? {
     val platformContext = LocalPlatformContext.current
-    val resolvedUrl =
-        remember(rawUrl, targetPx, preserveAspectRatio) {
-            rawUrl.sizedArtworkUrl(targetPx, preserveAspectRatio = preserveAspectRatio)
-        }
-    return remember(platformContext, resolvedUrl, rawUrl, targetPx, crossfadeMs, preserveAspectRatio, reuseExistingRamPlaceholder, selfAsPlaceholder) {
-        val dataUrl = resolvedUrl ?: return@remember null
-        val memKey = artworkMemoryCacheKey(rawUrl ?: dataUrl, targetPx, preserveAspectRatio)
-        val imageLoader = SingletonImageLoader.get(platformContext)
-        val placeholderRamKey =
-            when {
-                selfAsPlaceholder -> memKey
-                reuseExistingRamPlaceholder -> findExistingArtworkMemoryKey(imageLoader.memoryCache, rawUrl, targetPx)
-                else -> null
-            }
-        ImageRequest
-            .Builder(platformContext)
-            .data(dataUrl)
-            .size(targetPx, targetPx)
-            .precision(Precision.INEXACT)
-            .diskCachePolicy(CachePolicy.ENABLED)
-            .memoryCachePolicy(CachePolicy.ENABLED)
-            .diskCacheKey(dataUrl)
-            .memoryCacheKey(memKey)
-            .apply {
-                if (placeholderRamKey != null) {
-                    placeholderMemoryCacheKey(placeholderRamKey)
-                }
-            }.crossfade(crossfadeMs)
-            .build()
+    return remember(platformContext, rawUrl, targetPx, crossfadeMs, preserveAspectRatio, reuseExistingRamPlaceholder, selfAsPlaceholder) {
+        buildOptimizedImageRequest(
+            platformContext = platformContext,
+            rawUrl = rawUrl,
+            targetPx = targetPx,
+            crossfadeMs = crossfadeMs,
+            preserveAspectRatio = preserveAspectRatio,
+            reuseExistingRamPlaceholder = reuseExistingRamPlaceholder,
+            selfAsPlaceholder = selfAsPlaceholder,
+        )
     }
 }

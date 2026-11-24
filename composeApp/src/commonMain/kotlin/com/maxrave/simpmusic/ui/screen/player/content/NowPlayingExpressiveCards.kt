@@ -329,21 +329,30 @@ internal fun ExpressiveArtworkCardPage(
                             crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
                             preserveAspectRatio = state.screenData.isVideo,
                         )
+                    val cardHolder = rememberHolderPainter()
                     AsyncImage(
                         model = artworkRequest,
                         contentDescription = "",
-                        onSuccess = {
-                            actions.onArtworkBitmap(
-                                it.result.image.toImageBitmap(),
-                            )
-                        },
-                        onError = {
-                            val fallback = artworkUrl?.replace("maxresdefault", "hqdefault")
-                            if (fallback != null && fallback != artworkUrl) artworkUrl = fallback
+                        onState = { imgState ->
+                            when (imgState) {
+                                is coil3.compose.AsyncImagePainter.State.Success -> {
+                                    actions.onArtworkBitmap(
+                                        imgState.result.image.toImageBitmap(),
+                                    )
+                                }
+                                is coil3.compose.AsyncImagePainter.State.Error -> {
+                                    val fallback = artworkUrl?.replace("maxresdefault", "hqdefault")
+                                    if (fallback != null && fallback != artworkUrl) artworkUrl = fallback
+                                }
+                                else -> Unit
+                            }
                         },
                         contentScale = ContentScale.Crop,
-                        placeholder = rememberHolderPainter(),
-                        error = rememberHolderPainter(),
+                        transform =
+                            com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                                fallbackPlaceholder = cardHolder,
+                                error = cardHolder,
+                            ),
                         modifier =
                             Modifier
                                 .align(Alignment.Center)
@@ -528,12 +537,16 @@ internal fun ExpressiveArtworkCardPage(
                             targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
                             crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
                         )
+                    val adjacentHolder = rememberHolderPainter()
                     AsyncImage(
                         model = adjacentRequest,
                         contentDescription = pageTrack.title,
                         contentScale = ContentScale.Crop,
-                        placeholder = rememberHolderPainter(),
-                        error = rememberHolderPainter(),
+                        transform =
+                            com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                                fallbackPlaceholder = adjacentHolder,
+                                error = adjacentHolder,
+                            ),
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -718,10 +731,14 @@ internal fun ExpressiveBelowTheFold(
                                 crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
                                 preserveAspectRatio = true,
                             )
+                        val artistHolder = rememberHolderPainter()
                         AsyncImage(
                             model = authorCardRequest,
-                            placeholder = rememberHolderPainter(),
-                            error = rememberHolderPainter(),
+                            transform =
+                                com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                                    fallbackPlaceholder = artistHolder,
+                                    error = artistHolder,
+                                ),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
