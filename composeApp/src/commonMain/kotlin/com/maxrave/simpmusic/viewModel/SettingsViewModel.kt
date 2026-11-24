@@ -12,13 +12,21 @@ import com.maxrave.common.VIDEO_QUALITY
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.entities.GoogleAccountEntity
 import com.maxrave.domain.data.model.lyrics.RomanizationDictionaryState
+import com.maxrave.domain.data.player.AudioOutput
+import com.maxrave.domain.data.player.AutoEqLayer
+import com.maxrave.domain.data.player.EqualizerConfig
+import com.maxrave.domain.data.player.EqualizerEnhancements
 import com.maxrave.domain.data.player.GenericCastState
 import com.maxrave.domain.data.player.EightDDirection
 import com.maxrave.domain.data.player.EightDEffect
+import com.maxrave.domain.data.player.PreampMode
 import com.maxrave.domain.data.player.ReverbPreset
+import com.maxrave.domain.data.player.SavedEqualizerProfile
+import com.maxrave.domain.data.player.audioOutputKeyFor
 import com.maxrave.domain.extension.toNetScapeString
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
+import com.maxrave.simpmusic.ui.screen.home.EqualizerPreset
 import com.maxrave.domain.repository.AccountRepository
 import com.maxrave.domain.repository.ArtistRepository
 import com.maxrave.domain.repository.CacheRepository
@@ -1795,6 +1803,7 @@ class SettingsViewModel(
 
     fun setEqualizerEnabled(enabled: Boolean) {
         viewModelScope.launch {
+            mediaPlayerHandler.previewEqualizerConfig(null)
             dataStoreManager.setEqualizerEnabled(enabled)
         }
     }
@@ -1814,20 +1823,30 @@ class SettingsViewModel(
     private var _equalizerPreamp: MutableStateFlow<Float> = MutableStateFlow(0f)
     val equalizerPreamp: StateFlow<Float> = _equalizerPreamp
 
-    /** Raw `"<label>\n<gains>"` of the last imported AutoEq profile; the UI decides if it still applies. */
+    /** Raw `"<label>\n<gains>"` legacy AutoEq key kept for fallback compatibility. */
     private var _equalizerAutoEqProfile: MutableStateFlow<String> = MutableStateFlow("")
     val equalizerAutoEqProfile: StateFlow<String> = _equalizerAutoEqProfile
 
-    /**
-     * Guards the collectors below against being started twice.
-     *
-     * Two callers ask for them: [getData], which every visit to the settings screen runs, and the
-     * equalizer block itself, which asks on its own so it keeps working if it is ever hosted
-     * anywhere else. Both land on this same view model, and the collectors live in
-     * [viewModelScope] rather than in a composition — so without this, toggling the switch off and
-     * on left another five behind every time, each re-reading the preference file for a value
-     * three others were already publishing.
-     */
+    private val _equalizerEnhancements = MutableStateFlow(EqualizerEnhancements())
+    val equalizerEnhancements: StateFlow<EqualizerEnhancements> = _equalizerEnhancements
+
+    private val _equalizerSavedProfiles = MutableStateFlow<List<SavedEqualizerProfile>>(emptyList())
+    val equalizerSavedProfiles: StateFlow<List<SavedEqualizerProfile>> = _equalizerSavedProfiles
+
+    private val _equalizerActiveProfileId = MutableStateFlow<String?>(null)
+    val equalizerActiveProfileId: StateFlow<String?> = _equalizerActiveProfileId
+
+    private val _equalizerAutoEqLayer = MutableStateFlow<AutoEqLayer?>(null)
+    val equalizerAutoEqLayer: StateFlow<AutoEqLayer?> = _equalizerAutoEqLayer
+
+    private val _equalizerPerOutputEnabled = MutableStateFlow(false)
+    val equalizerPerOutputEnabled: StateFlow<Boolean> = _equalizerPerOutputEnabled
+
+    private val _equalizerOutputProfileMap = MutableStateFlow<Map<String, String>>(emptyMap())
+    val equalizerOutputProfileMap: StateFlow<Map<String, String>> = _equalizerOutputProfileMap
+
+    val audioOutputs: StateFlow<List<AudioOutput>> get() = mediaPlayerHandler.player.audioOutputs
+
     private var equalizerCollectorsStarted = false
 
     fun getEqualizer() {
@@ -1844,8 +1863,6 @@ class SettingsViewModel(
             }
             launch {
                 dataStoreManager.equalizerBands.collect { stored ->
-                    // Stored blank means flat. Short or malformed input is padded rather than
-                    // rejected, so a curve saved by a future build with more bands still loads.
                     val parsed = stored.split(",").mapNotNull { it.trim().toFloatOrNull() }
                     _equalizerBands.emit(
                         List(EQUALIZER_BAND_COUNT) { parsed.getOrElse(it) { 0f } },
@@ -1858,51 +1875,237 @@ class SettingsViewModel(
             launch {
                 dataStoreManager.equalizerAutoEqProfile.collect { _equalizerAutoEqProfile.emit(it) }
             }
+            launch {
+                dataStoreManager.equalizerEnhancements.collect { _equalizerEnhancements.emit(it) }
+            }
+            launch {
+                dataStoreManager.equalizerSavedProfiles.collect { _equalizerSavedProfiles.emit(it) }
+            }
+            launch {
+                dataStoreManager.equalizerActiveProfileId.collect { _equalizerActiveProfileId.emit(it) }
+            }
+            launch {
+                dataStoreManager.equalizerAutoEqLayer.collect { _equalizerAutoEqLayer.emit(it) }
+            }
+            launch {
+                dataStoreManager.equalizerPerOutputEnabled.collect { _equalizerPerOutputEnabled.emit(it) }
+            }
+            launch {
+                dataStoreManager.equalizerOutputProfileMap.collect { _equalizerOutputProfileMap.emit(it) }
+            }
         }
     }
 
-    /**
-     * Store a whole curve at once.
-     *
-     * The whole list rather than one band at a time because a single drag sweeps across several
-     * bands, and because the per-band version had to read [_equalizerBands] to rebuild the list —
-     * a value that only updates once the write has been through storage, so two edits in quick
-     * succession could reinstate the first band's old gain.
-     */
+    /** Push a live DSP draft to the active Android audio sink without touching DataStore on drag frames. */
+    fun previewEqualizerDraft(
+        enabled: Boolean = _equalizerEnabled.value,
+        bandsDb: List<Float> = _equalizerBands.value,
+        manualPreampDb: Float = _equalizerPreamp.value,
+        enhancements: EqualizerEnhancements = _equalizerEnhancements.value,
+        autoEqLayer: AutoEqLayer? = _equalizerAutoEqLayer.value,
+    ) {
+        mediaPlayerHandler.previewEqualizerConfig(
+            EqualizerConfig(
+                enabled = enabled && _equalizerType.value != DataStoreManager.EQUALIZER_TYPE_SYSTEM,
+                bandsDb = bandsDb,
+                manualPreampDb = manualPreampDb,
+                enhancements = enhancements,
+                autoEqLayer = autoEqLayer,
+            ),
+        )
+    }
+
+    fun clearEqualizerPreview() {
+        mediaPlayerHandler.previewEqualizerConfig(null)
+    }
+
     fun setEqualizerBands(bandsDb: List<Float>) {
         viewModelScope.launch {
             dataStoreManager.setEqualizerBands(bandsDb)
+            mediaPlayerHandler.previewEqualizerConfig(null)
         }
     }
 
-    /**
-     * Move the curve and its preamp together.
-     *
-     * These are two separate preference keys, so the player does briefly see one of them applied
-     * against the other's old value. The preamp goes first deliberately: that way the moment in
-     * between is the new headroom under the old curve — quieter — rather than a freshly boosted
-     * curve still running on the previous preset's headroom, which is the direction that clips.
-     */
-    fun applyEqualizerPreset(
-        bandsDb: List<Float>,
-        preampDb: Float,
-    ) {
+    fun applyEqualizerPreset(preset: EqualizerPreset) {
         viewModelScope.launch {
-            dataStoreManager.setEqualizerPreamp(preampDb)
-            dataStoreManager.setEqualizerBands(bandsDb)
+            mediaPlayerHandler.previewEqualizerConfig(null)
+            val currentEnh = _equalizerEnhancements.value
+            val updatedEnh =
+                currentEnh.copy(
+                    bassBoostDb = preset.bassBoostDb,
+                    trebleBoostDb = preset.trebleBoostDb,
+                    stereoWidth = preset.stereoWidth,
+                    loudnessAmount = preset.loudnessAmount,
+                )
+            dataStoreManager.setEqualizerPreamp(preset.preampDb)
+            dataStoreManager.setEqualizerBands(preset.bandsDb)
+            dataStoreManager.setEqualizerEnhancements(updatedEnh)
+            if (!_equalizerEnabled.value && preset.name != "Flat") {
+                dataStoreManager.setEqualizerEnabled(true)
+            }
         }
     }
 
     fun setEqualizerPreamp(preampDb: Float) {
         viewModelScope.launch {
             dataStoreManager.setEqualizerPreamp(preampDb)
+            mediaPlayerHandler.previewEqualizerConfig(null)
+        }
+    }
+
+    fun setEqualizerEnhancements(enhancements: EqualizerEnhancements) {
+        viewModelScope.launch {
+            dataStoreManager.setEqualizerEnhancements(enhancements.sanitized())
+            mediaPlayerHandler.previewEqualizerConfig(null)
+        }
+    }
+
+    fun saveEqualizerProfile(
+        name: String,
+        includeAutoEq: Boolean,
+        overwriteId: String? = null,
+    ) {
+        val cleanName = name.trim().ifEmpty { return }
+        viewModelScope.launch {
+            val nowMs = Clock.System.now().toEpochMilliseconds()
+            val enh = _equalizerEnhancements.value.sanitized()
+            val curBands = List(EQUALIZER_BAND_COUNT) { _equalizerBands.value.getOrElse(it) { 0f } }
+            val autoLayer = if (includeAutoEq) _equalizerAutoEqLayer.value?.takeIf { it.enabled } else null
+            val existingList = _equalizerSavedProfiles.value
+            val targetId = overwriteId ?: "eq_${nowMs}_${existingList.size}"
+            val entry =
+                SavedEqualizerProfile(
+                    id = targetId,
+                    name = cleanName,
+                    bandsDb = curBands,
+                    preampMode = enh.preampMode,
+                    manualPreampDb = _equalizerPreamp.value,
+                    bassBoostDb = enh.bassBoostDb,
+                    trebleBoostDb = enh.trebleBoostDb,
+                    stereoWidth = enh.stereoWidth,
+                    bassMonoEnabled = enh.bassMonoEnabled,
+                    loudnessAmount = enh.loudnessAmount,
+                    subsonicFilterEnabled = enh.subsonicFilterEnabled,
+                    limiterEnabled = enh.limiterEnabled,
+                    autoEqLayer = autoLayer,
+                    updatedAtEpochMs = nowMs,
+                )
+            val nextList =
+                if (overwriteId != null && existingList.any { it.id == overwriteId }) {
+                    existingList.map { if (it.id == overwriteId) entry else it }
+                } else {
+                    existingList + entry
+                }
+            dataStoreManager.setEqualizerSavedProfiles(nextList)
+            dataStoreManager.setEqualizerActiveProfileId(targetId)
+        }
+    }
+
+    fun applySavedProfile(profile: SavedEqualizerProfile) {
+        viewModelScope.launch {
+            mediaPlayerHandler.previewEqualizerConfig(null)
+            dataStoreManager.setEqualizerPreamp(profile.manualPreampDb)
+            dataStoreManager.setEqualizerBands(profile.bandsDb)
+            dataStoreManager.setEqualizerEnhancements(profile.toEnhancements())
+            if (profile.autoEqLayer != null) {
+                dataStoreManager.setEqualizerAutoEqLayer(profile.autoEqLayer)
+            }
+            dataStoreManager.setEqualizerActiveProfileId(profile.id)
+            if (!_equalizerEnabled.value) {
+                dataStoreManager.setEqualizerEnabled(true)
+            }
+        }
+    }
+
+    fun renameSavedProfile(
+        id: String,
+        newName: String,
+    ) {
+        val clean = newName.trim().ifEmpty { return }
+        viewModelScope.launch {
+            val nowMs = Clock.System.now().toEpochMilliseconds()
+            val next =
+                _equalizerSavedProfiles.value.map {
+                    if (it.id == id) it.copy(name = clean, updatedAtEpochMs = nowMs) else it
+                }
+            dataStoreManager.setEqualizerSavedProfiles(next)
+        }
+    }
+
+    fun duplicateSavedProfile(profile: SavedEqualizerProfile) {
+        viewModelScope.launch {
+            val nowMs = Clock.System.now().toEpochMilliseconds()
+            val copyId = "eq_${nowMs}_${_equalizerSavedProfiles.value.size}"
+            val copy = profile.copy(id = copyId, name = "${profile.name} (2)", updatedAtEpochMs = nowMs)
+            dataStoreManager.setEqualizerSavedProfiles(_equalizerSavedProfiles.value + copy)
+            dataStoreManager.setEqualizerActiveProfileId(copyId)
+        }
+    }
+
+    fun deleteSavedProfile(id: String) {
+        viewModelScope.launch {
+            dataStoreManager.setEqualizerSavedProfiles(_equalizerSavedProfiles.value.filterNot { it.id == id })
+            if (_equalizerActiveProfileId.value == id) {
+                dataStoreManager.setEqualizerActiveProfileId(null)
+            }
+            val cleanedMap = _equalizerOutputProfileMap.value.filterValues { it != id }
+            if (cleanedMap.size != _equalizerOutputProfileMap.value.size) {
+                dataStoreManager.setEqualizerOutputProfileMap(cleanedMap)
+            }
+        }
+    }
+
+    fun toggleAutoEqLayerEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = _equalizerAutoEqLayer.value ?: return@launch
+            mediaPlayerHandler.previewEqualizerConfig(null)
+            dataStoreManager.setEqualizerAutoEqLayer(current.copy(enabled = enabled))
+        }
+    }
+
+    fun clearAutoEqLayer() {
+        viewModelScope.launch {
+            mediaPlayerHandler.previewEqualizerConfig(null)
+            dataStoreManager.setEqualizerAutoEqLayer(null)
+            dataStoreManager.setEqualizerAutoEqProfile("", emptyList())
+        }
+    }
+
+    fun setEqualizerPerOutputEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setEqualizerPerOutputEnabled(enabled)
+        }
+    }
+
+    fun bindProfileToCurrentOutput(profileId: String) {
+        val output = mediaPlayerHandler.player.audioOutputs.value.firstOrNull { it.isActive } ?: return
+        val key = audioOutputKeyFor(output) ?: return
+        viewModelScope.launch {
+            val next = _equalizerOutputProfileMap.value.toMutableMap()
+            next[key] = profileId
+            dataStoreManager.setEqualizerOutputProfileMap(next)
+            if (!_equalizerPerOutputEnabled.value) {
+                dataStoreManager.setEqualizerPerOutputEnabled(true)
+            }
+        }
+    }
+
+    fun unbindCurrentOutput() {
+        val output = mediaPlayerHandler.player.audioOutputs.value.firstOrNull { it.isActive } ?: return
+        val key = audioOutputKeyFor(output) ?: return
+        viewModelScope.launch {
+            val next = _equalizerOutputProfileMap.value - key
+            dataStoreManager.setEqualizerOutputProfileMap(next)
         }
     }
 
     fun resetEqualizer() {
         viewModelScope.launch {
+            mediaPlayerHandler.previewEqualizerConfig(null)
             dataStoreManager.setEqualizerBands(List(EQUALIZER_BAND_COUNT) { 0f })
             dataStoreManager.setEqualizerPreamp(0f)
+            dataStoreManager.setEqualizerEnhancements(EqualizerEnhancements())
+            dataStoreManager.setEqualizerActiveProfileId(null)
         }
     }
 

@@ -228,6 +228,7 @@ import simpmusic.composeapp.generated.resources.disliked
 import simpmusic.composeapp.generated.resources.disliking
 import simpmusic.composeapp.generated.resources.download
 import simpmusic.composeapp.generated.resources.download_disabled_live
+import simpmusic.composeapp.generated.resources.equalizer
 import simpmusic.composeapp.generated.resources.download_speed
 import simpmusic.composeapp.generated.resources.download_this_song_video_file_to_your_device
 import simpmusic.composeapp.generated.resources.downloaded
@@ -1420,6 +1421,7 @@ fun NowPlayingBottomSheet(
     var sleepTimerWarning by remember { mutableStateOf(false) }
     var isBottomSheetVisible by rememberSaveable { mutableStateOf(false) }
     var changePlaybackSpeedPitch by remember { mutableStateOf(false) }
+    var showEqualizerSheet by remember { mutableStateOf(false) }
     val crossfadeEnabled by dataStoreManager.crossfadeEnabled.collectAsStateWithLifecycle(initialValue = DataStoreManager.FALSE)
 
     LaunchedEffect(uiState) {
@@ -1430,6 +1432,10 @@ fun NowPlayingBottomSheet(
 
     LaunchedEffect(key1 = song) {
         viewModel.setSongEntity(song)
+    }
+
+    if (showEqualizerSheet) {
+        EqualizerBottomSheet(onDismiss = { showEqualizerSheet = false })
     }
 
     if (changePlaybackSpeedPitch) {
@@ -1948,6 +1954,16 @@ fun NowPlayingBottomSheet(
                                 enable = crossfadeEnabled != DataStoreManager.TRUE,
                             ) {
                                 changePlaybackSpeedPitch = true
+                            }
+                        }
+                    }
+                    Crossfade(targetState = setSleepTimerEnable) {
+                        if (it) {
+                            ActionButton(
+                                icon = SimpIcons.Tune,
+                                text = Res.string.equalizer,
+                            ) {
+                                showEqualizerSheet = true
                             }
                         }
                     }
