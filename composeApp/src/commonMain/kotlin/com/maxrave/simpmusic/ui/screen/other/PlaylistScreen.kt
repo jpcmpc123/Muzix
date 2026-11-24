@@ -345,6 +345,14 @@ fun PlaylistScreen(
     var heroPrepDone by remember(id) { mutableStateOf(false) }
     val platformContext = coil3.compose.LocalPlatformContext.current
 
+    LaunchedEffect(tracks, platformContext) {
+        if (tracks.isEmpty()) return@LaunchedEffect
+        com.maxrave.simpmusic.utils.enqueueTrackArtworkPrefetch(
+            platformContext = platformContext,
+            rawUrls = tracks.map { it.thumbnails?.lastOrNull()?.url },
+        )
+    }
+
     LaunchedEffect(uiState, platformContext) {
         val success = uiState as? PlaylistUIState.Success
         if (success == null) {
@@ -359,7 +367,7 @@ fun PlaylistScreen(
             return@LaunchedEffect
         }
         if (paletteGeneratedFor != thumbUrl) {
-            val preloaded = com.maxrave.simpmusic.utils.loadHeroArtworkBitmap(platformContext, thumbUrl)
+            val preloaded = com.maxrave.simpmusic.utils.prepareHeroArtworkFast(platformContext, thumbUrl)
             if (preloaded != null) {
                 bitmap = preloaded
                 paletteState.generate(preloaded)

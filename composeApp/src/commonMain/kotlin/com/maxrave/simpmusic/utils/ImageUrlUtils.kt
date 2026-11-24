@@ -27,7 +27,7 @@ const val THUMB_BLUR_BACKDROP_PX = 128
 
 const val IMAGE_CROSSFADE_FAST_MS = 120
 const val IMAGE_CROSSFADE_HERO_MS = 150
-const val HERO_ARTWORK_PREP_TIMEOUT_MS = 1_500L
+const val HERO_ARTWORK_PREP_TIMEOUT_MS = 450L
 
 private val GOOGLE_WH_REGEX = Regex("(^|-)w(\\d+)-h(\\d+)(?=-|$)")
 private val GOOGLE_S_REGEX = Regex("(^|-)s(\\d+)(?=-|$)")
@@ -209,6 +209,42 @@ internal fun enqueueArtworkPrefetch(
     SingletonImageLoader.get(platformContext).enqueue(request)
 }
 
+internal fun findExistingArtworkBitmap(
+    platformContext: PlatformContext,
+    rawUrl: String?,
+): ImageBitmap? {
+    val cleanUrl = rawUrl?.takeIf { it.isNotBlank() } ?: return null
+    val cache = SingletonImageLoader.get(platformContext).memoryCache ?: return null
+    val baseId = artworkIdentityKey(cleanUrl)
+    for (candidatePx in listOf(THUMB_HERO_PX, THUMB_CARD_PX, THUMB_SMALL_PX, THUMB_BACKDROP_PX)) {
+        val value = cache[MemoryCache.Key("art:$baseId:$candidatePx")]
+        if (value != null) {
+            return value.image.toImageBitmap()
+        }
+    }
+    return null
+}
+
+internal fun enqueueTrackArtworkPrefetch(
+    platformContext: PlatformContext,
+    rawUrls: List<String?>,
+    maxCount: Int = 16,
+) {
+    val seen = HashSet<String>(maxCount)
+    var queued = 0
+    for (raw in rawUrls) {
+        if (queued >= maxCount) break
+        val clean = raw?.takeIf { it.isNotBlank() } ?: continue
+        if (!seen.add(artworkIdentityKey(clean))) continue
+        enqueueArtworkPrefetch(
+            platformContext = platformContext,
+            rawUrl = clean,
+            targetPx = THUMB_SMALL_PX,
+        )
+        queued++
+    }
+}
+
 internal suspend fun loadHeroArtworkBitmap(
     platformContext: PlatformContext,
     rawUrl: String?,
@@ -230,6 +266,37 @@ internal suspend fun loadHeroArtworkBitmap(
             is ErrorResult -> null
         }
     }
+}
+
+/**
+ * Fast-path hero artwork preparation for Album/Playlist headers:
+ * 1. Reuses any variant already in Coil RAM (`800px` / `400px` / `240px`) in 0 ms and silently
+ *    enqueues the `800px` hero upgrade in the background.
+ * 2. On cold cache, enqueues `800px` in parallel and awaits a tiny `400px` fast pass capped at
+ *    [timeoutMs] so the page opens quickly with sharp artwork and palette ready, while `800px`
+ *    finishes upgrading seamlessly within <= 1 s.
+ */
+internal suspend fun prepareHeroArtworkFast(
+    platformContext: PlatformContext,
+    rawUrl: String?,
+    timeoutMs: Long = HERO_ARTWORK_PREP_TIMEOUT_MS,
+): ImageBitmap? {
+    val cleanUrl = rawUrl?.takeIf { it.isNotBlank() } ?: return null
+    val cachedRam = findExistingArtworkBitmap(platformContext, cleanUrl)
+    enqueueArtworkPrefetch(
+        platformContext = platformContext,
+        rawUrl = cleanUrl,
+        targetPx = THUMB_HERO_PX,
+    )
+    if (cachedRam != null) {
+        return cachedRam
+    }
+    return loadHeroArtworkBitmap(
+        platformContext = platformContext,
+        rawUrl = cleanUrl,
+        targetPx = THUMB_CARD_PX,
+        timeoutMs = timeoutMs,
+    )
 }
 
 @Composable

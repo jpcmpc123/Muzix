@@ -294,10 +294,14 @@ fun SongFullWidthItems(
                                     targetPx = THUMB_SMALL_PX,
                                     crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
                                 )
+                            val holderPainter = rememberHolderPainter()
                             AsyncImage(
                                 model = imageRequest,
-                                placeholder = rememberHolderPainter(),
-                                error = rememberHolderPainter(),
+                                transform =
+                                    com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                                        fallbackPlaceholder = holderPainter,
+                                        error = holderPainter,
+                                    ),
                                 contentDescription = null,
                                 contentScale = ContentScale.FillWidth,
                                 modifier =

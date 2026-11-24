@@ -45,7 +45,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.auto_created_by_youtube_music
@@ -99,8 +98,7 @@ class PlaylistViewModel(
     private var continuationBgJob: Job? = null
 
     private companion object {
-        const val MAX_PRELOAD_CONTINUATION_PAGES = 15
-        const val PLAYLIST_PRELOAD_TIMEOUT_MS = 8_000L
+        const val MAX_BG_CONTINUATION_PAGES = 40
     }
 
     init {
@@ -256,53 +254,20 @@ class PlaylistViewModel(
                                 is Resource.Success if (data != null) -> {
                                     Logger.d(tag, "Playlist data: $data")
                                     log("Playlist endpoint: ${data.first.shuffleEndpoint}")
-                                    val allTracks = data.first.tracks.toMutableList()
-                                    var nextCont = data.second
-                                    if (!nextCont.isNullOrEmpty()) {
-                                        withTimeoutOrNull(PLAYLIST_PRELOAD_TIMEOUT_MS) {
-                                            var pagesLoaded = 0
-                                            while (!nextCont.isNullOrEmpty() && pagesLoaded < MAX_PRELOAD_CONTINUATION_PAGES) {
-                                                val contRes =
-                                                    songRepository
-                                                        .getContinueTrack(
-                                                            data.first.id,
-                                                            nextCont!!,
-                                                            fromPlaylist = true,
-                                                        ).firstOrNull() ?: break
-                                                val moreTracks = contRes.first
-                                                if (moreTracks.isNullOrEmpty()) {
-                                                    nextCont = null
-                                                    break
-                                                }
-                                                allTracks.addAll(moreTracks)
-                                                nextCont = contRes.second
-                                                pagesLoaded++
-                                            }
-                                        }
-                                    }
-                                    val resolvedCount = maxOf(data.first.trackCount, allTracks.size)
-                                    val fullBrowse =
-                                        data.first.copy(
-                                            tracks = allTracks,
-                                            trackCount = resolvedCount,
-                                        )
+                                    val initialTracks = data.first.tracks
+                                    val nextCont = data.second
+                                    val resolvedCount = maxOf(data.first.trackCount, initialTracks.size)
                                     val existingEntity =
                                         withContext(Dispatchers.IO) {
                                             playlistRepository.getPlaylist(data.first.id).firstOrNull()
                                         }
-                                    if (existingEntity == null) {
-                                        val createdEntity = fullBrowse.toPlaylistEntity()
-                                        withContext(Dispatchers.IO) {
-                                            playlistRepository.insertAndReplacePlaylist(createdEntity)
-                                        }
-                                        _playlistEntity.value = createdEntity
-                                    } else {
-                                        _playlistEntity.value = existingEntity
-                                    }
-                                    _tracks.value = allTracks
+                                    val entityToInsert =
+                                        if (existingEntity == null) data.first.toPlaylistEntity() else null
+                                    _playlistEntity.value = existingEntity ?: entityToInsert
+                                    _tracks.value = initialTracks
                                     _continuation.value = nextCont
                                     _tracksListState.value =
-                                        if (nextCont.isNullOrEmpty()) ListState.PAGINATION_EXHAUST else ListState.IDLE
+                                        if (nextCont.isNullOrEmpty()) ListState.PAGINATION_EXHAUST else ListState.PAGINATING
                                     _uiState.value =
                                         Success(
                                             data =
@@ -322,9 +287,13 @@ class PlaylistViewModel(
                                                     radioEndpoint = data.first.radioEndpoint,
                                                 ),
                                         )
-                                    observeAndPersistPlaylistEntity(id = data.first.id, tracksToPersist = allTracks)
+                                    observeAndPersistPlaylistEntity(
+                                        id = data.first.id,
+                                        entityToInsert = entityToInsert,
+                                        tracksToPersist = initialTracks,
+                                    )
                                     if (!nextCont.isNullOrEmpty()) {
-                                        preloadRemainingContinuationInBackground(data.first.id, nextCont!!)
+                                        preloadRemainingContinuationInBackground(data.first.id, nextCont)
                                     }
                                 }
 
@@ -339,11 +308,15 @@ class PlaylistViewModel(
 
     private fun observeAndPersistPlaylistEntity(
         id: String,
+        entityToInsert: PlaylistEntity?,
         tracksToPersist: List<Track>,
     ) {
         playlistEntityJob?.cancel()
         playlistEntityJob =
             viewModelScope.launch(Dispatchers.IO) {
+                if (entityToInsert != null) {
+                    playlistRepository.insertAndReplacePlaylist(entityToInsert)
+                }
                 playlistRepository.updatePlaylistInLibrary(
                     playlistId = id,
                     inLibrary = now(),
@@ -373,8 +346,10 @@ class PlaylistViewModel(
         continuationBgJob?.cancel()
         continuationBgJob =
             viewModelScope.launch {
+                val seenTokens = HashSet<String>()
                 var nextCont: String? = initialContinuation
-                while (!nextCont.isNullOrEmpty()) {
+                var pagesLoaded = 0
+                while (!nextCont.isNullOrEmpty() && pagesLoaded < MAX_BG_CONTINUATION_PAGES && seenTokens.add(nextCont)) {
                     _tracksListState.value = ListState.PAGINATING
                     val res =
                         songRepository
@@ -391,6 +366,7 @@ class PlaylistViewModel(
                     _tracks.update { existing -> existing + moreTracks }
                     nextCont = res.second
                     _continuation.value = nextCont
+                    pagesLoaded++
                     launch(Dispatchers.IO) {
                         moreTracks.forEach { track ->
                             songRepository
