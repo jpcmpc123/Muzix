@@ -814,18 +814,12 @@ fun SettingScreen(
                             )
                         },
                     )
-                    // The Apple Music treatments ARE the blur — the frosted page behind the player, and
-                    // the depth of field on the lyrics — and Modifier.blur is a documented no-op below
-                    // Android 12, so on an older device they render as a flat, wrong-looking version of
-                    // themselves. The requirement is spelled out on the option itself rather than left
-                    // for the user to discover after switching.
-                    val requiresAndroid12 = " (" + stringResource(Res.string.requires_android_12) + ")"
                     val nowPlayingStyleLabels =
                         listOf(
                             DataStoreManager.NOW_PLAYING_STYLE_SPOTIFY to stringResource(Res.string.now_playing_style_spotify),
                             DataStoreManager.NOW_PLAYING_STYLE_M3_EXPRESSIVE to stringResource(Res.string.now_playing_style_m3_expressive),
                             DataStoreManager.NOW_PLAYING_STYLE_APPLE_MUSIC to
-                                stringResource(Res.string.now_playing_style_apple_music) + requiresAndroid12,
+                                stringResource(Res.string.now_playing_style_apple_music),
                             DataStoreManager.NOW_PLAYING_STYLE_SOUNDCLOUD to stringResource(Res.string.now_playing_style_soundcloud),
                         )
                     SettingItem(
@@ -842,8 +836,13 @@ fun SettingScreen(
                                     confirm =
                                         runBlocking { getString(Res.string.change) } to { state ->
                                             val selected = state.selectOne?.getSelected()
-                                            nowPlayingStyleLabels.firstOrNull { it.second == selected }?.first?.let {
-                                                sharedViewModel.setNowPlayingStyle(it)
+                                            nowPlayingStyleLabels.firstOrNull { it.second == selected }?.first?.let { nextStyle ->
+                                                sharedViewModel.setNowPlayingStyle(nextStyle)
+                                                if (nextStyle == DataStoreManager.NOW_PLAYING_STYLE_APPLE_MUSIC &&
+                                                    lyricsStyle == DataStoreManager.LYRICS_STYLE_CLASSIC
+                                                ) {
+                                                    sharedViewModel.setLyricsStyle(DataStoreManager.LYRICS_STYLE_APPLE_MUSIC)
+                                                }
                                             }
                                         },
                                     dismiss = runBlocking { getString(Res.string.cancel) },
@@ -851,15 +850,12 @@ fun SettingScreen(
                             )
                         },
                     )
-                    // Hidden outright below Android 12 rather than offered with one option: the Apple
-                    // Music treatment IS the blur, and Modifier.blur is a documented no-op there, so
-                    // the choice would be between Classic and a broken-looking Classic.
                     if (isLyricsBlurSupported()) {
                         val lyricsStyleLabels =
                             listOf(
                                 DataStoreManager.LYRICS_STYLE_CLASSIC to stringResource(Res.string.lyrics_style_classic),
                                 DataStoreManager.LYRICS_STYLE_APPLE_MUSIC to
-                                    stringResource(Res.string.lyrics_style_apple_music) + requiresAndroid12,
+                                    stringResource(Res.string.lyrics_style_apple_music),
                             )
                         SettingItem(
                             title = stringResource(Res.string.lyrics_style),

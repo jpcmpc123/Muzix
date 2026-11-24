@@ -50,7 +50,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -114,10 +113,13 @@ import com.maxrave.simpmusic.ui.screen.player.content.applemusic.rememberAppleMu
 import com.maxrave.simpmusic.ui.theme.ArtworkShape
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.utils.blurImageBitmap
 import com.maxrave.simpmusic.viewModel.NowPlayingScreenData
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.UIEvent
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 import kotlin.math.pow
 
@@ -811,10 +813,27 @@ internal fun BoxScope.AppleMusicArtworkBackdrop(
     // this exact url while the execute() call did not, so this uses the path already proven to
     // work rather than a second one that has to be kept working.
     var backdropUrl by remember(state.screenData.thumbnailURL) { mutableStateOf(state.screenData.thumbnailURL) }
+    var sourceArtwork by remember(state.screenData.thumbnailURL) { mutableStateOf<ImageBitmap?>(null) }
+    var blurredBackdrop by remember { mutableStateOf<ImageBitmap?>(null) }
 
-    // The approved mock's page gradient is THREE stops — a clearly-tinted top, ~55%-darkened by
-    // mid-page (48%), warm near-black at the bottom. The first cut's two stops to near-black read
-    // as a flat black page on any dark artwork (first device screenshots).
+    LaunchedEffect(sourceArtwork) {
+        val art = sourceArtwork ?: return@LaunchedEffect
+        val frosted =
+            withContext(Dispatchers.Default) {
+                runCatching {
+                    blurImageBitmap(
+                        source = art,
+                        targetWidth = BACKDROP_BLUR_TEX_PX,
+                        targetHeight = BACKDROP_BLUR_TEX_PX,
+                        radius = BACKDROP_STACK_BLUR_RADIUS,
+                    )
+                }.getOrNull()
+            }
+        if (frosted != null) {
+            blurredBackdrop = frosted
+        }
+    }
+
     val backdropBrush =
         remember(seedColor) {
             Brush.verticalGradient(
@@ -824,23 +843,6 @@ internal fun BoxScope.AppleMusicArtworkBackdrop(
             )
         }
 
-    // Apple frosts the COVER ART into the page background — the colour and the soft blotches
-    // of the artwork stay visible through it. A flat tinted gradient, which is what this used
-    // to be, gets the hue right and loses everything else: the page reads as a solid colour
-    // swatch rather than as the record it belongs to.
-    //
-    // Loaded straight from the url by AsyncImage rather than through the screen state's
-    // decoded bitmap. The background IS an image, so there is no reason to route it through a
-    // bitmap someone else has to remember to fill in — which is exactly what broke: the only
-    // thing feeding that bitmap was the artwork pager inside MAIN, so on QUEUE or LYRICS a
-    // track change left it null and the page fell back to a bare gradient.
-    //
-    // The palette still needs a bitmap, and it comes off this same load. One source, so the
-    // frosted art and the tint over it cannot end up belonging to different songs.
-    //
-    // The heavy blur radius is safe because the whole style is gated behind Android 12 for
-    // exactly this reason (isLyricsBlurSupported), and Crop + fillMaxSize means the artwork is
-    // scaled far past its own resolution — at this blur that costs nothing visually.
     if (!backdropUrl.isNullOrBlank()) {
         val blurBackdropRequest =
             com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
@@ -849,23 +851,40 @@ internal fun BoxScope.AppleMusicArtworkBackdrop(
                 crossfadeMs = 0,
                 reuseExistingRamPlaceholder = false,
             )
+        // Hidden 1dp loader keeps Coil's proven request/cache/palette path intact without
+        // running a live full-screen RenderEffect blur over 1080x2400 pixels every frame.
         AsyncImage(
             model = blurBackdropRequest,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            onSuccess = { actions.onArtworkBitmap(it.result.image.toImageBitmap()) },
-            // Same fallback the artwork pager carries: maxresdefault is missing for plenty of
-            // videos, and without this the page would simply stay black.
+            onSuccess = {
+                val bmp = it.result.image.toImageBitmap()
+                actions.onArtworkBitmap(bmp)
+                sourceArtwork = bmp
+            },
             onError = {
                 val fallback = backdropUrl?.replace("maxresdefault", "hqdefault")
                 if (fallback != null && fallback != backdropUrl) backdropUrl = fallback
             },
-            modifier = Modifier.fillMaxSize().blur(BACKDROP_BLUR_RADIUS, BlurredEdgeTreatment.Unbounded),
+            modifier = Modifier.size(1.dp).graphicsLayer { alpha = 0f },
         )
     }
-    // The tint still rides on top, but as a translucent wash rather than the whole background:
-    // it keeps the vertical darkening that makes the controls readable at the bottom, while the
-    // frosted artwork shows through it.
+    Crossfade(
+        targetState = blurredBackdrop,
+        animationSpec = tween(500),
+        label = "appleMusicBlurredBackdrop",
+        modifier = Modifier.fillMaxSize(),
+    ) { frosted ->
+        if (frosted != null) {
+            androidx.compose.foundation.Image(
+                bitmap = frosted,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
     Box(
         modifier =
             Modifier
@@ -1453,10 +1472,10 @@ private const val TOP_WASH_MAX_ALPHA = 0.65f
 private const val TOP_WASH_FADE_MS = 900
 private val TOP_BAND_BLUR = 32.dp
 
-// Radius of the frosted cover art behind the page. Large enough that no detail of the artwork
-// survives as a shape — what is left is its colour and its broad light and dark areas, which is
-// precisely what Apple's background is.
-private val BACKDROP_BLUR_RADIUS = 80.dp
+// Frosted cover art pre-blurred once in CPU at 96x96 (< 2 ms) so no sharp artwork shape
+// survives and the GPU never runs a full-screen RenderEffect blur pass.
+private const val BACKDROP_BLUR_TEX_PX = 96
+private const val BACKDROP_STACK_BLUR_RADIUS = 12
 
 // Height of the Android grabber's tap target, right under the status bar. A tall video frame
 // starts below it, so the frame's fullscreen button lands on neither the grabber nor the status bar.

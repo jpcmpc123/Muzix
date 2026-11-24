@@ -8,67 +8,60 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.ui.imageBitmapFromArgb
+import com.maxrave.simpmusic.expect.ui.isHardwareRenderEffectBlurSupported
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.utils.stackBlurArgb
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.text.Bidi
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Apple Music renders EVERY lyric line at the same size — what separates the line being sung from
  * the rest is focus, not scale: the active line is opaque and sharp, its neighbours dim and
  * progressively blurred with distance, as if the page had a shallow depth of field.
- *
- * That is the whole trick, and it is why the style is gated on blur support: without the blur the
- * lines merely fade, which the app's Classic renderer already does better by changing size too.
  */
-// The DISTANCE rule is AMLL's (resolveBlurLevel in base/index.ts): the sung line is exempt
-// outright, and lines already sung carry a +1 so the page behind the singer recedes faster than
-// the page ahead — you are meant to read forward, not back.
-//
-// The MAGNITUDE is not AMLL's. Theirs is `min(5, (1 + distance) * 0.8)` in CSS px, sized for the
-// font its host happens to set; at 32sp that lands around 1.6dp one line out, which is invisible.
-// These numbers come from measuring the reference screenshot instead — its text measures ~68px on
-// a 920px-wide capture, i.e. 32pt, the same size used here, so the blur radii transfer directly:
-//
-//     one line out   ~6px  -> 2.8pt    three out  ~20px -> 9.3pt
-//     two out       ~12px  -> 5.6pt    four out   ~28px -> 13pt
-//
-// Expressed against the font size rather than in fixed dp, so changing the type size keeps the
-// depth of field proportional.
-private const val BLUR_PER_LINE_EM = 0.095f
-private const val BLUR_MAX_EM = 0.45f
-// AMLL's resolveOpacity returns a flat 1 for unsung lines, but the reference screenshots plainly
-// fade with distance — the line under the sung one sits at roughly half, the next at a third, and
-// beyond that they all but vanish. AMLL is reproducing Apple, not defining it, and on this point
-// the screenshots win.
-//
-// Blur and this work together rather than either doing the job alone: blur alone leaves far lines
-// as bright smears, fade alone leaves them sharp and readable when they should not be.
-private const val ACTIVE_LINE_ALPHA = 1f
-// Measured off the same screenshot: one line out still reads clearly, two is noticeably dimmer,
-// and past three they level off — blur is doing most of the work by then, so driving opacity any
-// harder just turns the far lines black.
-private const val ALPHA_FALLOFF_PER_LINE = 0.25f
-private const val MIN_LINE_ALPHA = 0.25f
+internal const val MAX_EFFECTIVE_DISTANCE = 4
+internal const val BLUR_QUANTIZE_STEP_DP = 0.5f
+internal const val BLUR_MAX_DP = 6.0f
+internal const val PRE_ROLL_LINE_ALPHA = 0.6f
 
-// Before the FIRST line is due — an intro, a long instrumental opening — there is no sung line for
-// anything to be near, so distance is meaningless and every line is equally "not yet". They are
-// dimmed uniformly and NOT blurred: blur means "far from where we are in the song", and during an
-// intro nowhere is where we are. It also has to stay readable, since this is exactly when someone
-// glances down to see what is coming. One flat value, deliberately not the distance falloff, or
-// the top of the sheet would read as the active line by being the brightest thing on it.
-private const val PRE_ROLL_LINE_ALPHA = 0.6f
+// Smooth calibrated curve: subtle depth of field that matches real Apple Music without heavy GPU taps,
+// and freezes at effective distance >= 4 so distant lines keep the exact same pooled BlurEffect.
+private val SMOOTH_BLUR_LEVELS_DP = floatArrayOf(0f, 1.4f, 2.8f, 4.4f, 5.8f)
+private val SMOOTH_ALPHA_LEVELS = floatArrayOf(1.0f, 0.68f, 0.48f, 0.34f, 0.24f)
 
 // The unsung REMAINDER of the line currently being sung — "ce" in "dan|ce". It has to be clearly
 // grey against the white of what has already been sung, or the wipe carries no contrast and the
@@ -83,143 +76,287 @@ internal val AppleMusicPendingWordColor = Color(0xFF8E8E8E)
  * overridden here while the weight and font family still come from the theme.
  */
 internal val AppleMusicLyricFontSize = 28.sp
-// Taken from AMLL's stylesheet (packages/core/src/styles/lyric-player.module.css) rather than
-// measured off a screenshot. Everything there is expressed in `em`, so it scales with whatever
-// font size the host picks — these are those ratios resolved against AppleMusicLyricFontSize.
-//
-//   .lyricLineWrapper { padding: 0.4em <x> }  -> 0.4 * 32 = 12.8dp above AND below each line
-//   .lyricMainLine    — no line-height at all -> the browser default, ~1.2em
-//
-// Note which one is bigger: the leading INSIDE a wrapped line is tighter than the padding between
-// two lines, and that is what makes a wrapped lyric read as one thought instead of two.
 internal val AppleMusicLyricLineHeight = 34.sp
 internal val AppleMusicLyricGap = 20.dp
 
-// Sizing from .lyricSubLine { font-size: max(0.5em, 10px); line-height: 1.5em } plus the flex
-// `gap: 0.3em` above it.
-//
-// Its `opacity: 0.3` is deliberately NOT copied. That rule dresses AMLL's romanisation/ruby row —
-// a pronunciation aid you glance at — whereas this row is the TRANSLATION, which the user turned
-// on specifically to read. At 0.3 it was unreadable even on the line being sung. It follows the
-// line's own colour instead: white-ish while sung, grey with the rest.
 internal val AppleMusicSubLineFontSize = 14.sp
 internal val AppleMusicSubLineHeight = 21.sp
 internal val AppleMusicMainToSubGap = 12.dp
 
-// .lyricLineWrapper { border-radius: 0.25em } plus its :hover / :active background. There is no
-// hover on a phone, so the press state takes the more visible of the two (#fff1). Note it is a
-// tinted panel behind the WHOLE wrapper — original line and translation together — not a ripple:
-// AMLL never uses one, and a ripple centred on a tap point reads as a button press.
-// --lyric-line-padding-x: 20px on a narrow viewport. It lives on .lyricLineWrapper in AMLL, i.e.
-// on the LINE, not on whatever screen happens to host the list — which is why LyricsView applies
-// it itself rather than trusting each caller. FullscreenLyricsSheet passes a bare fillMaxSize(),
-// so a caller-supplied gutter would have left the fullscreen sheet's text flush against both
-// edges while the Now Playing tab looked right.
 internal val AppleMusicLyricPaddingX = 20.dp
 
 internal val AppleMusicLyricCornerRadius = 8.dp
 internal val AppleMusicLyricPressedBackground = Color.White.copy(alpha = 0.067f)
 
-// FlowRow lays wrapped words out itself and ignores lineHeight entirely, so the rich-sync path
-// needs the same leading expressed as explicit spacing between its rows — and it has to stay
-// TIGHTER than AppleMusicLyricGap, for the same reason: rows here are one lyric wrapping, while
-// the gap separates two different lyrics. 38sp of leading over the ~37sp a 32sp line occupies
-// leaves almost nothing, which matches AMLL letting the default leading stand.
 internal val AppleMusicWrappedLineSpacing = 2.dp
 
-// White, like Apple — NOT the Classic renderer's yellow. Slightly under full opacity so the
-// translation still reads as secondary to the line it translates.
 internal val AppleMusicTranslatedColor = Color.White.copy(alpha = 0.78f)
-
-// A shade under the translation's: on a line carrying original + reading + translation, the
-// reading is the one you stop needing once you know the song, so it recedes first.
 internal val AppleMusicRomanizedColor = Color.White.copy(alpha = 0.62f)
-
-// The line NOT being sung is grey, full stop — white at reduced opacity is still white on a dark
-// page, which is why every line looked equally lit no matter how the alpha was tuned. This is the
-// single biggest signal separating the sung line from the rest; blur and opacity only refine it.
 internal val AppleMusicInactiveLineColor = Color(0xFF9B9B9B)
 
-// Passing this to a rich-synced line is what ENABLES AMLL's emphasis maths in AnimatedWord; the
-// alpha and radius here are placeholders, because that code computes both from the word's own
-// duration and its position within the wipe. Only the colour is read as-is.
-//
-// Deliberately NOT applied to line-synced lyrics: those carry no per-word timing, so there is no
-// sustain to reflect, and a constant halo there is pure decoration — which is what made the first
-// attempt look wrong.
 internal val AppleMusicActiveLineGlow = Shadow(color = Color.White, offset = Offset.Zero, blurRadius = 0f)
 
-// No glow constant for line-synced lyrics on purpose. Without per-word timing there is no single
-// word to flare, and lighting the whole line instead just makes it look smudged — the sung line is
-// marked by being WHITE against grey, and that is all.
+internal fun resolveEffectiveDistance(distanceFromCurrent: Int): Int {
+    if (distanceFromCurrent == 0) return 0
+    val raw = if (distanceFromCurrent < 0) abs(distanceFromCurrent) + 1 else distanceFromCurrent
+    return raw.coerceIn(0, MAX_EFFECTIVE_DISTANCE)
+}
+
+internal fun resolveTargetBlurDp(
+    distanceFromCurrent: Int,
+    blurEnabled: Boolean,
+    hasActiveLine: Boolean = true,
+    allLinesCurrent: Boolean = false,
+): Dp {
+    if (!blurEnabled || allLinesCurrent || !hasActiveLine || distanceFromCurrent == 0) {
+        return 0.dp
+    }
+    val eff = resolveEffectiveDistance(distanceFromCurrent)
+    return SMOOTH_BLUR_LEVELS_DP[eff].dp
+}
+
+internal fun resolveTargetAlpha(
+    distanceFromCurrent: Int,
+    hasActiveLine: Boolean = true,
+    allLinesCurrent: Boolean = false,
+): Float =
+    when {
+        allLinesCurrent -> SMOOTH_ALPHA_LEVELS[0]
+        !hasActiveLine -> PRE_ROLL_LINE_ALPHA
+        distanceFromCurrent == 0 -> SMOOTH_ALPHA_LEVELS[0]
+        else -> SMOOTH_ALPHA_LEVELS[resolveEffectiveDistance(distanceFromCurrent)]
+    }
+
+internal fun quantizeBlurStep(blurDp: Float): Int {
+    if (blurDp <= 0.25f) return 0
+    val maxStep = (BLUR_MAX_DP / BLUR_QUANTIZE_STEP_DP).roundToInt()
+    return (blurDp / BLUR_QUANTIZE_STEP_DP).roundToInt().coerceIn(0, maxStep)
+}
+
+internal fun quantizeBlurDp(blurDp: Float): Dp = (quantizeBlurStep(blurDp) * BLUR_QUANTIZE_STEP_DP).dp
 
 /**
- * Depth-of-field treatment for one lyric line. [distanceFromCurrent] is signed line distance from
- * the line being sung; its magnitude drives both blur and dimming.
- *
- * Both values are animated rather than applied outright, so the focus glides down the page with
- * the song instead of snapping — the same reason [LyricsView] animates its scroll rather than
- * jumping.
+ * Process-wide pool of quantized [BlurEffect] instances keyed by `(step, densityBucket, tileMode)`.
+ * Reusing the exact same [BlurEffect] reference across frames prevents Compose/HWUI from
+ * invalidating RenderNode caches during 60/120fps animations and keeps distant rows (`>= 4`)
+ * completely static on the GPU.
+ */
+internal object AppleMusicBlurEffectPool {
+    private val cache = HashMap<Long, BlurEffect>(64)
+
+    fun getOrCreate(
+        blurDp: Float,
+        density: Float,
+        tileMode: TileMode,
+    ): BlurEffect? {
+        val step = quantizeBlurStep(blurDp)
+        if (step <= 0) return null
+        val radiusDp = step * BLUR_QUANTIZE_STEP_DP
+        val radiusPx = radiusDp * density
+        if (radiusPx <= 0.5f * density) return null
+        val densityBucket = (density * 20f).roundToInt().coerceAtLeast(1)
+        val tileTag = if (tileMode == TileMode.Clamp) 1 else 0
+        val key = (step.toLong() shl 32) or (densityBucket.toLong() shl 1) or tileTag.toLong()
+        return synchronized(cache) {
+            cache.getOrPut(key) {
+                val bucketRadiusPx = radiusDp * (densityBucket / 20f)
+                BlurEffect(bucketRadiusPx, bucketRadiusPx, tileMode)
+            }
+        }
+    }
+
+    internal fun clearForTest() = synchronized(cache) { cache.clear() }
+
+    internal fun sizeForTest(): Int = synchronized(cache) { cache.size }
+}
+
+/**
+ * Bounded LRU cache of pre-blurred 0.5x lyric line bitmaps used only on Android < 12 where
+ * hardware [BlurEffect] is unavailable. Each entry is ~40-60 KB, ~1.5 MB total worst case.
+ */
+internal object AppleMusicSoftwareBlurCache {
+    private const val MAX_ENTRIES = 24
+    private val cache =
+        object : LinkedHashMap<String, ImageBitmap>(MAX_ENTRIES, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ImageBitmap>?): Boolean =
+                size > MAX_ENTRIES
+        }
+
+    fun get(key: String): ImageBitmap? = synchronized(cache) { cache[key] }
+
+    fun put(
+        key: String,
+        bitmap: ImageBitmap,
+    ) {
+        synchronized(cache) {
+            cache[key] = bitmap
+        }
+    }
+}
+
+/**
+ * Depth-of-field treatment for one lyric line in **a single unified `graphicsLayer`**:
+ * translation stagger, opacity dimming, and (on Android 12+ / Desktop) pooled quantized `BlurEffect`.
  */
 @Composable
 fun Modifier.appleMusicLyricFocus(
     distanceFromCurrent: Int,
     blurEnabled: Boolean,
     hasActiveLine: Boolean = true,
-    // An unsynced sheet has no sung line and never will have one, so every line IS the sung line:
-    // full opacity, no blur. Deliberately NOT folded into [hasActiveLine], which is false in two
-    // situations that want opposite treatments — this one, and the pre-roll of a SYNCED sheet,
-    // where a sung line is coming and PRE_ROLL_LINE_ALPHA is dimmer on purpose.
     allLinesCurrent: Boolean = false,
+    translationYProvider: (() -> Float)? = null,
 ): Modifier {
-    // Signed: negative means this line has already been sung. AMLL adds one to that side so the
-    // page behind the singer recedes faster than the page ahead of it.
-    val distance =
-        when {
-            distanceFromCurrent < 0 -> abs(distanceFromCurrent) + 1
-            else -> distanceFromCurrent
-        }
-    val fontSizeDp = with(LocalDensity.current) { AppleMusicLyricFontSize.toDp() }
-    val targetBlur: Dp =
-        if (!blurEnabled || allLinesCurrent || !hasActiveLine || distanceFromCurrent == 0) {
-            0.dp
-        } else {
-            fontSizeDp * (distance * BLUR_PER_LINE_EM).coerceAtMost(BLUR_MAX_EM)
-        }
-    val targetAlpha =
-        when {
-            // Ahead of the [hasActiveLine] branch, because an unsynced sheet satisfies both and
-            // wants the opposite answer: every line is the sung line, so every line is fully lit.
-            allLinesCurrent -> ACTIVE_LINE_ALPHA
-            // Checked before the distance test: the caller passes distance 0 for every line while
-            // no line is active, and 0 otherwise means "this is the sung line". Read in the other
-            // order, the whole sheet would take the sung line's full opacity during an intro.
-            !hasActiveLine -> PRE_ROLL_LINE_ALPHA
-            distanceFromCurrent == 0 -> ACTIVE_LINE_ALPHA
-            else -> (1f - distance * ALPHA_FALLOFF_PER_LINE).coerceAtLeast(MIN_LINE_ALPHA)
-        }
+    val targetBlur = resolveTargetBlurDp(distanceFromCurrent, blurEnabled, hasActiveLine, allLinesCurrent)
+    val targetAlpha = resolveTargetAlpha(distanceFromCurrent, hasActiveLine, allLinesCurrent)
 
-    val blurRadiusState = animateDpAsState(targetValue = targetBlur, animationSpec = tween(400), label = "appleMusicLyricBlur")
-    val lineAlphaState = animateFloatAsState(targetValue = targetAlpha, animationSpec = tween(400), label = "appleMusicLyricAlpha")
+    // Fast sharpening (180ms) while dragging for instant legibility; smooth 320ms settle back into focus.
+    val blurAnimMs = if (blurEnabled) 320 else 180
+    val blurRadiusState = animateDpAsState(targetValue = targetBlur, animationSpec = tween(blurAnimMs), label = "appleMusicLyricBlur")
+    val lineAlphaState = animateFloatAsState(targetValue = targetAlpha, animationSpec = tween(blurAnimMs), label = "appleMusicLyricAlpha")
+    val hardwareBlur = isHardwareRenderEffectBlurSupported()
     val isDesktop = getPlatform() == Platform.Desktop
     val edgeTreatment = if (isDesktop) TileMode.Clamp else TileMode.Decal
 
-    // alpha BEFORE blur: blurring an already-faded line keeps the two effects independent, whereas
-    // fading a blurred layer washes the blur out into a flat smear. Reading both animated states
-    // inside graphicsLayer avoids recomposing every lyric row at 60/120fps during line transitions.
-    return this
-        .graphicsLayer {
-            alpha = lineAlphaState.value
-        }.graphicsLayer {
-            val radiusPx = blurRadiusState.value.toPx()
-            if (radiusPx > 0.5f * density) {
-                renderEffect = BlurEffect(radiusPx, radiusPx, edgeTreatment)
-                clip = isDesktop
+    return this.graphicsLayer {
+        translationY = translationYProvider?.invoke() ?: 0f
+        alpha = lineAlphaState.value
+        if (hardwareBlur) {
+            val effect =
+                AppleMusicBlurEffectPool.getOrCreate(
+                    blurDp = blurRadiusState.value.value,
+                    density = density,
+                    tileMode = edgeTreatment,
+                )
+            renderEffect = effect
+            clip = isDesktop && effect != null
+        } else {
+            renderEffect = null
+            clip = false
+        }
+    }
+}
+
+/**
+ * Background 0.5x StackBlur generator for Android < 12 (`!isHardwareRenderEffectBlurSupported()`).
+ * Returns null immediately on Android 12+ / Desktop, active lines, or while dragging.
+ */
+@Composable
+internal fun rememberSoftwareBlurredLyricBitmap(
+    originalWords: String,
+    romanizedWords: String?,
+    translatedWords: String?,
+    distanceFromCurrent: Int,
+    blurEnabled: Boolean,
+    hasActiveLine: Boolean,
+    allLinesCurrent: Boolean,
+    fullWidthPx: Int,
+    paddingXPx: Int,
+    mainStyle: TextStyle,
+    subStyle: TextStyle?,
+    textMeasurer: TextMeasurer,
+): ImageBitmap? {
+    if (isHardwareRenderEffectBlurSupported()) return null
+    val targetBlur = resolveTargetBlurDp(distanceFromCurrent, blurEnabled, hasActiveLine, allLinesCurrent)
+    val step = quantizeBlurStep(targetBlur.value)
+    if (step <= 0 || fullWidthPx <= paddingXPx * 2 + 2) return null
+
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val contentWidthPx = (fullWidthPx - paddingXPx * 2).coerceAtLeast(1)
+    val cacheKey = "$originalWords|${romanizedWords.orEmpty()}|${translatedWords.orEmpty()}|$fullWidthPx|$step|$layoutDirection"
+    val cachedImmediate = AppleMusicSoftwareBlurCache.get(cacheKey)
+    var bitmap by remember(cacheKey) { mutableStateOf(cachedImmediate) }
+
+    LaunchedEffect(cacheKey) {
+        AppleMusicSoftwareBlurCache.get(cacheKey)?.let {
+            bitmap = it
+            return@LaunchedEffect
+        }
+        val blurDp = step * BLUR_QUANTIZE_STEP_DP
+        val gapPx = with(density) { AppleMusicLyricGap.toPx() }
+        val subGapPx = with(density) { AppleMusicMainToSubGap.toPx() }
+        val origAlign =
+            if (Bidi(originalWords, Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT).isRightToLeft) {
+                TextAlign.End
             } else {
-                renderEffect = null
-                clip = false
+                TextAlign.Start
+            }
+        val origLayout =
+            textMeasurer.measure(
+                text = originalWords,
+                style =
+                    mainStyle.copy(
+                        color = AppleMusicInactiveLineColor,
+                        textAlign = origAlign,
+                        textDirection = TextDirection.Content,
+                    ),
+                constraints = Constraints(maxWidth = contentWidthPx),
+            )
+        val effectiveSubStyle =
+            (subStyle ?: mainStyle).copy(
+                fontSize = AppleMusicSubLineFontSize,
+                lineHeight = AppleMusicSubLineHeight,
+                color = AppleMusicInactiveLineColor,
+                textAlign = origAlign,
+                textDirection = TextDirection.Content,
+            )
+        val romanLayout =
+            romanizedWords?.let {
+                textMeasurer.measure(
+                    text = it,
+                    style = effectiveSubStyle,
+                    constraints = Constraints(maxWidth = contentWidthPx),
+                )
+            }
+        val transLayout =
+            translatedWords?.let {
+                textMeasurer.measure(
+                    text = it,
+                    style = effectiveSubStyle,
+                    constraints = Constraints(maxWidth = contentWidthPx),
+                )
+            }
+        var totalHeightF = gapPx + origLayout.size.height
+        if (romanLayout != null) totalHeightF += subGapPx + romanLayout.size.height
+        if (transLayout != null) totalHeightF += subGapPx + transLayout.size.height
+        totalHeightF += gapPx
+
+        val fullH = totalHeightF.roundToInt().coerceIn(4, 2048)
+        val halfW = (fullWidthPx / 2).coerceAtLeast(2)
+        val halfH = (fullH / 2).coerceAtLeast(2)
+
+        val rawBitmap = ImageBitmap(halfW, halfH)
+        val canvas = Canvas(rawBitmap)
+        val drawScope = CanvasDrawScope()
+        drawScope.draw(density, layoutDirection, canvas, Size(halfW.toFloat(), halfH.toFloat())) {
+            scale(0.5f, 0.5f, Offset.Zero) {
+                var y = gapPx
+                val x = paddingXPx.toFloat()
+                drawText(origLayout, topLeft = Offset(x, y))
+                y += origLayout.size.height
+                if (romanLayout != null) {
+                    y += subGapPx
+                    drawText(romanLayout, topLeft = Offset(x, y))
+                    y += romanLayout.size.height
+                }
+                if (transLayout != null) {
+                    y += subGapPx
+                    drawText(transLayout, topLeft = Offset(x, y))
+                }
             }
         }
+        val pixels = IntArray(halfW * halfH)
+        rawBitmap.readPixels(pixels)
+        val stackRadius = with(density) { (blurDp.dp.toPx() * 0.5f).roundToInt().coerceIn(1, 12) }
+        val blurred =
+            withContext(Dispatchers.Default) {
+                stackBlurArgb(pixels, halfW, halfH, stackRadius)
+                imageBitmapFromArgb(pixels, halfW, halfH)
+            }
+        AppleMusicSoftwareBlurCache.put(cacheKey, blurred)
+        bitmap = blurred
+    }
+    return bitmap
 }
 
 /**

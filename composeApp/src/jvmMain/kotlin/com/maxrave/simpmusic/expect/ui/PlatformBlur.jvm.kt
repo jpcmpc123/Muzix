@@ -4,3 +4,5 @@ package com.maxrave.simpmusic.expect.ui
 // plain Compose blur, NOT haze's progressive path — that one throws NoSuchMethodError against the
 // pinned Compose (see CLAUDE.md), and nothing here goes near it.
 actual fun isLyricsBlurSupported(): Boolean = true
+
+actual fun isHardwareRenderEffectBlurSupported(): Boolean = true

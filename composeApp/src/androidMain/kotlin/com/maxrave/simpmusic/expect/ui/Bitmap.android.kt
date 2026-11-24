@@ -34,3 +34,9 @@ actual fun ImageBitmap.toReadableBitmap(
     val readable = if (source.config == Bitmap.Config.HARDWARE) source.copy(Bitmap.Config.ARGB_8888, false) else source
     return Bitmap.createScaledBitmap(readable, width, height, true).asImageBitmap()
 }
+
+actual fun imageBitmapFromArgb(
+    pixels: IntArray,
+    width: Int,
+    height: Int,
+): ImageBitmap = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888).asImageBitmap()

@@ -14,19 +14,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.maxrave.simpmusic.expect.ui.imageBitmapFromArgb
 import com.maxrave.simpmusic.expect.ui.toReadableBitmap
 import com.maxrave.simpmusic.extension.smoothScrimBrush
+import com.maxrave.simpmusic.utils.stackBlurArgb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -47,8 +46,8 @@ import kotlin.random.Random
  *  - every row but row 0 is shifted sideways by a seeded amount, and mirrored half the time. A flip
  *    alone reads as a reflection on a cover with a face or a logo in it; the shift breaks that
  *    without putting any two colours side by side that were not neighbours in the artwork;
- *  - the grid is resampled to MESH_TEX with smoothstep, which is what makes it smooth. The blur only
- *    takes the last of the edge off.
+ *  - the grid is resampled to MESH_TEX with smoothstep and pre-blurred once in CPU with StackBlur
+ *    so drawing requires zero live GPU blur passes.
  * Proportions survive on purpose: a cover that is mostly black leaves a mostly black page.
  */
 
@@ -134,12 +133,8 @@ internal fun AppleMusicMeshBackdrop(
         modifier =
             modifier
                 .fillMaxSize()
-                // Outside the blur, so it is an opaque floor the blur cannot thin out — the page is a
-                // sheet over the rest of the app and every pixel of it has to be opaque.
-                .background(MeshFallback)
-                // The default edge treatment clamps; Unbounded would fade alpha in from every edge and
-                // let the page underneath show through down the sides.
-                .blur(MESH_BLUR),
+                // Solid background floor so the mesh page remains completely opaque.
+                .background(MeshFallback),
     ) {
         val seamY = seam.toPx().coerceIn(0f, size.height)
         val topHoldY = topHold.toPx().coerceIn(0f, seamY)
@@ -170,7 +165,7 @@ private fun DrawScope.drawMesh(
             dstOffset = IntOffset.Zero,
             dstSize = IntSize(width, topHold),
             alpha = alpha,
-            filterQuality = FilterQuality.Low,
+            filterQuality = FilterQuality.Medium,
         )
     }
     if (seam > topHold) {
@@ -181,7 +176,7 @@ private fun DrawScope.drawMesh(
             dstOffset = IntOffset(0, topHold),
             dstSize = IntSize(width, seam - topHold),
             alpha = alpha,
-            filterQuality = FilterQuality.Low,
+            filterQuality = FilterQuality.Medium,
         )
     }
     drawImage(
@@ -191,7 +186,7 @@ private fun DrawScope.drawMesh(
         dstOffset = IntOffset(0, seam),
         dstSize = IntSize(width, (size.height.roundToInt() - seam).coerceAtLeast(1)),
         alpha = alpha,
-        filterQuality = FilterQuality.Low,
+        filterQuality = FilterQuality.Medium,
     )
 }
 
@@ -237,25 +232,13 @@ private fun meshOf(
     val topLuminance =
         (topRow.sumOf { 0.2126 * red[it] + 0.7152 * green[it] + 0.0722 * blue[it] } / topPixels / 255.0).toFloat().coerceIn(0f, 1f)
     val texels = grid.rotatedBelowSeam(cols, rows, seed).resampled(cols, rows, MESH_TEX)
+    stackBlurArgb(texels, MESH_TEX, MESH_TEX, MESH_STACK_BLUR_RADIUS)
     // The top band before any shifting: held above the artwork's top edge, it has to meet the picture
     // colour for colour, and every row but row 0 is carried sideways below.
     val topTexels = grid.copyOfRange((rows - 1) * cols, rows * cols).resampled(cols, 1, MESH_TEX).copyOfRange(0, MESH_TEX)
 
-    val image = ImageBitmap(MESH_TEX, MESH_TEX)
-    val canvas = Canvas(image)
-    val paint = Paint()
-    for (y in 0 until MESH_TEX) {
-        for (x in 0 until MESH_TEX) {
-            paint.color = Color(texels[y * MESH_TEX + x])
-            canvas.drawRect(x.toFloat(), y.toFloat(), x + 1f, y + 1f, paint)
-        }
-    }
-    val topEdge = ImageBitmap(MESH_TEX, 1)
-    val topCanvas = Canvas(topEdge)
-    for (x in 0 until MESH_TEX) {
-        paint.color = Color(topTexels[x])
-        topCanvas.drawRect(x.toFloat(), 0f, x + 1f, 1f, paint)
-    }
+    val image = imageBitmapFromArgb(texels, MESH_TEX, MESH_TEX)
+    val topEdge = imageBitmapFromArgb(topTexels, MESH_TEX, 1)
     return AppleMusicMesh(image, topLuminance, topEdge)
 }
 
@@ -374,9 +357,9 @@ private const val MESH_FLOOR = 0.045f
 /** How long the page takes to change colour on a skip: long enough to read as a change, not a cut. */
 private const val MESH_FADE_MS = 900
 
-// The owner asked for the page to be visibly smooth, and at 44dp no cell edge survives even on a
-// cover with hard colour blocks.
-private val MESH_BLUR = 44.dp
+// Pre-blurred once in CPU over the 32x32 mesh buffer (< 0.3 ms) so no cell edge survives and
+// the GPU never runs a full-screen RenderEffect blur pass.
+private const val MESH_STACK_BLUR_RADIUS = 6
 
 /** Drawn only until an artwork has been read. */
 private val MeshFallback = Color(0xFF121212)

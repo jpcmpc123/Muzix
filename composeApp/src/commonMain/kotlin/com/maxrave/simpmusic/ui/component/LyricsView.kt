@@ -60,6 +60,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -498,6 +499,18 @@ fun LyricsView(
         // so the final third of every song reads bottom-anchored instead of top-anchored.
         val tailPadding = if (appleStyle) maxHeight * 0.72f else 0.dp
         val baseBodyMedium = typo().bodyMedium
+        val baseHeadlineLarge = typo().headlineLarge
+        val appleMainStyle =
+            remember(appleStyle, baseHeadlineLarge) {
+                if (appleStyle) {
+                    baseHeadlineLarge.copy(
+                        fontSize = AppleMusicLyricFontSize,
+                        lineHeight = AppleMusicLyricLineHeight,
+                    )
+                } else {
+                    baseHeadlineLarge
+                }
+            }
         val appleSubLineStyle =
             remember(appleStyle, baseBodyMedium) {
                 if (appleStyle) {
@@ -509,6 +522,10 @@ fun LyricsView(
                     null
                 }
             }
+        val softwareTextMeasurer = rememberTextMeasurer()
+        val localDensity = LocalDensity.current
+        val appleFullWidthPx = with(localDensity) { maxWidth.roundToPx() }
+        val applePaddingXPx = with(localDensity) { AppleMusicLyricPaddingX.roundToPx() }
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -562,15 +579,16 @@ fun LyricsView(
                             romanizedByLineIndex[index]
                         }
 
-                    val renderLine: @Composable () -> Unit = {
-                        val plainDisplayWords =
-                            remember(words, lyricsData.lyrics.syncType) {
-                                if (lyricsData.lyrics.syncType == "RICH_SYNCED") {
-                                    words.stripRichSyncTimestamps()
-                                } else {
-                                    words
-                                }
+                    val plainDisplayWords =
+                        remember(words, lyricsData.lyrics.syncType) {
+                            if (lyricsData.lyrics.syncType == "RICH_SYNCED") {
+                                words.stripRichSyncTimestamps()
+                            } else {
+                                words
                             }
+                        }
+
+                    val renderLine: @Composable () -> Unit = {
                         when {
                             // Rich sync: parse and use RichSyncLyricsLineItem when word-by-word highlight is enabled
                             effectiveSyncType == "RICH_SYNCED" -> {
@@ -689,25 +707,26 @@ fun LyricsView(
                     }
 
                     if (appleStyle) {
-                        // The whole wrapper is the tap target — original line AND translation — the
-                        // way AMLL's .lyricLineWrapper is, rather than each Text separately. The
-                        // press shows as a tinted rounded panel; indication is null because a
-                        // ripple centred on the finger reads as a button, and these are lyrics.
                         val lineInteraction = remember { MutableInteractionSource() }
                         val linePressed by lineInteraction.collectIsPressedAsState()
+                        val softwareBlurredBitmap =
+                            rememberSoftwareBlurredLyricBitmap(
+                                originalWords = plainDisplayWords,
+                                romanizedWords = romanizedWords,
+                                translatedWords = translatedWords,
+                                distanceFromCurrent = distanceFromCurrent,
+                                blurEnabled = !isDragging,
+                                hasActiveLine = currentLineIndex >= 0,
+                                allLinesCurrent = allLinesCurrent,
+                                fullWidthPx = appleFullWidthPx,
+                                paddingXPx = applePaddingXPx,
+                                mainStyle = appleMainStyle,
+                                subStyle = appleSubLineStyle,
+                                textMeasurer = softwareTextMeasurer,
+                            )
                         Column(
                             modifier =
                                 Modifier
-                                    // Trails the list while a handover runs (LyricsStagger). A
-                                    // translation only — no clip — so the blur and the glow below
-                                    // still spill past the line's own box.
-                                    .graphicsLayer { translationY = stagger.lagPx(index) }
-                                    // background(colour, shape), NOT clip(shape) + background().
-                                    // clip() cuts everything that leaves this line's box — which is
-                                    // exactly what blur and glow are supposed to do. It sliced the
-                                    // blur off square at the left edge and erased the bloom around
-                                    // the sung line entirely. background() with a shape paints the
-                                    // rounded press panel without clipping any of the content.
                                     .background(
                                         color = if (linePressed) AppleMusicLyricPressedBackground else Color.Transparent,
                                         shape = RoundedCornerShape(AppleMusicLyricCornerRadius),
@@ -724,23 +743,35 @@ fun LyricsView(
                                         }
                                     },
                         ) {
-                            // Blur spans the FULL width; the gutter is applied inside it. Ordered
-                            // the other way — gutter outside, blur around the text — the blurred
-                            // box begins exactly where the glyphs begin, so there is no margin for
-                            // the softened edge to spill into and it comes out sliced flat down the
-                            // left. This is the same problem AMLL solves with `margin: -1em;
-                            // padding: 1em`, which widens the painted area without moving the
-                            // layout; Compose has no negative padding, so the equivalent is to blur
-                            // the wide box and inset the content within it.
+                            // Single unified graphicsLayer (translationY + alpha + pooled RenderEffect).
+                            // On Android < 12, draws the pre-blurred 0.5x ImageBitmap across the full width
+                            // so blur bleeds cleanly into both gutters with near-zero GPU cost.
                             Box(
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
                                         .appleMusicLyricFocus(
-                                            distanceFromCurrent,
+                                            distanceFromCurrent = distanceFromCurrent,
                                             blurEnabled = !isDragging,
                                             hasActiveLine = currentLineIndex >= 0,
                                             allLinesCurrent = allLinesCurrent,
+                                            translationYProvider = { stagger.lagPx(index) },
+                                        ).then(
+                                            if (softwareBlurredBitmap != null) {
+                                                Modifier.drawWithContent {
+                                                    drawImage(
+                                                        image = softwareBlurredBitmap,
+                                                        dstSize =
+                                                            androidx.compose.ui.unit.IntSize(
+                                                                size.width.toInt().coerceAtLeast(1),
+                                                                size.height.toInt().coerceAtLeast(1),
+                                                            ),
+                                                        filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium,
+                                                    )
+                                                }
+                                            } else {
+                                                Modifier
+                                            },
                                         ),
                             ) {
                                 Box(modifier = Modifier.padding(horizontal = AppleMusicLyricPaddingX)) {

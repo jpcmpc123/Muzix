@@ -27,3 +27,10 @@ expect fun ImageBitmap.toReadableBitmap(
     width: Int,
     height: Int,
 ): ImageBitmap
+
+/** Builds an [ImageBitmap] directly from packed `ARGB_8888` pixels (`width * height`). */
+expect fun imageBitmapFromArgb(
+    pixels: IntArray,
+    width: Int,
+    height: Int,
+): ImageBitmap
