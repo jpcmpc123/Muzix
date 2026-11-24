@@ -27,6 +27,7 @@ class EqualizerPresetsTest {
                             bassBoostDb = preset.bassBoostDb,
                             trebleBoostDb = preset.trebleBoostDb,
                             stereoWidth = preset.stereoWidth,
+                            spatialStage = preset.spatialStage,
                             loudnessAmount = preset.loudnessAmount,
                         ),
                 )
@@ -38,6 +39,8 @@ class EqualizerPresetsTest {
             assertEquals(preset.name, equalizerPresetFor(preset.bandsDb)?.name)
         }
         assertNotNull(EQUALIZER_PRESETS.firstOrNull { it.name == "Hi-Fi / Harman" })
+        val openStage = assertNotNull(EQUALIZER_PRESETS.firstOrNull { it.name == "Open Stage" })
+        assertTrue(openStage.spatialStage > 0f && openStage.stereoWidth >= 1.25f)
         assertNotNull(EQUALIZER_PRESETS.firstOrNull { it.name == "Clean Bass" })
     }
 }

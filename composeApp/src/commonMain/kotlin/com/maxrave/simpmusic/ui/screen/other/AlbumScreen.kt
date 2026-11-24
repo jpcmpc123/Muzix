@@ -79,6 +79,7 @@ import com.maxrave.simpmusic.ui.component.DownloadingIndicator
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.utils.toSongEntity
+import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
@@ -205,9 +206,25 @@ fun AlbumScreen(
     }
 
     var heroPrepDone by remember(browseId) { mutableStateOf(false) }
+    var heroVisualReady by remember(browseId) { mutableStateOf(false) }
+    val hintThumbUrl = remember(browseId) { com.maxrave.simpmusic.utils.ArtworkHintCache.get(browseId) }
+    val openStartedAtMs = remember(browseId) { System.currentTimeMillis() }
+    var loadReadyAtMs by remember(browseId) { mutableStateOf<Long?>(null) }
+    var heroTimingLogged by remember(browseId) { mutableStateOf(false) }
     val platformContext = coil3.compose.LocalPlatformContext.current
 
-    LaunchedEffect(uiState.listTrack, uiState.otherVersion, platformContext) {
+    LaunchedEffect(browseId, hintThumbUrl, platformContext) {
+        if (!hintThumbUrl.isNullOrBlank()) {
+            com.maxrave.simpmusic.utils.enqueueArtworkPrefetch(
+                platformContext = platformContext,
+                rawUrl = hintThumbUrl,
+                targetPx = com.maxrave.simpmusic.utils.THUMB_HEADER_HERO_PX,
+            )
+        }
+    }
+
+    LaunchedEffect(heroVisualReady, uiState.loadState, uiState.listTrack, uiState.otherVersion, platformContext) {
+        if (!heroVisualReady || uiState.loadState != LocalPlaylistState.PlaylistLoadState.Success) return@LaunchedEffect
         if (uiState.listTrack.isEmpty() && uiState.otherVersion.isEmpty()) return@LaunchedEffect
         com.maxrave.simpmusic.utils.enqueueTrackArtworkPrefetch(
             platformContext = platformContext,
@@ -221,23 +238,47 @@ fun AlbumScreen(
         if (uiState.loadState != LocalPlaylistState.PlaylistLoadState.Success) {
             if (uiState.loadState == LocalPlaylistState.PlaylistLoadState.Loading) {
                 heroPrepDone = false
+                heroVisualReady = false
             }
             return@LaunchedEffect
         }
         val thumbUrl = uiState.thumbnail
         if (thumbUrl.isNullOrBlank()) {
             heroPrepDone = true
+            heroVisualReady = true
             return@LaunchedEffect
         }
         if (paletteGeneratedFor != thumbUrl) {
-            val preloaded = com.maxrave.simpmusic.utils.prepareHeroArtworkFast(platformContext, thumbUrl)
-            if (preloaded != null) {
-                bitmap = preloaded
-                paletteState.generate(preloaded)
+            val prep =
+                com.maxrave.simpmusic.utils.prepareHeroArtworkResult(
+                    platformContext = platformContext,
+                    rawUrl = thumbUrl,
+                    hintUrl = hintThumbUrl,
+                    targetPx = com.maxrave.simpmusic.utils.THUMB_HEADER_HERO_PX,
+                )
+            if (prep.bitmap != null) {
+                bitmap = prep.bitmap
+                paletteState.generate(prep.bitmap)
                 paletteGeneratedFor = thumbUrl
+                heroVisualReady = true
+                if (!heroTimingLogged) {
+                    heroTimingLogged = true
+                    val nowMs = System.currentTimeMillis()
+                    Logger.i(
+                        "HeroTiming",
+                        "screen=Album id=$browseId afterLoadMs=${nowMs - (loadReadyAtMs ?: nowMs)} totalMs=${nowMs - openStartedAtMs} source=${prep.source}",
+                    )
+                }
             }
         }
         heroPrepDone = true
+        if (loadReadyAtMs == null) {
+            loadReadyAtMs = System.currentTimeMillis()
+        }
+        if (!heroVisualReady) {
+            kotlinx.coroutines.delay(500L)
+            heroVisualReady = true
+        }
     }
 
     LaunchedEffect(bitmap) {
@@ -337,8 +378,9 @@ fun AlbumScreen(
                                                 val albumHeroRequest =
                                                     com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
                                                         rawUrl = uiState.thumbnail,
-                                                        targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                                                        targetPx = com.maxrave.simpmusic.utils.THUMB_HEADER_HERO_PX,
                                                         crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                                                        fallbackPlaceholderUrl = hintThumbUrl,
                                                     )
                                                 val albumHeroHolder = rememberHolderPainter()
                                                 AsyncImage(
@@ -353,6 +395,15 @@ fun AlbumScreen(
                                                     onState = { imgState ->
                                                         if (imgState is coil3.compose.AsyncImagePainter.State.Success) {
                                                             bitmap = imgState.result.image.toImageBitmap()
+                                                            heroVisualReady = true
+                                                            if (!heroTimingLogged) {
+                                                                heroTimingLogged = true
+                                                                val nowMs = System.currentTimeMillis()
+                                                                Logger.i(
+                                                                    "HeroTiming",
+                                                                    "screen=Album id=$browseId afterLoadMs=${nowMs - (loadReadyAtMs ?: nowMs)} totalMs=${nowMs - openStartedAtMs} source=network",
+                                                                )
+                                                            }
                                                         }
                                                     },
                                                     modifier = Modifier.fillMaxSize(),
@@ -499,8 +550,9 @@ fun AlbumScreen(
                                                     val albumDesktopHeroRequest =
                                                         com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
                                                             rawUrl = uiState.thumbnail,
-                                                            targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                                                            targetPx = com.maxrave.simpmusic.utils.THUMB_HEADER_HERO_PX,
                                                             crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                                                            fallbackPlaceholderUrl = hintThumbUrl,
                                                         )
                                                     val albumDesktopHeroHolder = rememberHolderPainter()
                                                     AsyncImage(
@@ -515,6 +567,15 @@ fun AlbumScreen(
                                                         onState = { imgState ->
                                                             if (imgState is coil3.compose.AsyncImagePainter.State.Success) {
                                                                 bitmap = imgState.result.image.toImageBitmap()
+                                                                heroVisualReady = true
+                                                                if (!heroTimingLogged) {
+                                                                    heroTimingLogged = true
+                                                                    val nowMs = System.currentTimeMillis()
+                                                                    Logger.i(
+                                                                        "HeroTiming",
+                                                                        "screen=Album id=$browseId afterLoadMs=${nowMs - (loadReadyAtMs ?: nowMs)} totalMs=${nowMs - openStartedAtMs} source=network",
+                                                                    )
+                                                                }
                                                             }
                                                         },
                                                         modifier =

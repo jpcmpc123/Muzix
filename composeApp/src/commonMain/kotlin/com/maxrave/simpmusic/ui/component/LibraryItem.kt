@@ -469,11 +469,17 @@ internal fun RecentlyAddedRow(
 
         else -> {
             if (item is PlaylistType) {
+                val platformContext = coil3.compose.LocalPlatformContext.current
                 PlaylistFullWidthItems(
                     data = item,
                     onClickListener = {
                         when (item) {
                             is AlbumEntity -> {
+                                com.maxrave.simpmusic.utils.primeCollectionArtworkNavigation(
+                                    platformContext = platformContext,
+                                    collectionId = item.browseId,
+                                    rawThumbUrl = item.thumbnails,
+                                )
                                 navController.navigate(
                                     AlbumDestination(
                                         item.browseId,
@@ -482,6 +488,11 @@ internal fun RecentlyAddedRow(
                             }
 
                             is PlaylistEntity -> {
+                                com.maxrave.simpmusic.utils.primeCollectionArtworkNavigation(
+                                    platformContext = platformContext,
+                                    collectionId = item.id,
+                                    rawThumbUrl = item.thumbnails,
+                                )
                                 navController.navigate(
                                     PlaylistDestination(
                                         item.id,

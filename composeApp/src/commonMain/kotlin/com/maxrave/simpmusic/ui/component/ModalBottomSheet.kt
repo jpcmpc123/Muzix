@@ -1848,6 +1848,7 @@ fun NowPlayingBottomSheet(
                     ) {
                         artist = true
                     }
+                    val modalPlatformContext = coil3.compose.LocalPlatformContext.current
                     ActionButton(
                         icon = SimpIcons.Album,
                         // Three states, not two. A track can carry an album ID with no title: the
@@ -1872,6 +1873,11 @@ fun NowPlayingBottomSheet(
                         enable = uiState.songUIState.album != null,
                     ) {
                         uiState.songUIState.album?.id?.let { id ->
+                            com.maxrave.simpmusic.utils.primeCollectionArtworkNavigation(
+                                platformContext = modalPlatformContext,
+                                collectionId = id,
+                                rawThumbUrl = uiState.songUIState.thumbnails,
+                            )
                             onNavigateToOtherScreen()
                             navController.navigate(AlbumDestination(browseId = id))
                         }

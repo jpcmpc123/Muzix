@@ -22,6 +22,7 @@ import simpmusic.composeapp.generated.resources.equalizer_preset_jazz
 import simpmusic.composeapp.generated.resources.equalizer_preset_latin
 import simpmusic.composeapp.generated.resources.equalizer_preset_loudness
 import simpmusic.composeapp.generated.resources.equalizer_preset_lounge
+import simpmusic.composeapp.generated.resources.equalizer_preset_open_stage
 import simpmusic.composeapp.generated.resources.equalizer_preset_piano
 import simpmusic.composeapp.generated.resources.equalizer_preset_pop
 import simpmusic.composeapp.generated.resources.equalizer_preset_rnb
@@ -47,6 +48,7 @@ data class EqualizerPreset(
     val bassBoostDb: Float = 0f,
     val trebleBoostDb: Float = 0f,
     val stereoWidth: Float = 1f,
+    val spatialStage: Float = 0f,
     val loudnessAmount: Float = 0f,
 ) {
     val preampDb: Float
@@ -62,6 +64,7 @@ data class EqualizerPreset(
                                 bassBoostDb = bassBoostDb,
                                 trebleBoostDb = trebleBoostDb,
                                 stereoWidth = stereoWidth,
+                                spatialStage = spatialStage,
                                 loudnessAmount = loudnessAmount,
                             ),
                     ),
@@ -76,8 +79,17 @@ val EQUALIZER_PRESETS: List<EqualizerPreset> =
         preset(
             "Hi-Fi / Harman",
             Res.string.equalizer_preset_hifi_harman,
-            2.5f, 2f, 0.5f, -0.5f, 0f, 0.5f, 1.5f, 2f, 1.5f, 2f,
-            stereoWidth = 1.15f,
+            2.5f, 2f, 0.5f, -1f, 0f, 0.5f, 1.5f, 2f, 2f, 2f,
+            stereoWidth = 1.20f,
+            spatialStage = 0.15f,
+        ),
+        preset(
+            "Open Stage",
+            Res.string.equalizer_preset_open_stage,
+            2f, 1.5f, 0f, -1.5f, -0.5f, 0.5f, 1.5f, 2f, 2.5f, 2.5f,
+            trebleBoostDb = 1f,
+            stereoWidth = 1.30f,
+            spatialStage = 0.30f,
         ),
         preset(
             "Clean Bass",
@@ -117,6 +129,7 @@ private fun preset(
     bassBoostDb: Float = 0f,
     trebleBoostDb: Float = 0f,
     stereoWidth: Float = 1f,
+    spatialStage: Float = 0f,
     loudnessAmount: Float = 0f,
 ) = EqualizerPreset(
     name = name,
@@ -125,6 +138,7 @@ private fun preset(
     bassBoostDb = bassBoostDb,
     trebleBoostDb = trebleBoostDb,
     stereoWidth = stereoWidth,
+    spatialStage = spatialStage,
     loudnessAmount = loudnessAmount,
 )
 

@@ -51,12 +51,27 @@ class ImageUrlUtilsTest {
     }
 
     @Test
-    fun sizedArtworkUrlLeavesNonGoogleUrlsUntouched() {
+    fun sizedArtworkUrlLeavesExternalAndLargeYtimgUrlsUntouched() {
         val ytimg = "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"
-        assertEquals(ytimg, ytimg.sizedArtworkUrl(THUMB_SMALL_PX))
+        assertEquals(ytimg, ytimg.sizedArtworkUrl(THUMB_CARD_PX))
 
         val external = "https://i1.sndcdn.com/artworks-123-t500x500.jpg?w=500"
         assertEquals(external, external.sizedArtworkUrl(THUMB_SMALL_PX))
+    }
+
+    @Test
+    fun sizedArtworkUrlShrinksUnsignedYtimgTrackThumbsAndLeavesSignedOnes() {
+        val hq = "https://i.ytimg.com/vi/abc123/hqdefault.jpg"
+        assertEquals("https://i.ytimg.com/vi/abc123/mqdefault.jpg", hq.sizedArtworkUrl(THUMB_SMALL_PX))
+
+        val maxres = "https://i.ytimg.com/vi/abc123/maxresdefault.jpg"
+        assertEquals("https://i.ytimg.com/vi/abc123/mqdefault.jpg", maxres.sizedArtworkUrl(THUMB_SMALL_PX))
+        // Hero requests keep full resolution
+        assertEquals(maxres, maxres.sizedArtworkUrl(THUMB_HEADER_HERO_PX))
+
+        // Signed URLs remain completely untouched
+        val signed = "https://i.ytimg.com/vi/abc123/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg=="
+        assertEquals(signed, signed.sizedArtworkUrl(THUMB_SMALL_PX))
     }
 
     @Test
@@ -69,13 +84,32 @@ class ImageUrlUtilsTest {
             artworkIdentityKey("https://i.ytimg.com/vi/abcXYZ/maxresdefault.jpg"),
             artworkIdentityKey("https://i.ytimg.com/vi/abcXYZ/hqdefault.jpg"),
         )
+        assertEquals(
+            artworkIdentityKey("https://www.gstatic.com/youtube/media/lk/liked-music-@576.png"),
+            artworkIdentityKey("https://www.gstatic.com/youtube/media/lk/liked-music-@1200.png"),
+        )
 
         val memoryCache = MemoryCache.Builder().maxSizeBytes(1024L * 1024L).build()
         val smallKey = artworkMemoryCacheKey(smallUrl, THUMB_SMALL_PX)
         memoryCache[MemoryCache.Key(smallKey)] = MemoryCache.Value(DummyImage())
 
-        assertEquals(smallKey, findExistingArtworkMemoryKey(memoryCache, heroUrl, THUMB_HERO_PX))
+        assertEquals(smallKey, findExistingArtworkMemoryKey(memoryCache, heroUrl, THUMB_HEADER_HERO_PX))
         assertNull(findExistingArtworkMemoryKey(memoryCache, smallUrl, THUMB_SMALL_PX))
+    }
+
+    @Test
+    fun artworkHintCacheNormalizesVlPrefixAndRespectsLruLookup() {
+        ArtworkHintCache.clear()
+        ArtworkHintCache.put("VLPLxyz123", "https://lh3.googleusercontent.com/cover=w400-h400")
+        assertEquals(
+            "https://lh3.googleusercontent.com/cover=w400-h400",
+            ArtworkHintCache.get("PLxyz123"),
+        )
+        assertEquals(
+            "https://lh3.googleusercontent.com/cover=w400-h400",
+            ArtworkHintCache.get("VLPLxyz123"),
+        )
+        ArtworkHintCache.clear()
     }
 
     @Test

@@ -393,10 +393,16 @@ fun ItemAlbumNotification(
     thumbnail: String?,
     navController: NavController,
 ) {
+    val platformContext = coil3.compose.LocalPlatformContext.current
     Box(
         modifier =
             Modifier
                 .clickable {
+                    com.maxrave.simpmusic.utils.primeCollectionArtworkNavigation(
+                        platformContext = platformContext,
+                        collectionId = browseId,
+                        rawThumbUrl = thumbnail,
+                    )
                     navController.navigate(
                         AlbumDestination(
                             browseId = browseId,

@@ -67,6 +67,7 @@ import com.maxrave.domain.data.player.AudioOutputKind
 import com.maxrave.domain.data.player.EQUALIZER_BASS_MAX_DB
 import com.maxrave.domain.data.player.EQUALIZER_PREAMP_MAX_DB
 import com.maxrave.domain.data.player.EQUALIZER_PREAMP_MIN_DB
+import com.maxrave.domain.data.player.EQUALIZER_SPATIAL_STAGE_MAX
 import com.maxrave.domain.data.player.EQUALIZER_STEREO_WIDTH_MAX
 import com.maxrave.domain.data.player.EQUALIZER_STEREO_WIDTH_MIN
 import com.maxrave.domain.data.player.EQUALIZER_TREBLE_MAX_DB
@@ -128,6 +129,7 @@ import simpmusic.composeapp.generated.resources.equalizer_reset
 import simpmusic.composeapp.generated.resources.equalizer_save_as_new
 import simpmusic.composeapp.generated.resources.equalizer_save_profile
 import simpmusic.composeapp.generated.resources.equalizer_save_profile_title
+import simpmusic.composeapp.generated.resources.equalizer_spatial_stage
 import simpmusic.composeapp.generated.resources.equalizer_stereo_width
 import simpmusic.composeapp.generated.resources.equalizer_subsonic
 import simpmusic.composeapp.generated.resources.equalizer_subsonic_desc
@@ -719,6 +721,20 @@ fun EqualizerSection(
                     )
                 }
             }
+
+            LiveToneSlider(
+                label = stringResource(Res.string.equalizer_spatial_stage),
+                value = shownEnh.spatialStage,
+                valueRange = 0f..EQUALIZER_SPATIAL_STAGE_MAX,
+                snap = { ((it * 20f).roundToInt() / 20f).coerceIn(0f, EQUALIZER_SPATIAL_STAGE_MAX) },
+                readout = { "${(it * 100f).roundToInt()}%" },
+                onPreview = { v ->
+                    val next = shownEnh.copy(spatialStage = v)
+                    draftEnh = next
+                    viewModel.previewEqualizerDraft(enhancements = next)
+                },
+                onCommit = { v -> viewModel.setEqualizerEnhancements(shownEnh.copy(spatialStage = v)) },
+            )
 
             LiveToneSlider(
                 label = stringResource(Res.string.equalizer_loudness),

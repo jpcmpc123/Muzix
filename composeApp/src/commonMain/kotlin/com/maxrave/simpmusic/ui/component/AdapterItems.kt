@@ -638,6 +638,46 @@ fun HomeItemContentPlaylist(
     val titleColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val textWidth = if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier.width(thumbSize)
     val (hoverModifier, hovered) = rememberCardHover(enabled = onPlay != null)
+    val platformContext = coil3.compose.LocalPlatformContext.current
+    val thumb =
+        when (data) {
+            is Content -> data.thumbnails.lastOrNull()?.url
+            is com.maxrave.domain.data.model.mood.genre.Content -> data.thumbnail?.lastOrNull()?.url
+            is com.maxrave.domain.data.model.mood.moodmoments.Content -> data.thumbnails?.lastOrNull()?.url
+            is LocalPlaylistEntity -> data.thumbnail
+            is ChartItem -> null
+            is PlaylistsResult -> data.thumbnails.lastOrNull()?.url
+            is AlbumEntity -> data.thumbnails
+            is PlaylistEntity -> data.thumbnails
+            is ResultSingle -> data.thumbnails.lastOrNull()?.url
+            is ResultAlbum -> data.thumbnails.lastOrNull()?.url
+            is ResultPlaylist -> data.thumbnails.lastOrNull()?.url
+            is PodcastsEntity -> data.thumbnail
+            is AlbumsResult -> data.thumbnails.lastOrNull()?.url
+            // A recap owns no artwork; it borrows the month's own top song's, resolved
+            // where the recap itself is (LibraryViewModel.getMonthlyRecaps).
+            // Deliberately null: a recap has no artwork of its own, so it falls to
+            // the title placeholder below — the same tile a local playlist without
+            // a thumbnail gets. Same reason ChartItem above is null.
+            is MonthlyRecapItem -> null
+            else -> null
+        }
+    val collectionId =
+        when (data) {
+            is Content -> data.playlistId ?: data.browseId
+            is com.maxrave.domain.data.model.mood.genre.Content -> data.playlistBrowseId
+            is com.maxrave.domain.data.model.mood.moodmoments.Content -> data.playlistBrowseId
+            is LocalPlaylistEntity -> data.id.toString()
+            is PlaylistsResult -> data.browseId
+            is AlbumEntity -> data.browseId
+            is PlaylistEntity -> data.id
+            is ResultSingle -> data.browseId
+            is ResultAlbum -> data.browseId
+            is ResultPlaylist -> data.id
+            is PodcastsEntity -> data.podcastId
+            is AlbumsResult -> data.browseId
+            else -> null
+        }
     Box(
         Modifier
             .then(hoverModifier)
@@ -645,6 +685,11 @@ fun HomeItemContentPlaylist(
             .focusable(true)
             .clip(RoundedCornerShape(8.dp))
             .clickable {
+                com.maxrave.simpmusic.utils.primeCollectionArtworkNavigation(
+                    platformContext = platformContext,
+                    collectionId = collectionId,
+                    rawThumbUrl = thumb,
+                )
                 onClick()
             },
     ) {
@@ -659,29 +704,6 @@ fun HomeItemContentPlaylist(
                     // thumbSize, so the floor would only add empty space under every tile.
                     .then(if (fillMaxWidth) Modifier else Modifier.heightIn(min = thumbSize + if (compactCards) cardTextBlockFloor() else 70.dp)),
         ) {
-            val thumb =
-                when (data) {
-                    is Content -> data.thumbnails.lastOrNull()?.url
-                    is com.maxrave.domain.data.model.mood.genre.Content -> data.thumbnail?.lastOrNull()?.url
-                    is com.maxrave.domain.data.model.mood.moodmoments.Content -> data.thumbnails?.lastOrNull()?.url
-                    is LocalPlaylistEntity -> data.thumbnail
-                    is ChartItem -> null
-                    is PlaylistsResult -> data.thumbnails.lastOrNull()?.url
-                    is AlbumEntity -> data.thumbnails
-                    is PlaylistEntity -> data.thumbnails
-                    is ResultSingle -> data.thumbnails.lastOrNull()?.url
-                    is ResultAlbum -> data.thumbnails.lastOrNull()?.url
-                    is ResultPlaylist -> data.thumbnails.lastOrNull()?.url
-                    is PodcastsEntity -> data.thumbnail
-                    is AlbumsResult -> data.thumbnails.lastOrNull()?.url
-                    // A recap owns no artwork; it borrows the month's own top song's, resolved
-                    // where the recap itself is (LibraryViewModel.getMonthlyRecaps).
-                    // Deliberately null: a recap has no artwork of its own, so it falls to
-                    // the title placeholder below — the same tile a local playlist without
-                    // a thumbnail gets. Same reason ChartItem above is null.
-                    is MonthlyRecapItem -> null
-                    else -> null
-                }
             val imageRequest =
                 rememberOptimizedImageRequest(
                     rawUrl = thumb,

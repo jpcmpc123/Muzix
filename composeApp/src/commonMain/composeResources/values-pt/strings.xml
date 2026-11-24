@@ -1205,6 +1205,7 @@
     <string name="translation_source_google">Tradutor · Google</string>
     <string name="translation_source_ai">Tradução · IA</string>
     <string name="equalizer_preset_hifi_harman">Hi-Fi / Harman</string>
+    <string name="equalizer_preset_open_stage">Palco Aberto / Spatial</string>
     <string name="equalizer_preset_clean_bass">Grave Limpo</string>
     <string name="equalizer_preset_studio">Estúdio / Referência</string>
     <string name="equalizer_preset_car">Som Automotivo</string>
@@ -1225,7 +1226,8 @@
     <string name="equalizer_bass_boost">Grave Profundo</string>
     <string name="equalizer_treble_boost">Brilho &amp; Clareza</string>
     <string name="equalizer_stereo_width">Palco Estéreo</string>
-    <string name="equalizer_bass_mono">Manter grave centralizado (&lt; 140 Hz)</string>
+    <string name="equalizer_bass_mono">Manter grave centralizado (&lt; 100 Hz)</string>
+    <string name="equalizer_spatial_stage">Espaço / Sala 3D</string>
     <string name="equalizer_loudness">Loudness Dinâmico</string>
     <string name="equalizer_view_curve">Curva</string>
     <string name="equalizer_view_sliders">Sliders</string>

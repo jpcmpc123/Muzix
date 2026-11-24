@@ -542,6 +542,7 @@ fun SearchScreen(
                             key = { index, item -> suggestKeys.getOrElse(index) { "suggest_${item.hashCode()}_$index" } },
                             contentType = { _, item -> item::class.simpleName ?: "suggest_item" },
                         ) { _, item ->
+                            val platformContext = coil3.compose.LocalPlatformContext.current
                             SuggestItemRow(
                                 searchResult = item,
                                 onItemClick = { item ->
@@ -569,12 +570,22 @@ fun SearchScreen(
                                         }
 
                                         is AlbumsResult -> {
+                                            com.maxrave.simpmusic.utils.primeCollectionArtworkNavigation(
+                                                platformContext = platformContext,
+                                                collectionId = item.browseId,
+                                                rawThumbUrl = item.thumbnails.lastOrNull()?.url,
+                                            )
                                             navController.navigate(
                                                 AlbumDestination(item.browseId),
                                             )
                                         }
 
                                         is PlaylistsResult -> {
+                                            com.maxrave.simpmusic.utils.primeCollectionArtworkNavigation(
+                                                platformContext = platformContext,
+                                                collectionId = item.browseId,
+                                                rawThumbUrl = item.thumbnails.lastOrNull()?.url,
+                                            )
                                             navController.navigate(
                                                 PlaylistDestination(
                                                     item.browseId,
@@ -1055,9 +1066,15 @@ fun SearchScreen(
                                                                 }
 
                                                                 is AlbumsResult -> {
+                                                                    val itemPlatformContext = coil3.compose.LocalPlatformContext.current
                                                                     PlaylistFullWidthItems(
                                                                         data = result,
                                                                         onClickListener = {
+                                                                            com.maxrave.simpmusic.utils.primeCollectionArtworkNavigation(
+                                                                                platformContext = itemPlatformContext,
+                                                                                collectionId = result.browseId,
+                                                                                rawThumbUrl = result.thumbnails.lastOrNull()?.url,
+                                                                            )
                                                                             navController.navigate(
                                                                                 AlbumDestination(
                                                                                     result.browseId,
@@ -1081,6 +1098,7 @@ fun SearchScreen(
                                                                 }
 
                                                                 is PlaylistsResult -> {
+                                                                    val itemPlatformContext = coil3.compose.LocalPlatformContext.current
                                                                     PlaylistFullWidthItems(
                                                                         data = result,
                                                                         onClickListener = {
@@ -1091,6 +1109,11 @@ fun SearchScreen(
                                                                                     ),
                                                                                 )
                                                                             } else {
+                                                                                com.maxrave.simpmusic.utils.primeCollectionArtworkNavigation(
+                                                                                    platformContext = itemPlatformContext,
+                                                                                    collectionId = result.browseId,
+                                                                                    rawThumbUrl = result.thumbnails.lastOrNull()?.url,
+                                                                                )
                                                                                 navController.navigate(
                                                                                     PlaylistDestination(
                                                                                         result.browseId,

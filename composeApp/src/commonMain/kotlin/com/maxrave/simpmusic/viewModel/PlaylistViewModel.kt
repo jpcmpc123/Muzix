@@ -346,6 +346,8 @@ class PlaylistViewModel(
         continuationBgJob?.cancel()
         continuationBgJob =
             viewModelScope.launch {
+                // Yield initial mobile bandwidth so header hero artwork completes cleanly first.
+                delay(600L)
                 val seenTokens = HashSet<String>()
                 var nextCont: String? = initialContinuation
                 var pagesLoaded = 0

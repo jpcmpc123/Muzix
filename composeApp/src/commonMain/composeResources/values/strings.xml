@@ -1225,6 +1225,7 @@
     <string name="translation_source_google">Translator · Google</string>
     <string name="translation_source_ai">Translation · AI</string>
     <string name="equalizer_preset_hifi_harman">Hi-Fi / Harman</string>
+    <string name="equalizer_preset_open_stage">Open Stage (Spatial)</string>
     <string name="equalizer_preset_clean_bass">Clean Bass</string>
     <string name="equalizer_preset_studio">Studio / Reference</string>
     <string name="equalizer_preset_car">Car Audio</string>
@@ -1245,7 +1246,8 @@
     <string name="equalizer_bass_boost">Deep Bass (Sub-Shelf)</string>
     <string name="equalizer_treble_boost">Clarity &amp; Air</string>
     <string name="equalizer_stereo_width">Soundstage (Stereo Width)</string>
-    <string name="equalizer_bass_mono">Keep bass centered (Bass Mono &lt; 140 Hz)</string>
+    <string name="equalizer_bass_mono">Keep bass centered (Bass Mono &lt; 100 Hz)</string>
+    <string name="equalizer_spatial_stage">3D Space / Room Stage</string>
     <string name="equalizer_loudness">Dynamic Loudness</string>
     <string name="equalizer_view_curve">Curve</string>
     <string name="equalizer_view_sliders">Sliders</string>

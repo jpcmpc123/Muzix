@@ -21,18 +21,65 @@ import kotlin.math.roundToInt
 
 const val THUMB_SMALL_PX = 240
 const val THUMB_CARD_PX = 400
+const val THUMB_HEADER_HERO_PX = 600
 const val THUMB_HERO_PX = 800
 const val THUMB_BACKDROP_PX = 360
 const val THUMB_BLUR_BACKDROP_PX = 128
 
 const val IMAGE_CROSSFADE_FAST_MS = 120
 const val IMAGE_CROSSFADE_HERO_MS = 150
-const val HERO_ARTWORK_PREP_TIMEOUT_MS = 450L
+const val HERO_ARTWORK_PREP_TIMEOUT_MS = 350L
 
 private val GOOGLE_WH_REGEX = Regex("(^|-)w(\\d+)-h(\\d+)(?=-|$)")
 private val GOOGLE_S_REGEX = Regex("(^|-)s(\\d+)(?=-|$)")
 private val YTIMG_VIDEO_ID_REGEX = Regex("/vi(?:_webp)?/([^/]+)/")
+private val YTIMG_DOWNGRADE_REGEX = Regex("^(https?://i\\.ytimg\\.com/vi(?:_webp)?/[^/]+/)(?:maxresdefault|sddefault|hqdefault)\\.jpg$")
+private val GSTATIC_SIZE_REGEX = Regex("-@\\d+(?=\\.[a-zA-Z0-9]+(?:$|\\?))")
 private val SIZE_SUFFIX_REGEX = Regex("=[^/]*$")
+
+internal object ArtworkHintCache {
+    private const val MAX_ENTRIES = 64
+    private val map =
+        object : LinkedHashMap<String, String>(MAX_ENTRIES, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > MAX_ENTRIES
+        }
+
+    internal fun normalizeId(collectionId: String): String = collectionId.trim().removePrefix("VL")
+
+    fun put(
+        collectionId: String?,
+        rawThumbUrl: String?,
+    ) {
+        val cleanId = collectionId?.let(::normalizeId)?.takeIf { it.isNotBlank() } ?: return
+        val cleanUrl = rawThumbUrl?.takeIf { it.isNotBlank() } ?: return
+        synchronized(map) {
+            map[cleanId] = cleanUrl
+        }
+    }
+
+    fun get(collectionId: String?): String? {
+        val cleanId = collectionId?.let(::normalizeId)?.takeIf { it.isNotBlank() } ?: return null
+        return synchronized(map) { map[cleanId] }
+    }
+
+    internal fun clear() {
+        synchronized(map) { map.clear() }
+    }
+}
+
+internal fun primeCollectionArtworkNavigation(
+    platformContext: PlatformContext,
+    collectionId: String?,
+    rawThumbUrl: String?,
+) {
+    val cleanUrl = rawThumbUrl?.takeIf { it.isNotBlank() } ?: return
+    ArtworkHintCache.put(collectionId, cleanUrl)
+    enqueueArtworkPrefetch(
+        platformContext = platformContext,
+        rawUrl = cleanUrl,
+        targetPx = THUMB_HEADER_HERO_PX,
+    )
+}
 
 internal fun isResizableGoogleImageUrl(url: String): Boolean =
     url.contains("googleusercontent.com", ignoreCase = true) ||
@@ -41,14 +88,23 @@ internal fun isResizableGoogleImageUrl(url: String): Boolean =
 /**
  * Rewrites Google/YouTube Music artwork URLs (`googleusercontent.com` / `ggpht.com`) to request
  * only [targetPx] pixels from the CDN instead of downloading full-size 544px–2880px bitmaps for
- * small cards and list rows. Non-Google URLs pass through untouched.
+ * small cards and list rows, and shrinks unsigned `i.ytimg.com` track rows to `mqdefault.jpg`.
  */
 fun String?.sizedArtworkUrl(
     targetPx: Int,
     preserveAspectRatio: Boolean = false,
 ): String? {
     val url = this ?: return null
-    if (url.isBlank() || targetPx <= 0 || !isResizableGoogleImageUrl(url)) return url
+    if (url.isBlank() || targetPx <= 0) return url
+    if (!isResizableGoogleImageUrl(url)) {
+        if (targetPx <= THUMB_SMALL_PX && !url.contains('?')) {
+            val ytMatch = YTIMG_DOWNGRADE_REGEX.find(url)
+            if (ytMatch != null) {
+                return "${ytMatch.groupValues[1]}mqdefault.jpg"
+            }
+        }
+        return url
+    }
 
     val eqIndex = url.lastIndexOf('=')
     val slashIndex = url.lastIndexOf('/')
@@ -92,6 +148,9 @@ internal fun artworkIdentityKey(url: String): String {
     if (isResizableGoogleImageUrl(url)) {
         return "gimg:${SIZE_SUFFIX_REGEX.replace(url, "")}"
     }
+    if (url.contains("gstatic.com", ignoreCase = true)) {
+        return "gstatic:${GSTATIC_SIZE_REGEX.replace(url, "")}"
+    }
     return url
 }
 
@@ -113,7 +172,7 @@ internal fun findExistingArtworkMemoryKey(
     val url = rawUrl?.takeIf { it.isNotBlank() } ?: return null
     val baseId = artworkIdentityKey(url)
     val candidates =
-        listOf(THUMB_HERO_PX, THUMB_CARD_PX, THUMB_SMALL_PX, THUMB_BACKDROP_PX)
+        listOf(THUMB_HERO_PX, THUMB_HEADER_HERO_PX, THUMB_CARD_PX, THUMB_SMALL_PX, THUMB_BACKDROP_PX)
             .filter { it != targetPx }
     for (candidatePx in candidates) {
         val candidateKey = "art:$baseId:$candidatePx"
@@ -163,6 +222,7 @@ internal fun buildOptimizedImageRequest(
     preserveAspectRatio: Boolean = false,
     reuseExistingRamPlaceholder: Boolean = true,
     selfAsPlaceholder: Boolean = false,
+    fallbackPlaceholderUrl: String? = null,
 ): ImageRequest? {
     val cleanUrl = rawUrl?.takeIf { it.isNotBlank() } ?: return null
     val dataUrl = cleanUrl.sizedArtworkUrl(targetPx, preserveAspectRatio = preserveAspectRatio) ?: return null
@@ -171,7 +231,9 @@ internal fun buildOptimizedImageRequest(
     val placeholderRamKey =
         when {
             selfAsPlaceholder -> memKey
-            reuseExistingRamPlaceholder -> findExistingArtworkMemoryKey(imageLoader.memoryCache, cleanUrl, targetPx)
+            reuseExistingRamPlaceholder ->
+                findExistingArtworkMemoryKey(imageLoader.memoryCache, cleanUrl, targetPx)
+                    ?: fallbackPlaceholderUrl?.let { findExistingArtworkMemoryKey(imageLoader.memoryCache, it, -1) }
             else -> null
         }
     return ImageRequest
@@ -194,13 +256,17 @@ internal fun buildOptimizedImageRequest(
 internal fun enqueueArtworkPrefetch(
     platformContext: PlatformContext,
     rawUrl: String?,
-    targetPx: Int = THUMB_HERO_PX,
+    targetPx: Int = THUMB_HEADER_HERO_PX,
     preserveAspectRatio: Boolean = false,
 ) {
+    val cleanUrl = rawUrl?.takeIf { it.isNotBlank() } ?: return
+    val memKey = artworkMemoryCacheKey(cleanUrl, targetPx, preserveAspectRatio)
+    val cache = SingletonImageLoader.get(platformContext).memoryCache
+    if (cache?.get(MemoryCache.Key(memKey)) != null) return
     val request =
         buildOptimizedImageRequest(
             platformContext = platformContext,
-            rawUrl = rawUrl,
+            rawUrl = cleanUrl,
             targetPx = targetPx,
             crossfadeMs = 0,
             preserveAspectRatio = preserveAspectRatio,
@@ -216,7 +282,7 @@ internal fun findExistingArtworkBitmap(
     val cleanUrl = rawUrl?.takeIf { it.isNotBlank() } ?: return null
     val cache = SingletonImageLoader.get(platformContext).memoryCache ?: return null
     val baseId = artworkIdentityKey(cleanUrl)
-    for (candidatePx in listOf(THUMB_HERO_PX, THUMB_CARD_PX, THUMB_SMALL_PX, THUMB_BACKDROP_PX)) {
+    for (candidatePx in listOf(THUMB_HERO_PX, THUMB_HEADER_HERO_PX, THUMB_CARD_PX, THUMB_SMALL_PX, THUMB_BACKDROP_PX)) {
         val value = cache[MemoryCache.Key("art:$baseId:$candidatePx")]
         if (value != null) {
             return value.image.toImageBitmap()
@@ -228,7 +294,7 @@ internal fun findExistingArtworkBitmap(
 internal fun enqueueTrackArtworkPrefetch(
     platformContext: PlatformContext,
     rawUrls: List<String?>,
-    maxCount: Int = 16,
+    maxCount: Int = 8,
 ) {
     val seen = HashSet<String>(maxCount)
     var queued = 0
@@ -245,59 +311,75 @@ internal fun enqueueTrackArtworkPrefetch(
     }
 }
 
-internal suspend fun loadHeroArtworkBitmap(
+internal data class HeroArtworkResult(
+    val bitmap: ImageBitmap?,
+    val source: String,
+)
+
+/**
+ * Non-cancelling hero artwork preparation for Album/Playlist headers:
+ * 1. Reuses any RAM variant for [rawUrl] or [hintUrl] in 0 ms and enqueues a single [targetPx]
+ *    (`600px`) upgrade only if not already cached.
+ * 2. On cold miss, enqueues ONE `600px` request in [ImageLoader]'s own scope and awaits up to
+ *    [timeoutMs] WITHOUT cancelling the HTTP request on timeout — so `AsyncImage` shares the
+ *    already in-flight download cleanly via `NetworkFirstInterceptor` without throwing away bytes.
+ */
+internal suspend fun prepareHeroArtworkResult(
     platformContext: PlatformContext,
     rawUrl: String?,
-    targetPx: Int = THUMB_HERO_PX,
+    hintUrl: String? = null,
+    targetPx: Int = THUMB_HEADER_HERO_PX,
     timeoutMs: Long = HERO_ARTWORK_PREP_TIMEOUT_MS,
-): ImageBitmap? {
+): HeroArtworkResult {
+    val cleanUrl = rawUrl?.takeIf { it.isNotBlank() } ?: return HeroArtworkResult(null, "empty")
+
+    val cachedPrimary = findExistingArtworkBitmap(platformContext, cleanUrl)
+    if (cachedPrimary != null) {
+        enqueueArtworkPrefetch(
+            platformContext = platformContext,
+            rawUrl = cleanUrl,
+            targetPx = targetPx,
+        )
+        return HeroArtworkResult(cachedPrimary, "ram")
+    }
+
+    val cachedHint =
+        hintUrl
+            ?.takeIf { it.isNotBlank() && it != cleanUrl }
+            ?.let { findExistingArtworkBitmap(platformContext, it) }
+    if (cachedHint != null) {
+        enqueueArtworkPrefetch(
+            platformContext = platformContext,
+            rawUrl = cleanUrl,
+            targetPx = targetPx,
+        )
+        return HeroArtworkResult(cachedHint, "hint")
+    }
+
     val request =
         buildOptimizedImageRequest(
             platformContext = platformContext,
-            rawUrl = rawUrl,
+            rawUrl = cleanUrl,
             targetPx = targetPx,
             crossfadeMs = 0,
             preserveAspectRatio = false,
             reuseExistingRamPlaceholder = false,
-        ) ?: return null
-    return withTimeoutOrNull(timeoutMs) {
-        when (val result = SingletonImageLoader.get(platformContext).execute(request)) {
-            is SuccessResult -> result.image.toImageBitmap()
-            is ErrorResult -> null
-        }
+        ) ?: return HeroArtworkResult(null, "empty")
+
+    val disposable = SingletonImageLoader.get(platformContext).enqueue(request)
+    val awaited = withTimeoutOrNull(timeoutMs) { disposable.job.await() }
+    return if (awaited is SuccessResult) {
+        HeroArtworkResult(awaited.image.toImageBitmap(), "network")
+    } else {
+        HeroArtworkResult(null, if (awaited is ErrorResult) "error" else "timeout")
     }
 }
 
-/**
- * Fast-path hero artwork preparation for Album/Playlist headers:
- * 1. Reuses any variant already in Coil RAM (`800px` / `400px` / `240px`) in 0 ms and silently
- *    enqueues the `800px` hero upgrade in the background.
- * 2. On cold cache, enqueues `800px` in parallel and awaits a tiny `400px` fast pass capped at
- *    [timeoutMs] so the page opens quickly with sharp artwork and palette ready, while `800px`
- *    finishes upgrading seamlessly within <= 1 s.
- */
 internal suspend fun prepareHeroArtworkFast(
     platformContext: PlatformContext,
     rawUrl: String?,
     timeoutMs: Long = HERO_ARTWORK_PREP_TIMEOUT_MS,
-): ImageBitmap? {
-    val cleanUrl = rawUrl?.takeIf { it.isNotBlank() } ?: return null
-    val cachedRam = findExistingArtworkBitmap(platformContext, cleanUrl)
-    enqueueArtworkPrefetch(
-        platformContext = platformContext,
-        rawUrl = cleanUrl,
-        targetPx = THUMB_HERO_PX,
-    )
-    if (cachedRam != null) {
-        return cachedRam
-    }
-    return loadHeroArtworkBitmap(
-        platformContext = platformContext,
-        rawUrl = cleanUrl,
-        targetPx = THUMB_CARD_PX,
-        timeoutMs = timeoutMs,
-    )
-}
+): ImageBitmap? = prepareHeroArtworkResult(platformContext, rawUrl, timeoutMs = timeoutMs).bitmap
 
 @Composable
 internal fun rememberOptimizedImageRequest(
@@ -307,9 +389,19 @@ internal fun rememberOptimizedImageRequest(
     preserveAspectRatio: Boolean = false,
     reuseExistingRamPlaceholder: Boolean = true,
     selfAsPlaceholder: Boolean = false,
+    fallbackPlaceholderUrl: String? = null,
 ): ImageRequest? {
     val platformContext = LocalPlatformContext.current
-    return remember(platformContext, rawUrl, targetPx, crossfadeMs, preserveAspectRatio, reuseExistingRamPlaceholder, selfAsPlaceholder) {
+    return remember(
+        platformContext,
+        rawUrl,
+        targetPx,
+        crossfadeMs,
+        preserveAspectRatio,
+        reuseExistingRamPlaceholder,
+        selfAsPlaceholder,
+        fallbackPlaceholderUrl,
+    ) {
         buildOptimizedImageRequest(
             platformContext = platformContext,
             rawUrl = rawUrl,
@@ -318,6 +410,7 @@ internal fun rememberOptimizedImageRequest(
             preserveAspectRatio = preserveAspectRatio,
             reuseExistingRamPlaceholder = reuseExistingRamPlaceholder,
             selfAsPlaceholder = selfAsPlaceholder,
+            fallbackPlaceholderUrl = fallbackPlaceholderUrl,
         )
     }
 }

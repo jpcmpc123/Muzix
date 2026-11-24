@@ -80,6 +80,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -126,7 +128,7 @@ import com.maxrave.simpmusic.extension.artworkScrimBrush
 import com.maxrave.simpmusic.extension.displayNameRes
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
-import com.maxrave.simpmusic.extension.rememberPaletteColor
+import com.maxrave.simpmusic.extension.rememberPaletteColorState
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.SearchBarExit
 import com.maxrave.simpmusic.ui.component.SearchBarEnter
@@ -387,12 +389,17 @@ fun LocalPlaylistScreen(
     val currentThumbnail = uiState.thumbnail
 
     var heroPrepDone by remember(id) { mutableStateOf(false) }
+    var heroVisualReady by remember(id) { mutableStateOf(false) }
+    val hintThumbUrl = remember(id) { com.maxrave.simpmusic.utils.ArtworkHintCache.get(id.toString()) }
     val platformContext = coil3.compose.LocalPlatformContext.current
 
-    LaunchedEffect(trackPagingItems.itemCount, platformContext) {
+    LaunchedEffect(heroVisualReady, uiState.id, uiState.loadState, trackPagingItems.itemCount, platformContext) {
+        if (!heroVisualReady || uiState.id != id || uiState.loadState != LocalPlaylistState.PlaylistLoadState.Success) {
+            return@LaunchedEffect
+        }
         if (trackPagingItems.itemCount <= 0) return@LaunchedEffect
         val firstUrls =
-            (0 until minOf(trackPagingItems.itemCount, 16)).map { idx ->
+            (0 until minOf(trackPagingItems.itemCount, 8)).map { idx ->
                 trackPagingItems.peek(idx)?.first?.thumbnails
             }
         com.maxrave.simpmusic.utils.enqueueTrackArtworkPrefetch(
@@ -405,23 +412,36 @@ fun LocalPlaylistScreen(
         if (uiState.id != id || uiState.loadState != LocalPlaylistState.PlaylistLoadState.Success) {
             if (uiState.id != id || uiState.loadState == LocalPlaylistState.PlaylistLoadState.Loading) {
                 heroPrepDone = false
+                heroVisualReady = false
             }
             return@LaunchedEffect
         }
         val thumbUrl = uiState.thumbnail
         if (thumbUrl.isNullOrBlank()) {
             heroPrepDone = true
+            heroVisualReady = true
             return@LaunchedEffect
         }
         if (paletteGeneratedFor != thumbUrl) {
-            val preloaded = com.maxrave.simpmusic.utils.prepareHeroArtworkFast(platformContext, thumbUrl)
-            if (preloaded != null) {
-                bitmap = preloaded
-                paletteState.generate(preloaded)
+            val prep =
+                com.maxrave.simpmusic.utils.prepareHeroArtworkResult(
+                    platformContext = platformContext,
+                    rawUrl = thumbUrl,
+                    hintUrl = hintThumbUrl,
+                    targetPx = com.maxrave.simpmusic.utils.THUMB_HEADER_HERO_PX,
+                )
+            if (prep.bitmap != null) {
+                bitmap = prep.bitmap
+                paletteState.generate(prep.bitmap)
                 paletteGeneratedFor = thumbUrl
+                heroVisualReady = true
             }
         }
         heroPrepDone = true
+        if (!heroVisualReady) {
+            kotlinx.coroutines.delay(500L)
+            heroVisualReady = true
+        }
     }
 
     LaunchedEffect(bitmap) {
@@ -452,7 +472,7 @@ fun LocalPlaylistScreen(
     // AsyncImage shows the title placeholder and onSuccess never fires, so the palette stays
     // null; in that case we fall back to the SAME deterministic title gradient the placeholder
     // draws, so the background still matches the thumbnail. Darkened slightly for readability.
-    // Held and faded (see UIExt.rememberPaletteColor).
+    // Held and faded (see UIExt.rememberPaletteColorState).
     val titleColors = playlistTitleGradient(uiState.title)
     val titleBase =
         if (titleColors.size >= 2) {
@@ -460,7 +480,7 @@ fun LocalPlaylistScreen(
         } else {
             titleColors.firstOrNull() ?: Color.Black
         }
-    val mutedPaletteBg = rememberPaletteColor(paletteState.palette, fallback = lerp(titleBase, Color.Black, 0.3f))
+    val mutedPaletteBgState = rememberPaletteColorState(paletteState.palette, fallback = lerp(titleBase, Color.Black, 0.3f))
 
     // Loading dialog
     val showLoadingDialog by viewModel.showLoadingDialog.collectAsStateWithLifecycle()
@@ -539,7 +559,7 @@ fun LocalPlaylistScreen(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .background(mutedPaletteBg)
+                .drawBehind { drawRect(mutedPaletteBgState.value) }
                 .glassHazeSource(hazeState)
                 .pointerInput(changingOrder) {
                     if (!changingOrder) return@pointerInput
@@ -630,8 +650,9 @@ fun LocalPlaylistScreen(
                                     val localPlaylistHeroRequest =
                                         com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
                                             rawUrl = uiState.thumbnail,
-                                            targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                                            targetPx = com.maxrave.simpmusic.utils.THUMB_HEADER_HERO_PX,
                                             crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                                            fallbackPlaceholderUrl = hintThumbUrl,
                                         )
                                     val thumbFallbackPainter =
                                         painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp)
@@ -655,6 +676,7 @@ fun LocalPlaylistScreen(
                                             onState = { imgState ->
                                                 if (imgState is coil3.compose.AsyncImagePainter.State.Success) {
                                                     bitmap = imgState.result.image.toImageBitmap()
+                                                    heroVisualReady = true
                                                 }
                                             },
                                             modifier = Modifier.fillMaxSize(),
@@ -669,7 +691,10 @@ fun LocalPlaylistScreen(
                                                 .fillMaxWidth()
                                                 .height((screenInfo.hDP * 0.35f).dp)
                                                 .align(Alignment.BottomCenter)
-                                                .background(artworkScrimBrush(mutedPaletteBg)),
+                                                .drawWithCache {
+                                                    val scrimBrush = artworkScrimBrush(mutedPaletteBgState.value)
+                                                    onDrawBehind { drawRect(scrimBrush) }
+                                                },
                                     )
                                     Column(
                                         modifier =
@@ -820,7 +845,7 @@ fun LocalPlaylistScreen(
                             // so the recorded layer holds something to refract — and the glass buttons
                             // are SIBLINGS placed with align(), never children of the source (that
                             // nesting is the render-feedback loop that kills the RuntimeShader).
-                            val headerBackdrop = rememberBackdrop(mutedPaletteBg)
+                            val headerBackdrop = rememberBackdrop(Color.Black)
                             Box(modifier = Modifier.fillMaxWidth()) {
                                 Column(
                                     modifier =
@@ -841,8 +866,9 @@ fun LocalPlaylistScreen(
                                         val localPlaylistDesktopHeroRequest =
                                             com.maxrave.simpmusic.utils.rememberOptimizedImageRequest(
                                                 rawUrl = uiState.thumbnail,
-                                                targetPx = com.maxrave.simpmusic.utils.THUMB_HERO_PX,
+                                                targetPx = com.maxrave.simpmusic.utils.THUMB_HEADER_HERO_PX,
                                                 crossfadeMs = com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_HERO_MS,
+                                                fallbackPlaceholderUrl = hintThumbUrl,
                                             )
                                         val desktopThumbFallbackPainter =
                                             painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp)
@@ -869,6 +895,7 @@ fun LocalPlaylistScreen(
                                                 onState = { imgState ->
                                                     if (imgState is coil3.compose.AsyncImagePainter.State.Success) {
                                                         bitmap = imgState.result.image.toImageBitmap()
+                                                        heroVisualReady = true
                                                     }
                                                 },
                                                 modifier =
@@ -1567,7 +1594,7 @@ fun LocalPlaylistScreen(
             },
             onOpenActions = { showSelectionSheet = true },
             modifier =
-                Modifier.tintedBarBlur(hazeState, mutedPaletteBg, 0.55f),
+                Modifier.tintedBarBlur(hazeState, mutedPaletteBgState.value, 0.55f),
         )
     }
     if (showSelectionSheet) {
@@ -1733,14 +1760,14 @@ fun LocalPlaylistScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(mutedPaletteBg),
+                    .background(mutedPaletteBgState.value),
         ) {
             // Same bar as the one on Playlist and Album: blurred over the content behind it,
             // back on the left, clear on the right.
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .tintedBarBlur(hazeState, mutedPaletteBg, 0.55f),
+                    .tintedBarBlur(hazeState, mutedPaletteBgState.value, 0.55f),
             ) {
                 Row(
                     modifier =
@@ -1866,7 +1893,7 @@ fun LocalPlaylistScreen(
                     containerColor = Color.Transparent,
                 ),
             modifier =
-                Modifier.tintedBarBlur(hazeState, mutedPaletteBg, 0.55f),
+                Modifier.tintedBarBlur(hazeState, mutedPaletteBgState.value, 0.55f),
         )
     }
             }

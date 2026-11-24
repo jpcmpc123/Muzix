@@ -1935,6 +1935,7 @@ class SettingsViewModel(
                     bassBoostDb = preset.bassBoostDb,
                     trebleBoostDb = preset.trebleBoostDb,
                     stereoWidth = preset.stereoWidth,
+                    spatialStage = preset.spatialStage,
                     loudnessAmount = preset.loudnessAmount,
                 )
             dataStoreManager.setEqualizerPreamp(preset.preampDb)
@@ -1984,6 +1985,7 @@ class SettingsViewModel(
                     trebleBoostDb = enh.trebleBoostDb,
                     stereoWidth = enh.stereoWidth,
                     bassMonoEnabled = enh.bassMonoEnabled,
+                    spatialStage = enh.spatialStage,
                     loudnessAmount = enh.loudnessAmount,
                     subsonicFilterEnabled = enh.subsonicFilterEnabled,
                     limiterEnabled = enh.limiterEnabled,
