@@ -75,10 +75,13 @@ import com.maxrave.domain.data.player.EqualizerConfig
 import com.maxrave.domain.data.player.EqualizerEnhancements
 import com.maxrave.domain.data.player.PreampMode
 import com.maxrave.domain.data.player.SavedEqualizerProfile
+import com.maxrave.domain.data.player.audioOutputFallbackKeyFor
+import com.maxrave.domain.data.player.audioOutputKeyFor
 import com.maxrave.simpmusic.extension.LeftToRight
 import com.maxrave.simpmusic.ui.component.Chip
 import com.maxrave.simpmusic.ui.icon.Add
 import com.maxrave.simpmusic.ui.icon.Check
+import com.maxrave.simpmusic.ui.icon.Close
 import com.maxrave.simpmusic.ui.icon.KeyboardArrowDown
 import com.maxrave.simpmusic.ui.icon.MoreVert
 import com.maxrave.simpmusic.ui.icon.SimpIcons
@@ -89,9 +92,13 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.cancel
+import simpmusic.composeapp.generated.resources.equalizer_active_output
 import simpmusic.composeapp.generated.resources.equalizer_autoeq
+import simpmusic.composeapp.generated.resources.equalizer_autoeq_clear
+import simpmusic.composeapp.generated.resources.equalizer_autoeq_parametric_badge
 import simpmusic.composeapp.generated.resources.equalizer_bass_boost
 import simpmusic.composeapp.generated.resources.equalizer_bass_mono
+import simpmusic.composeapp.generated.resources.equalizer_bind_output
 import simpmusic.composeapp.generated.resources.equalizer_bypass_active
 import simpmusic.composeapp.generated.resources.equalizer_bypass_off
 import simpmusic.composeapp.generated.resources.equalizer_delete
@@ -103,6 +110,8 @@ import simpmusic.composeapp.generated.resources.equalizer_limiter
 import simpmusic.composeapp.generated.resources.equalizer_limiter_desc
 import simpmusic.composeapp.generated.resources.equalizer_loudness
 import simpmusic.composeapp.generated.resources.equalizer_my_profiles
+import simpmusic.composeapp.generated.resources.equalizer_per_output_desc
+import simpmusic.composeapp.generated.resources.equalizer_per_output_switch
 import simpmusic.composeapp.generated.resources.equalizer_preamp
 import simpmusic.composeapp.generated.resources.equalizer_preamp_auto_balanced
 import simpmusic.composeapp.generated.resources.equalizer_preamp_auto_strict
@@ -124,6 +133,7 @@ import simpmusic.composeapp.generated.resources.equalizer_subsonic
 import simpmusic.composeapp.generated.resources.equalizer_subsonic_desc
 import simpmusic.composeapp.generated.resources.equalizer_tone_section
 import simpmusic.composeapp.generated.resources.equalizer_treble_boost
+import simpmusic.composeapp.generated.resources.equalizer_unbind_output
 import simpmusic.composeapp.generated.resources.equalizer_update_profile
 import simpmusic.composeapp.generated.resources.equalizer_view_curve
 import simpmusic.composeapp.generated.resources.equalizer_view_sliders
@@ -151,6 +161,8 @@ fun EqualizerSection(
     val autoEqProfile by viewModel.equalizerAutoEqProfile.collectAsStateWithLifecycle()
     val autoEqLayer by viewModel.equalizerAutoEqLayer.collectAsStateWithLifecycle()
     val audioOutputs by viewModel.audioOutputs.collectAsStateWithLifecycle()
+    val perOutputEnabled by viewModel.equalizerPerOutputEnabled.collectAsStateWithLifecycle()
+    val outputProfileMap by viewModel.equalizerOutputProfileMap.collectAsStateWithLifecycle()
 
     val curveColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
@@ -189,6 +201,21 @@ fun EqualizerSection(
         remember(activeSavedProfile, bands, preamp, enhancements, autoEqLayer) {
             activeSavedProfile != null &&
                 !activeSavedProfile.matches(bands, preamp, enhancements, autoEqLayer)
+        }
+    val activeOutput =
+        remember(audioOutputs) {
+            audioOutputs.firstOrNull { it.isActive } ?: audioOutputs.firstOrNull()
+        }
+    val activeOutputKey = remember(activeOutput) { audioOutputKeyFor(activeOutput) }
+    val activeOutputFallbackKey = remember(activeOutput) { audioOutputFallbackKeyFor(activeOutput) }
+    val boundProfileId =
+        remember(outputProfileMap, activeOutputKey, activeOutputFallbackKey) {
+            activeOutputKey?.let { outputProfileMap[it] }
+                ?: activeOutputFallbackKey?.let { outputProfileMap[it] }
+        }
+    val boundProfile =
+        remember(savedProfiles, boundProfileId) {
+            boundProfileId?.let { id -> savedProfiles.firstOrNull { it.id == id } }
         }
 
     val effectiveHeadroom =
@@ -377,6 +404,30 @@ fun EqualizerSection(
                                     viewModel.duplicateSavedProfile(profile)
                                 },
                             )
+                            if (activeOutputKey != null) {
+                                val isBoundHere = boundProfileId == profile.id
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            stringResource(
+                                                if (isBoundHere) {
+                                                    Res.string.equalizer_unbind_output
+                                                } else {
+                                                    Res.string.equalizer_bind_output
+                                                },
+                                            ),
+                                        )
+                                    },
+                                    onClick = {
+                                        menuOpen = false
+                                        if (isBoundHere) {
+                                            viewModel.unbindCurrentOutput()
+                                        } else {
+                                            viewModel.bindProfileToCurrentOutput(profile.id)
+                                        }
+                                    },
+                                )
+                            }
                             DropdownMenuItem(
                                 text = {
                                     Text(
@@ -418,6 +469,66 @@ fun EqualizerSection(
                         )
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(
+                        text = stringResource(Res.string.equalizer_per_output_switch),
+                        style = typo().bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(Res.string.equalizer_per_output_desc),
+                        style = typo().labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = perOutputEnabled,
+                    onCheckedChange = { viewModel.setEqualizerPerOutputEnabled(it) },
+                )
+            }
+
+            if (perOutputEnabled && activeOutput != null && activeOutputKey != null) {
+                val outputName = activeOutput.name.ifBlank { activeOutput.kind.name }
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.45f),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 10.dp),
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        Text(
+                            text = stringResource(Res.string.equalizer_active_output, outputName),
+                            style = typo().labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (boundProfile != null) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Chip(
+                                isSelected = true,
+                                text = "${boundProfile.name} · ${stringResource(Res.string.equalizer_unbind_output)}",
+                                onClick = { viewModel.unbindCurrentOutput() },
+                            )
+                        } else if (activeSavedProfile != null) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Chip(
+                                isSelected = false,
+                                text = "${stringResource(Res.string.equalizer_bind_output)} (${activeSavedProfile.name})",
+                                onClick = { viewModel.bindProfileToCurrentOutput(activeSavedProfile.id) },
+                            )
+                        }
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.height(6.dp))
             }
 
             HorizontalDivider(color = gridColor.copy(alpha = 0.4f))
@@ -485,7 +596,7 @@ fun EqualizerSection(
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = if (autoEqLayer != null) 4.dp else 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -494,7 +605,45 @@ fun EqualizerSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.width(LABEL_COLUMN_WIDTH),
                 )
-                AutoEqPicker(label = autoEqLabel)
+                Box(modifier = Modifier.weight(1f)) {
+                    AutoEqPicker(label = autoEqLabel)
+                }
+            }
+
+            autoEqLayer?.let { layer ->
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(start = LABEL_COLUMN_WIDTH, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (!layer.isFixedBand) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                        ) {
+                            Text(
+                                text = stringResource(Res.string.equalizer_autoeq_parametric_badge),
+                                style = typo().labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    TextButton(onClick = { viewModel.clearAutoEqLayer() }) {
+                        Text(
+                            text = stringResource(Res.string.equalizer_autoeq_clear),
+                            style = typo().labelSmall,
+                        )
+                    }
+                    Switch(
+                        checked = layer.enabled,
+                        onCheckedChange = { viewModel.toggleAutoEqLayerEnabled(it) },
+                    )
+                }
             }
 
             // 4. Musical Enhancement Sliders (live preview while dragging)

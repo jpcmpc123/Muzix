@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -14,12 +15,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,8 +36,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.maxrave.simpmusic.ui.icon.Add
+import com.maxrave.simpmusic.ui.icon.Delete
 import com.maxrave.simpmusic.ui.icon.DownloadForOffline
 import com.maxrave.simpmusic.ui.icon.DownloadForOfflineOutlined
 import com.maxrave.simpmusic.ui.icon.KeyboardArrowDown
@@ -42,22 +51,26 @@ import com.maxrave.simpmusic.viewModel.AutoEqViewModel
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.equalizer_autoeq_choose
+import simpmusic.composeapp.generated.resources.equalizer_autoeq_custom_badge
 import simpmusic.composeapp.generated.resources.equalizer_autoeq_downloading
 import simpmusic.composeapp.generated.resources.equalizer_autoeq_empty
 import simpmusic.composeapp.generated.resources.equalizer_autoeq_failed
+import simpmusic.composeapp.generated.resources.equalizer_autoeq_import
+import simpmusic.composeapp.generated.resources.equalizer_autoeq_import_hint
+import simpmusic.composeapp.generated.resources.equalizer_autoeq_import_invalid
+import simpmusic.composeapp.generated.resources.equalizer_autoeq_import_name
+import simpmusic.composeapp.generated.resources.equalizer_autoeq_import_title
 import simpmusic.composeapp.generated.resources.equalizer_autoeq_search
 import simpmusic.composeapp.generated.resources.equalizer_autoeq_unavailable
+import simpmusic.composeapp.generated.resources.equalizer_save_profile
 
 private val MENU_LIST_MAX_HEIGHT = 280.dp
 
 /**
- * Pick the headphone whose AutoEq correction should become the curve.
- *
- * Built as a dropdown rather than a dialog so it behaves exactly like the presets control beside
- * it: the two rows answer two different questions — what the music should sound like, and what
- * this pair of headphones gets wrong — and nothing about them should feel like different kinds of
- * control. There are several thousand headphones, so this one carries a filter.
+ * Pick the headphone whose AutoEq correction runs on the independent AutoEq layer, or import
+ * custom ParametricEQ / FixedBandEQ / Wavelet `.txt` profiles (e.g., from Squiglink).
  */
 @Composable
 fun AutoEqPicker(
@@ -67,14 +80,13 @@ fun AutoEqPicker(
 ) {
     var open by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
+    var showImportDialog by remember { mutableStateOf(false) }
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val status by viewModel.status.collectAsStateWithLifecycle()
     val cachedPaths by viewModel.cachedPaths.collectAsStateWithLifecycle()
+    val customProfiles by viewModel.customProfiles.collectAsStateWithLifecycle()
 
-    // The index is only wanted once the menu is actually opened, which is why nothing here runs on
-    // first composition: the equalizer card is in the settings list whether or not anyone scrolls
-    // to it, and it must not spend a request on being scrolled past.
     LaunchedEffect(open) {
         if (open) viewModel.onOpen()
     }
@@ -92,12 +104,15 @@ fun AutoEqPicker(
             Text(
                 text = label ?: stringResource(Res.string.equalizer_autoeq_choose),
                 style = typo().bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 color =
                     if (label != null) {
                         MaterialTheme.colorScheme.onSurface
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
+                modifier = Modifier.weight(1f, fill = false),
             )
             Icon(
                 imageVector = SimpIcons.KeyboardArrowDown,
@@ -120,14 +135,81 @@ fun AutoEqPicker(
                     label = { Text(text = stringResource(Res.string.equalizer_autoeq_search)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                open = false
+                                showImportDialog = true
+                            }.padding(vertical = 8.dp, horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = SimpIcons.Add,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(Res.string.equalizer_autoeq_import),
+                        style = typo().labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
                 if (status == AutoEqStatus.DOWNLOADING || status == AutoEqStatus.APPLYING) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
                 }
                 if (failed) {
                     Message(
                         text = stringResource(Res.string.equalizer_autoeq_failed),
                         color = MaterialTheme.colorScheme.error,
                     )
+                }
+                if (customProfiles.isNotEmpty() && query.isBlank()) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    customProfiles.forEach { custom ->
+                        Row(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.applyCustomProfile(custom)
+                                        open = false
+                                    }.padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = custom.label, style = typo().bodyMedium)
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                                ) {
+                                    Text(
+                                        text = stringResource(Res.string.equalizer_autoeq_custom_badge),
+                                        style = typo().bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    )
+                                }
+                            }
+                            IconButton(
+                                onClick = { viewModel.deleteCustomProfile(custom.path) },
+                                modifier = Modifier.size(28.dp),
+                            ) {
+                                Icon(
+                                    imageVector = SimpIcons.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                 }
                 when {
                     status == AutoEqStatus.DOWNLOADING ->
@@ -139,11 +221,6 @@ fun AutoEqPicker(
                     results.isEmpty() -> Message(stringResource(Res.string.equalizer_autoeq_empty))
 
                     else ->
-                        // A plain scrolling column, deliberately not a lazy list. A menu measures
-                        // its content with `width(IntrinsicSize.Max)`, and anything built on
-                        // SubcomposeLayout — every lazy list — throws rather than answer an
-                        // intrinsic query. The result count is capped by the repository, so there
-                        // is a known ceiling on how many rows this composes at once.
                         Column(
                             modifier =
                                 Modifier
@@ -158,9 +235,6 @@ fun AutoEqPicker(
                                         Modifier
                                             .fillMaxWidth()
                                             .clickable(
-                                                // Keyed to the row, because the list is rebuilt on
-                                                // every keystroke and an unkeyed remember here
-                                                // would hand a row the previous one's slot.
                                                 interactionSource = remember(entry.path) { MutableInteractionSource() },
                                                 indication = null,
                                             ) {
@@ -175,16 +249,11 @@ fun AutoEqPicker(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(text = entry.name, style = typo().bodyMedium)
                                         Text(
-                                            // The same headphone is measured by several sources,
-                                            // and sometimes on more than one rig, so the row says
-                                            // which.
                                             text = listOfNotNull(entry.source, entry.rig).joinToString(" · "),
                                             style = typo().bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
-                                    // Filled means the curve is already on disk and this row works
-                                    // with no connection; outlined means picking it has to fetch.
                                     Icon(
                                         imageVector =
                                             if (downloaded) {
@@ -207,6 +276,67 @@ fun AutoEqPicker(
                 }
             }
         }
+    }
+
+    if (showImportDialog) {
+        var profileName by remember { mutableStateOf("") }
+        var rawText by remember { mutableStateOf("") }
+        var parseError by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { showImportDialog = false },
+            title = { Text(text = stringResource(Res.string.equalizer_autoeq_import_title), style = typo().titleSmall) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = profileName,
+                        onValueChange = { profileName = it },
+                        singleLine = true,
+                        label = { Text(stringResource(Res.string.equalizer_autoeq_import_name)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = rawText,
+                        onValueChange = {
+                            rawText = it
+                            parseError = false
+                        },
+                        minLines = 4,
+                        maxLines = 8,
+                        placeholder = { Text(stringResource(Res.string.equalizer_autoeq_import_hint), style = typo().bodySmall) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (parseError) {
+                        Text(
+                            text = stringResource(Res.string.equalizer_autoeq_import_invalid),
+                            style = typo().bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = rawText.isNotBlank(),
+                    onClick = {
+                        val effectiveName = profileName.trim().ifEmpty { "Galaxy Buds / Custom" }
+                        val ok = viewModel.importCustomText(effectiveName, rawText)
+                        if (ok) {
+                            showImportDialog = false
+                        } else {
+                            parseError = true
+                        }
+                    },
+                ) {
+                    Text(stringResource(Res.string.equalizer_save_profile))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showImportDialog = false }) {
+                    Text(stringResource(Res.string.cancel))
+                }
+            },
+        )
     }
 }
 

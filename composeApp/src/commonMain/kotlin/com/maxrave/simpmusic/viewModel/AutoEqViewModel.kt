@@ -2,6 +2,7 @@ package com.maxrave.simpmusic.viewModel
 
 import androidx.lifecycle.viewModelScope
 import com.maxrave.domain.data.entities.AutoEqEntryEntity
+import com.maxrave.domain.data.player.AutoEqLayer
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.repository.AutoEqRepository
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
@@ -9,6 +10,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** What the picker is doing, so it can say so instead of looking empty. */
@@ -43,13 +45,21 @@ class AutoEqViewModel(
     private val _cachedPaths = MutableStateFlow<Set<String>>(emptySet())
     val cachedPaths: StateFlow<Set<String>> = _cachedPaths
 
+    private val _customProfiles = MutableStateFlow<List<AutoEqLayer>>(emptyList())
+    val customProfiles: StateFlow<List<AutoEqLayer>> = _customProfiles
+
     init {
         viewModelScope.launch {
-            // collectLatest cancels the pending delay on the next keystroke, which is the whole of
-            // what debounce would do here — without depending on a preview flow operator.
-            _query.collectLatest { term ->
-                delay(SEARCH_DEBOUNCE_MS)
-                _results.emit(autoEqRepository.search(term))
+            launch {
+                _query.collectLatest { term ->
+                    delay(SEARCH_DEBOUNCE_MS)
+                    _results.emit(autoEqRepository.search(term))
+                }
+            }
+            launch {
+                dataStoreManager.equalizerCustomAutoEqProfiles.collect {
+                    _customProfiles.emit(it)
+                }
             }
         }
     }
@@ -58,13 +68,6 @@ class AutoEqViewModel(
         _query.value = value
     }
 
-    /**
-     * Show the cached list at once, then check for a newer index behind it.
-     *
-     * The refresh is deliberately not awaited before the first list appears: the index changes
-     * rarely and the cache is almost always current, so making every open wait on the network
-     * would pay a round trip for a result that is nearly always "nothing changed".
-     */
     fun onOpen() {
         viewModelScope.launch {
             _cachedPaths.value = autoEqRepository.cachedCurvePaths()
@@ -80,11 +83,8 @@ class AutoEqViewModel(
     }
 
     /**
-     * Fetch [entry]'s curve and hand it to the equalizer.
-     *
-     * Preamp before bands, for the same reason a preset does it in that order: the two are separate
-     * keys, and the moment in between should be the new headroom under the old curve rather than a
-     * boosted curve still running on the old headroom.
+     * Loads the headphone's ParametricEQ (or FixedBand fallback) into the independent AutoEq layer
+     * so user EQ bands, presets, and tone enhancements are preserved intact.
      */
     fun apply(
         entry: AutoEqEntryEntity,
@@ -92,26 +92,62 @@ class AutoEqViewModel(
     ) {
         viewModelScope.launch {
             _status.value = AutoEqStatus.APPLYING
-            val curve = autoEqRepository.loadCurve(entry)
-            if (curve == null) {
+            val label = labelFor(entry)
+            val layer = autoEqRepository.loadAutoEqLayer(entry, label)
+            if (layer == null) {
                 _status.value = AutoEqStatus.READY
                 onResult(false)
                 return@launch
             }
-            dataStoreManager.setEqualizerPreamp(curve.preampDb)
-            dataStoreManager.setEqualizerBands(curve.bandsDb)
-            dataStoreManager.setEqualizerAutoEqProfile(labelFor(entry), curve.bandsDb)
-            // A first pick has just put this curve on disk, so the mark has to move with it.
+            dataStoreManager.setEqualizerAutoEqLayer(layer)
+            if (dataStoreManager.equalizerEnabled.first() != DataStoreManager.TRUE) {
+                dataStoreManager.setEqualizerEnabled(true)
+            }
             _cachedPaths.value = autoEqRepository.cachedCurvePaths()
             _status.value = AutoEqStatus.READY
             onResult(true)
         }
     }
 
+    fun importCustomText(
+        name: String,
+        rawText: String,
+    ): Boolean {
+        val parsed = autoEqRepository.parseCustomAutoEqText(name, rawText) ?: return false
+        viewModelScope.launch {
+            val nextCustom = _customProfiles.value + parsed
+            dataStoreManager.setEqualizerCustomAutoEqProfiles(nextCustom)
+            dataStoreManager.setEqualizerAutoEqLayer(parsed)
+            if (dataStoreManager.equalizerEnabled.first() != DataStoreManager.TRUE) {
+                dataStoreManager.setEqualizerEnabled(true)
+            }
+        }
+        return true
+    }
+
+    fun applyCustomProfile(layer: AutoEqLayer) {
+        viewModelScope.launch {
+            dataStoreManager.setEqualizerAutoEqLayer(layer.copy(enabled = true))
+            if (dataStoreManager.equalizerEnabled.first() != DataStoreManager.TRUE) {
+                dataStoreManager.setEqualizerEnabled(true)
+            }
+        }
+    }
+
+    fun deleteCustomProfile(path: String) {
+        viewModelScope.launch {
+            dataStoreManager.setEqualizerCustomAutoEqProfiles(
+                _customProfiles.value.filterNot { it.path == path },
+            )
+            if (dataStoreManager.equalizerAutoEqLayer.first()?.path == path) {
+                dataStoreManager.setEqualizerAutoEqLayer(null)
+            }
+        }
+    }
+
     companion object {
         private const val SEARCH_DEBOUNCE_MS = 200L
 
-        /** Source is part of the label because the same headphone is measured by several of them. */
         fun labelFor(entry: AutoEqEntryEntity): String = "${entry.name} · ${entry.source}"
     }
 }
