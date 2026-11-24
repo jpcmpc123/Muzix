@@ -276,6 +276,12 @@ fun NowPlayingContentSpotify(
         }
     }
 
+    val spotifyBackdropColor =
+        if (com.maxrave.simpmusic.ui.theme.LocalPureBlack.current) {
+            Color.Black
+        } else {
+            PlayerBackdropColor
+        }
     Box {
         Column(
             Modifier
@@ -293,7 +299,7 @@ fun NowPlayingContentSpotify(
                             // is drawn over just the first screen height. Using background() for
                             // the gradient instead would stretch it across the entire content,
                             // which is what made it run on forever while scrolling.
-                            .background(PlayerBackdropColor)
+                            .background(spotifyBackdropColor)
                             .drawWithCache {
                                 val gradientHeight = screenInfo.hPX.toFloat()
                                 val area = Size(size.width, gradientHeight)
@@ -309,8 +315,8 @@ fun NowPlayingContentSpotify(
                                     )
                                 val scrimBrush =
                                     smoothScrimBrush(
-                                        from = PlayerBackdropColor.copy(alpha = 0f),
-                                        to = PlayerBackdropColor,
+                                        from = spotifyBackdropColor.copy(alpha = 0f),
+                                        to = spotifyBackdropColor,
                                         startY = 0f,
                                         // Reaches full opacity at 95% and is held there by Clamp,
                                         // same as the old `0.95f to PlayerBackdropColor` stop.
@@ -859,7 +865,7 @@ fun NowPlayingContentSpotify(
                                     canvas = pageAnimatedArtwork,
                                     cover = state.screenData.bitmap,
                                     topChrome = topAppBarHeightDp.dp,
-                                    pageColor = PlayerBackdropColor,
+                                    pageColor = spotifyBackdropColor,
                                 )
                             }
                         }
@@ -1469,7 +1475,12 @@ fun NowPlayingContentSpotify(
                                 shape = RoundedCornerShape(8.dp),
                                 colors =
                                     CardDefaults.elevatedCardColors().copy(
-                                        containerColor = Color(0xFF212121),
+                                        containerColor =
+                                            if (com.maxrave.simpmusic.ui.theme.LocalPureBlack.current) {
+                                                Color(0xFF141414)
+                                            } else {
+                                                Color(0xFF212121)
+                                            },
                                     ),
                             ) {
                                 Column(modifier = Modifier.fillMaxWidth()) {

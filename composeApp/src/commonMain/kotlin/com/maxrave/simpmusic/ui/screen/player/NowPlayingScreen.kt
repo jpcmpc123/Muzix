@@ -516,7 +516,8 @@ fun NowPlayingScreenContent(
             }
     }
 
-    LaunchedEffect(Unit) {
+    val isPureBlack = com.maxrave.simpmusic.ui.theme.LocalPureBlack.current
+    LaunchedEffect(isPureBlack) {
         snapshotFlow { paletteState.palette }
             .distinctUntilChanged()
             .collectLatest {
@@ -524,7 +525,7 @@ fun NowPlayingScreenContent(
                 startColor.animateTo(it.getColorFromPalette())
                 // Lands on the same backdrop colour the fade and the area below the gradient
                 // use, so the palette ramp resolves into the surface instead of a black patch.
-                endColor.animateTo(PlayerBackdropColor)
+                endColor.animateTo(if (isPureBlack) Color.Black else PlayerBackdropColor)
             }
     }
 

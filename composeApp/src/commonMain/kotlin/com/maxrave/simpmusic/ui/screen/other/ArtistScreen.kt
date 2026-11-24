@@ -260,8 +260,14 @@ fun ArtistScreen(
 
     // Apple Music-style page background from the artwork's dominant tone, held and faded (see UIExt.rememberPaletteColor).
     val mutedPaletteBg = rememberPaletteColor(paletteState.palette)
-    // Tint for the description card, matching the non-portrait CollapsingToolbar color.
-    val sectionTint = rememberPaletteColor(paletteState.palette) { it.getColorFromPalette() }
+    // Tint for the description card, matching the non-portrait CollapsingToolbar color;
+    // in Pure Black OLED mode, step cleanly up to #141414 over #000000.
+    val sectionTint =
+        if (com.maxrave.simpmusic.ui.theme.LocalPureBlack.current) {
+            Color(0xFF141414)
+        } else {
+            rememberPaletteColor(paletteState.palette, pureBlackOverride = false) { it.getColorFromPalette() }
+        }
 
     // Accent color for the action buttons, sourced from the artist name-logo image's dominant
     // color (hidden catalog). Falls back to white until the logo loads (or if none exists), and

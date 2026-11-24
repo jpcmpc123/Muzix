@@ -114,18 +114,21 @@ fun NotificationScreen(
 
     // Home-family ambient ground — scrolls away with the list (see SettingScreen's note on the
     // draw-phase translation). Tinted with the app's primary, as Settings is.
-    AmbientThemeGlow(
-        tint = MaterialTheme.colorScheme.primary,
-        modifier =
-            Modifier.graphicsLayer {
-                translationY =
-                    if (listState.firstVisibleItemIndex == 0) {
-                        -listState.firstVisibleItemScrollOffset.toFloat()
-                    } else {
-                        -size.height
-                    }
-            },
-    )
+    // Disabled in Pure Black OLED mode to keep the top of list/settings screens true black (#000000).
+    if (!com.maxrave.simpmusic.ui.theme.LocalPureBlack.current) {
+        AmbientThemeGlow(
+            tint = MaterialTheme.colorScheme.primary,
+            modifier =
+                Modifier.graphicsLayer {
+                    translationY =
+                        if (listState.firstVisibleItemIndex == 0) {
+                            -listState.firstVisibleItemScrollOffset.toFloat()
+                        } else {
+                            -size.height
+                        }
+                },
+        )
+    }
     Box(Modifier.fillMaxSize().glassHazeSource(hazeState)) {
         Crossfade(targetState = listNotification) {
             if (it == null) {

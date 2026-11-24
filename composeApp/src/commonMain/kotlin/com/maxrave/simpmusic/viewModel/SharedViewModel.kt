@@ -2569,6 +2569,8 @@ class SharedViewModel(
 
     fun getCustomThemeColor() = dataStoreManager.customThemeColor
 
+    fun getPureBlackTheme(): Flow<Boolean> = dataStoreManager.getString(PURE_BLACK_THEME_KEY).map { it == DataStoreManager.TRUE }
+
     fun getNowPlayingStyle() = dataStoreManager.nowPlayingStyle
 
     fun getLyricsStyle() = dataStoreManager.lyricsStyle
@@ -2596,6 +2598,15 @@ class SharedViewModel(
     fun setCustomThemeColor(argbHex: String) {
         viewModelScope.launch {
             dataStoreManager.setCustomThemeColor(argbHex)
+        }
+    }
+
+    fun setPureBlackTheme(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.putString(
+                PURE_BLACK_THEME_KEY,
+                if (enabled) DataStoreManager.TRUE else DataStoreManager.FALSE,
+            )
         }
     }
 
@@ -2960,3 +2971,5 @@ internal fun resolveNowPlayingThumbnailUrl(
         ?: songThumbnails?.takeIf { it.isNotBlank() }
 
 private fun String.isCanvasVideoUrl(): Boolean = contains(".mp4") || contains(".m3u8")
+
+private const val PURE_BLACK_THEME_KEY = "pure_black_theme"

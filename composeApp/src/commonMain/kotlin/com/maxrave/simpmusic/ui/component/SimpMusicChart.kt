@@ -29,10 +29,21 @@ fun SimpMusicChartButton(
     onClick: () -> Unit,
 ) {
     val isDark = LocalIsDarkTheme.current
-    // Dark: original warm-black pill (reads as a warm/orange tint on the dark page). Light: a warm
-    // cream-orange pill so it doesn't turn into a hard black slab on the white page.
-    val containerColor = if (isDark) Color(0xFF1A0F0F) else Color(0xFFFBE6D4)
-    val borderColor = if (isDark) Color(0xFF3D2828) else Color(0xFFEBCBB0)
+    val isPureBlack = isDark && com.maxrave.simpmusic.ui.theme.LocalPureBlack.current
+    // Dark: original warm-black pill (reads as a warm/orange tint on the dark page), or pure neutral
+    // charcoal in Pure Black OLED mode. Light: warm cream-orange pill on white page.
+    val containerColor =
+        when {
+            isPureBlack -> Color(0xFF141414)
+            isDark -> Color(0xFF1A0F0F)
+            else -> Color(0xFFFBE6D4)
+        }
+    val borderColor =
+        when {
+            isPureBlack -> Color(0xFF282828)
+            isDark -> Color(0xFF3D2828)
+            else -> Color(0xFFEBCBB0)
+        }
     val labelColor = if (isDark) Color(0xFFB8B8B8) else Color(0xFF5C3D2A)
     Surface(
         modifier = modifier,

@@ -174,6 +174,7 @@ fun App(
     val themeMode by viewModel.getThemeMode().collectAsStateWithLifecycle(DataStoreManager.THEME_MODE_DARK)
     val themeColorSource by viewModel.getThemeColorSource().collectAsStateWithLifecycle(DataStoreManager.THEME_COLOR_DEFAULT)
     val customThemeColorHex by viewModel.getCustomThemeColor().collectAsStateWithLifecycle(DataStoreManager.DEFAULT_THEME_COLOR_HEX)
+    val pureBlackTheme by viewModel.getPureBlackTheme().collectAsStateWithLifecycle(false)
     val isOfficialBuild by viewModel.isOfficialBuild.collectAsStateWithLifecycle()
     // MiniPlayer visibility: derived, never stored.
     //
@@ -513,6 +514,7 @@ fun App(
         customThemeColor = parseThemeColorHex(customThemeColorHex),
         // The setting governs Desktop too, the same as Android: off, every glass surface draws flat.
         liquidGlassEnabled = isLiquidGlassEnabled == TRUE,
+        pureBlack = pureBlackTheme,
     ) {
         if (!isOfficialBuild) {
             UnofficialBuildScreen()
@@ -520,13 +522,18 @@ fun App(
         }
         // Read inside AppTheme so MaterialTheme reflects the resolved scheme.
         val isLightScheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+        val isPureBlack = com.maxrave.simpmusic.ui.theme.LocalPureBlack.current
 
         // The desktop shell is a window colour with panels floating on it. The two schemes mirror
         // each other: the window takes the extreme (pure black / pure white) and the panel steps
         // one shade back towards the middle, so the panels read as raised either way.
         val desktopWindow = if (isLightScheme) desktopWindowLight else desktopWindowDark
         val desktopPanel =
-            if (isLightScheme) MaterialTheme.colorScheme.surfaceContainer else desktopPanelDark
+            when {
+                isLightScheme -> MaterialTheme.colorScheme.surfaceContainer
+                isPureBlack -> androidx.compose.ui.graphics.Color.Black
+                else -> desktopPanelDark
+            }
 
         // Backdrop base must match the page, so glass over an empty area reads as the page itself.
         // On Desktop the page is the panel: its colour is painted outside the recorded layer, and

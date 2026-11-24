@@ -446,6 +446,8 @@
     <string name="theme_mode_system">Padrão do sistema</string>
     <string name="theme_mode_dark">Escuro</string>
     <string name="theme_mode_light">Claro</string>
+    <string name="pure_black_theme">Preto puro (OLED)</string>
+    <string name="pure_black_theme_description">Usar fundo preto puro (#000000) no modo escuro em telas, álbuns, playlists e artistas</string>
     <string name="now_playing_style">Estilo da tela Tocando agora</string>
     <string name="now_playing_style_spotify">Clássico</string>
     <string name="ai_translated">Traduzida por IA</string>

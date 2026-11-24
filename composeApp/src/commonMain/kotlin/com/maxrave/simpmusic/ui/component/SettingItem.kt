@@ -154,6 +154,7 @@ fun SettingGroup(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val cardColor = settingGroupColor()
+    val cardAlpha = if (com.maxrave.simpmusic.ui.theme.LocalPureBlack.current) 0.92f else 0.5f
     Column(modifier.fillMaxWidth().padding(top = 24.dp)) {
         Text(
             text = title.toUpperCase(Locale.current),
@@ -166,7 +167,7 @@ fun SettingGroup(
                 Modifier
                     .fillMaxWidth()
                     .clip(SettingGroupShape)
-                    .background(cardColor.copy(alpha = 0.5f))
+                    .background(cardColor.copy(alpha = cardAlpha))
                     .drawWithContent {
                         // The first row's hairline would sit on the card's own edge, so that strip is
                         // left undrawn. Clipped rather than painted over: the card is translucent.

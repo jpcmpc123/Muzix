@@ -30,14 +30,25 @@ data class SurfaceDarkColors(
 @Composable
 fun rememberSurfaceDarkColors(): SurfaceDarkColors {
     val cs = MaterialTheme.colorScheme
+    val isPureBlack = com.maxrave.simpmusic.ui.theme.LocalPureBlack.current
     return if (LocalForceDarkText.current) {
-        SurfaceDarkColors(
-            container = Color(0xFF242424),
-            handle = Color(0xFF474545),
-            content = Color.White,
-            subtitle = Color(0xFFB0B0A0),
-            disabled = Color.Gray,
-        )
+        if (isPureBlack) {
+            SurfaceDarkColors(
+                container = Color(0xFF141414),
+                handle = Color(0xFF3A3A3A),
+                content = Color.White,
+                subtitle = Color(0xFFAAAAAA),
+                disabled = Color(0xFF707070),
+            )
+        } else {
+            SurfaceDarkColors(
+                container = Color(0xFF242424),
+                handle = Color(0xFF474545),
+                content = Color.White,
+                subtitle = Color(0xFFB0B0A0),
+                disabled = Color.Gray,
+            )
+        }
     } else {
         SurfaceDarkColors(
             container = cs.surfaceContainerLow,

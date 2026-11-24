@@ -1,5 +1,7 @@
 package com.maxrave.simpmusic.expect.ui
 
+import android.graphics.Color as AndroidColor
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -21,7 +23,10 @@ actual fun platformDynamicColorScheme(isDark: Boolean): ColorScheme? {
 actual fun isWallpaperDynamicColorSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
 @Composable
-actual fun SystemBarAppearanceEffect(isDark: Boolean) {
+actual fun SystemBarAppearanceEffect(
+    isDark: Boolean,
+    isPureBlack: Boolean,
+) {
     val view = LocalView.current
     val context = LocalContext.current
     if (!view.isInEditMode) {
@@ -31,6 +36,13 @@ actual fun SystemBarAppearanceEffect(isDark: Boolean) {
             // Light theme → dark icons; dark theme → light icons.
             controller.isAppearanceLightStatusBars = !isDark
             controller.isAppearanceLightNavigationBars = !isDark
+            val bgArgb =
+                when {
+                    isPureBlack -> AndroidColor.BLACK
+                    isDark -> 0xFF131313.toInt()
+                    else -> 0xFFFAFAFA.toInt()
+                }
+            window.setBackgroundDrawable(ColorDrawable(bgArgb))
         }
     }
 }

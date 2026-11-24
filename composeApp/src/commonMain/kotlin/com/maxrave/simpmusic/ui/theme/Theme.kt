@@ -72,6 +72,11 @@ val LocalIsDarkTheme = staticCompositionLocalOf { true }
 val LocalLiquidGlassEnabled = staticCompositionLocalOf { true }
 
 /**
+ * True when dark theme is active AND the user enabled Pure Black (OLED) mode.
+ */
+val LocalPureBlack = staticCompositionLocalOf { false }
+
+/**
  * The dark scheme to use for immersive screens while the app itself is on the light theme.
  * Provided by [AppTheme], consumed by [ForceDarkContent]; null only outside of [AppTheme].
  */
@@ -96,7 +101,7 @@ fun parseThemeColorHex(hex: String): Color? {
  * desktop window, and even Apple — who pins systemBackground to white — puts #F2F2F7 behind
  * list pages. Pure white is kept for surfaceBright/surfaceContainerLowest so cards and sheets
  * still have a brighter-than-page tier to lift onto. Dark keeps the generated neutrals (a tone-6
- * page), not AMOLED pure black.
+ * page) unless Pure Black mode is enabled.
  */
 private fun ColorScheme.withNeutralLightSurfaces(): ColorScheme =
     copy(
@@ -120,6 +125,34 @@ private fun ColorScheme.withNeutralLightSurfaces(): ColorScheme =
         inverseOnSurface = Color(0xFFF1F1F1),
     )
 
+/**
+ * YouTube Music-style pure black (OLED) neutral dark ramp: absolute #000000 for screen grounds,
+ * neutral charcoal steps (#141414 / #1C1C1C / #262626) for elevated capsules, sheets, and cards,
+ * and Color.Transparent for surfaceTint so tonal elevation never tints #000000. Accent colors
+ * (primary, secondary, tertiary, error) remain untouched so Default, Wallpaper, and Custom seeds work.
+ */
+internal fun ColorScheme.withPureBlackSurfaces(): ColorScheme =
+    copy(
+        background = Color(0xFF000000),
+        onBackground = Color(0xFFFFFFFF),
+        surface = Color(0xFF000000),
+        onSurface = Color(0xFFFFFFFF),
+        surfaceDim = Color(0xFF000000),
+        surfaceBright = Color(0xFF282828),
+        surfaceVariant = Color(0xFF1C1C1C),
+        onSurfaceVariant = Color(0xFFAAAAAA),
+        surfaceTint = Color.Transparent,
+        surfaceContainerLowest = Color(0xFF000000),
+        surfaceContainerLow = Color(0xFF0E0E0E),
+        surfaceContainer = Color(0xFF141414),
+        surfaceContainerHigh = Color(0xFF1C1C1C),
+        surfaceContainerHighest = Color(0xFF262626),
+        outline = Color(0xFF555555),
+        outlineVariant = Color(0xFF262626),
+        inverseSurface = Color(0xFFF1F1F1),
+        inverseOnSurface = Color(0xFF0F0F0F),
+    )
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun AppTheme(
@@ -127,11 +160,13 @@ fun AppTheme(
     themeColorSource: String = DataStoreManager.THEME_COLOR_DEFAULT,
     customThemeColor: Color? = null,
     liquidGlassEnabled: Boolean = true,
+    pureBlack: Boolean = false,
     content:
         @Composable()
         () -> Unit,
 ) {
     val isDark = isDarkTheme(themeMode)
+    val isPureBlack = isDark && pureBlack
     val wallpaperScheme =
         if (themeColorSource == DataStoreManager.THEME_COLOR_WALLPAPER) {
             platformDynamicColorScheme(isDark)
@@ -145,8 +180,8 @@ fun AppTheme(
             seed
         }
     // Light pins the neutrals to a neutral-grey ramp (the seed otherwise tints them warm/cream);
-    // dark keeps the generated neutrals as they are.
-    val colorScheme =
+    // dark keeps the generated neutrals unless Pure Black mode is enabled.
+    val baseColorScheme =
         wallpaperScheme
             ?: rememberDynamicColorScheme(
                 seedColor = seedColor,
@@ -154,9 +189,11 @@ fun AppTheme(
                 style = PaletteStyle.TonalSpot,
                 modifyColorScheme = { cs -> if (isDark) cs else cs.withNeutralLightSurfaces() },
             )
+    val colorScheme =
+        if (isPureBlack) baseColorScheme.withPureBlackSurfaces() else baseColorScheme
     // Immersive screens stay dark even at light theme (see [ForceDarkContent]). Resolve their scheme
     // once here instead of letting every such subtree build a palette of its own.
-    val forcedDarkScheme =
+    val baseForcedDarkScheme =
         if (isDark) {
             colorScheme
         } else {
@@ -166,7 +203,13 @@ fun AppTheme(
                 style = PaletteStyle.TonalSpot,
             )
         }
-    SystemBarAppearanceEffect(isDark)
+    val forcedDarkScheme =
+        if (pureBlack && !isDark) {
+            baseForcedDarkScheme.withPureBlackSurfaces()
+        } else {
+            baseForcedDarkScheme
+        }
+    SystemBarAppearanceEffect(isDark = isDark, isPureBlack = isPureBlack)
     MaterialExpressiveTheme(
         colorScheme = colorScheme,
         content = {
@@ -175,6 +218,7 @@ fun AppTheme(
                 LocalContentColor provides colorScheme.onSurfaceVariant,
                 LocalAppColors provides if (isDark) DarkAppColors else LightAppColors,
                 LocalIsDarkTheme provides isDark,
+                LocalPureBlack provides isPureBlack,
                 LocalForcedDarkColorScheme provides forcedDarkScheme,
                 LocalLiquidGlassEnabled provides liquidGlassEnabled,
                 content = content,
@@ -235,12 +279,14 @@ private val SoftRippleConfiguration =
 @Composable
 fun ForceDarkContent(content: @Composable () -> Unit) {
     val darkScheme = LocalForcedDarkColorScheme.current ?: MaterialTheme.colorScheme
+    val isPureBlack = darkScheme.background == Color.Black
     MaterialExpressiveTheme(
         colorScheme = darkScheme,
         content = {
             CompositionLocalProvider(
                 LocalForceDarkText provides true,
                 LocalIsDarkTheme provides true,
+                LocalPureBlack provides isPureBlack,
                 LocalContentColor provides darkScheme.onSurfaceVariant,
                 LocalAppColors provides DarkAppColors,
                 content = content,
@@ -264,3 +310,12 @@ fun isDarkTheme(themeMode: String): Boolean =
         DataStoreManager.THEME_MODE_SYSTEM -> isSystemInDarkTheme()
         else -> true
     }
+
+/**
+ * Pure (non-composable) resolver for unit tests and non-UI guards: Pure Black only activates when
+ * the effective theme is dark and the user preference is enabled.
+ */
+internal fun isPureBlackTheme(
+    isDark: Boolean,
+    pureBlackEnabled: Boolean,
+): Boolean = isDark && pureBlackEnabled

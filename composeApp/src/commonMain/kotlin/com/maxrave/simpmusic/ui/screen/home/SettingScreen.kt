@@ -149,6 +149,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.login.DiscordLoginDestina
 import com.maxrave.simpmusic.ui.navigation.destination.login.LastfmLoginDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.LoginDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.SpotifyLoginDestination
+import com.maxrave.simpmusic.ui.theme.LocalPureBlack
 import com.maxrave.simpmusic.ui.theme.md_theme_dark_primary
 import com.maxrave.simpmusic.ui.theme.parseThemeColorHex
 import com.maxrave.simpmusic.ui.theme.typo
@@ -405,6 +406,8 @@ import simpmusic.composeapp.generated.resources.proxy_port_message
 import simpmusic.composeapp.generated.resources.proxy_type
 import simpmusic.composeapp.generated.resources.proxy_username
 import simpmusic.composeapp.generated.resources.proxy_username_message
+import simpmusic.composeapp.generated.resources.pure_black_theme
+import simpmusic.composeapp.generated.resources.pure_black_theme_description
 import simpmusic.composeapp.generated.resources.quality
 import simpmusic.composeapp.generated.resources.radio_audio_only
 import simpmusic.composeapp.generated.resources.radio_audio_only_description
@@ -613,6 +616,7 @@ fun SettingScreen(
     val themeMode by sharedViewModel.getThemeMode().collectAsStateWithLifecycle(DataStoreManager.THEME_MODE_DARK)
     val themeColorSource by sharedViewModel.getThemeColorSource().collectAsStateWithLifecycle(DataStoreManager.THEME_COLOR_DEFAULT)
     val customThemeColorHex by sharedViewModel.getCustomThemeColor().collectAsStateWithLifecycle(DataStoreManager.DEFAULT_THEME_COLOR_HEX)
+    val pureBlackTheme by sharedViewModel.getPureBlackTheme().collectAsStateWithLifecycle(false)
     val nowPlayingStyle by sharedViewModel.getNowPlayingStyle().collectAsStateWithLifecycle(DataStoreManager.NOW_PLAYING_STYLE_SPOTIFY)
     val lyricsStyle by sharedViewModel.getLyricsStyle().collectAsStateWithLifecycle(DataStoreManager.LYRICS_STYLE_CLASSIC)
     val romanizationStored by sharedViewModel.getRomanizationLanguages().collectAsStateWithLifecycle("")
@@ -699,18 +703,21 @@ fun SettingScreen(
     // taller than the glow, so the glow has fully left before the branch ever switches — no jump.
     // graphicsLayer reads the state in the DRAW phase, so scrolling redraws without recomposing.
     // Tinted with the app's own primary rather than the song playing: this page is about the app.
-    AmbientThemeGlow(
-        tint = MaterialTheme.colorScheme.primary,
-        modifier =
-            Modifier.graphicsLayer {
-                translationY =
-                    if (settingListState.firstVisibleItemIndex == 0) {
-                        -settingListState.firstVisibleItemScrollOffset.toFloat()
-                    } else {
-                        -size.height
-                    }
-            },
-    )
+    // Disabled in Pure Black OLED mode to keep the top of Settings pure #000000.
+    if (!LocalPureBlack.current) {
+        AmbientThemeGlow(
+            tint = MaterialTheme.colorScheme.primary,
+            modifier =
+                Modifier.graphicsLayer {
+                    translationY =
+                        if (settingListState.firstVisibleItemIndex == 0) {
+                            -settingListState.firstVisibleItemScrollOffset.toFloat()
+                        } else {
+                            -size.height
+                        }
+                },
+        )
+    }
     LazyColumn(
         state = settingListState,
         contentPadding = innerPadding,
@@ -813,6 +820,16 @@ fun SettingScreen(
                                 ),
                             )
                         },
+                    )
+                    SettingItem(
+                        title = stringResource(Res.string.pure_black_theme),
+                        subtitle = stringResource(Res.string.pure_black_theme_description),
+                        smallSubtitle = true,
+                        isEnable = themeMode != DataStoreManager.THEME_MODE_LIGHT,
+                        switch =
+                            pureBlackTheme to { enabled ->
+                                sharedViewModel.setPureBlackTheme(enabled)
+                            },
                     )
                     val nowPlayingStyleLabels =
                         listOf(

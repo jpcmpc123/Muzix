@@ -57,9 +57,14 @@ fun AmbientThemeGlow(
 ) {
     val backgroundColor = MaterialTheme.colorScheme.background
     val isLightTheme = backgroundColor.luminance() > 0.5f
+    val isPureBlack = com.maxrave.simpmusic.ui.theme.LocalPureBlack.current
     val pageBackground =
         if (getPlatform() == Platform.Desktop) {
-            if (isLightTheme) MaterialTheme.colorScheme.surfaceContainer else desktopPanelDark
+            when {
+                isLightTheme -> MaterialTheme.colorScheme.surfaceContainer
+                isPureBlack -> Color.Black
+                else -> desktopPanelDark
+            }
         } else {
             backgroundColor
         }

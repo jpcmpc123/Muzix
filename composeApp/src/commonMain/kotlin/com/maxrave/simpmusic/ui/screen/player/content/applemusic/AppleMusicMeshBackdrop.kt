@@ -129,12 +129,13 @@ internal fun AppleMusicMeshBackdrop(
             smoothScrimBrush(from = Color.Black.copy(alpha = 0.06f), to = Color.Black.copy(alpha = 0.30f))
         }
 
+    val meshBackground = if (com.maxrave.simpmusic.ui.theme.LocalPureBlack.current) Color.Black else MeshFallback
     Canvas(
         modifier =
             modifier
                 .fillMaxSize()
                 // Solid background floor so the mesh page remains completely opaque.
-                .background(MeshFallback),
+                .background(meshBackground),
     ) {
         val seamY = seam.toPx().coerceIn(0f, size.height)
         val topHoldY = topHold.toPx().coerceIn(0f, seamY)
