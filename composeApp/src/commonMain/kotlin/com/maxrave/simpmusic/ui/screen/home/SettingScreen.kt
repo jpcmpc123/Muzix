@@ -480,6 +480,8 @@ import simpmusic.composeapp.generated.resources.what_segments_will_be_skipped
 import simpmusic.composeapp.generated.resources.youtube_account
 import simpmusic.composeapp.generated.resources.youtube_subtitle_language
 import simpmusic.composeapp.generated.resources.youtube_subtitle_language_message
+import simpmusic.composeapp.generated.resources.netease
+import simpmusic.composeapp.generated.resources.unison
 import simpmusic.composeapp.generated.resources.youtube_music_official
 import simpmusic.composeapp.generated.resources.youtube_transcript
 import java.time.Instant
@@ -1776,6 +1778,8 @@ fun SettingScreen(
                             DataStoreManager.YOUTUBE -> stringResource(Res.string.youtube_transcript)
                             DataStoreManager.YTM_OFFICIAL -> stringResource(Res.string.youtube_music_official)
                             DataStoreManager.LRCLIB -> stringResource(Res.string.lrclib)
+                            DataStoreManager.UNISON -> stringResource(Res.string.unison)
+                            DataStoreManager.NETEASE -> stringResource(Res.string.netease)
                             DataStoreManager.BETTER_LYRICS -> stringResource(Res.string.better_lyrics)
                             else -> stringResource(Res.string.unknown)
                         },
@@ -1787,13 +1791,15 @@ fun SettingScreen(
                                     SettingAlertState.SelectData(
                                         listSelect =
                                             listOf(
-                                                (mainLyricsProvider == DataStoreManager.BETTER_LYRICS) to
-                                                    runBlocking { getString(Res.string.better_lyrics) },
-                                                (mainLyricsProvider == DataStoreManager.LRCLIB) to runBlocking { getString(Res.string.lrclib) },
-                                                (mainLyricsProvider == DataStoreManager.SIMPMUSIC) to
-                                                    runBlocking { getString(Res.string.simpmusic_lyrics) },
                                                 (mainLyricsProvider == DataStoreManager.YTM_OFFICIAL) to
                                                     runBlocking { getString(Res.string.youtube_music_official) },
+                                                (mainLyricsProvider == DataStoreManager.LRCLIB) to runBlocking { getString(Res.string.lrclib) },
+                                                (mainLyricsProvider == DataStoreManager.UNISON) to runBlocking { getString(Res.string.unison) },
+                                                (mainLyricsProvider == DataStoreManager.NETEASE) to runBlocking { getString(Res.string.netease) },
+                                                (mainLyricsProvider == DataStoreManager.SIMPMUSIC) to
+                                                    runBlocking { getString(Res.string.simpmusic_lyrics) },
+                                                (mainLyricsProvider == DataStoreManager.BETTER_LYRICS) to
+                                                    runBlocking { getString(Res.string.better_lyrics) },
                                                 (mainLyricsProvider == DataStoreManager.YOUTUBE) to
                                                     runBlocking { getString(Res.string.youtube_transcript) },
                                             ),
@@ -1802,12 +1808,14 @@ fun SettingScreen(
                                     runBlocking { getString(Res.string.change) } to { state ->
                                         viewModel.setLyricsProvider(
                                             when (state.selectOne?.getSelected()) {
-                                                runBlocking { getString(Res.string.better_lyrics) } -> DataStoreManager.BETTER_LYRICS
-                                                runBlocking { getString(Res.string.lrclib) } -> DataStoreManager.LRCLIB
-                                                runBlocking { getString(Res.string.simpmusic_lyrics) } -> DataStoreManager.SIMPMUSIC
                                                 runBlocking { getString(Res.string.youtube_music_official) } -> DataStoreManager.YTM_OFFICIAL
+                                                runBlocking { getString(Res.string.lrclib) } -> DataStoreManager.LRCLIB
+                                                runBlocking { getString(Res.string.unison) } -> DataStoreManager.UNISON
+                                                runBlocking { getString(Res.string.netease) } -> DataStoreManager.NETEASE
+                                                runBlocking { getString(Res.string.simpmusic_lyrics) } -> DataStoreManager.SIMPMUSIC
+                                                runBlocking { getString(Res.string.better_lyrics) } -> DataStoreManager.BETTER_LYRICS
                                                 runBlocking { getString(Res.string.youtube_transcript) } -> DataStoreManager.YOUTUBE
-                                                else -> DataStoreManager.BETTER_LYRICS
+                                                else -> DataStoreManager.LRCLIB
                                             },
                                         )
                                     },

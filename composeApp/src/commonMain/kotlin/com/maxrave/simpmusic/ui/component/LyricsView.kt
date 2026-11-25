@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -58,9 +59,11 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -70,6 +73,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.data.model.lyrics.RomanizationDictionaryState
 import com.maxrave.domain.data.model.lyrics.RomanizationLanguage
+import com.maxrave.domain.lyrics.LyricsAttribution
 import com.maxrave.domain.repository.LyricsRomanizerRepository
 import com.maxrave.simpmusic.expect.ui.isLyricsBlurSupported
 import com.maxrave.domain.data.model.metadata.Line
@@ -94,6 +98,10 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
+import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.lyrics_from_unison
+import simpmusic.composeapp.generated.resources.submitted_by
 import java.text.Bidi
 import kotlin.math.abs
 import kotlin.math.sqrt
@@ -784,7 +792,12 @@ fun LyricsView(
                     }
                 }
             }
-            footerContent?.let { footer ->
+            val effectiveFooter: (@Composable () -> Unit)? =
+                footerContent
+                    ?: lyricsData.attribution?.let { attr ->
+                        { LyricsAttributionFooter(attribution = attr) }
+                    }
+            effectiveFooter?.let { footer ->
                 item {
                     if (appleStyle) {
                         // Same gutter as the lyrics, and dimmed — but NOT blurred. Blur means
@@ -804,10 +817,62 @@ fun LyricsView(
                             footer()
                         }
                     } else {
-                        footer()
+                        Box(modifier = Modifier.alpha(0.65f)) {
+                            footer()
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LyricsAttributionFooter(attribution: LyricsAttribution) {
+    val uriHandler = LocalUriHandler.current
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        val songLabel = stringResource(Res.string.lyrics_from_unison)
+        Text(
+            text = songLabel,
+            style = typo().labelSmall,
+            color = Color.White,
+            textDecoration = if (!attribution.songUrl.isNullOrBlank()) TextDecoration.Underline else null,
+            modifier =
+                if (!attribution.songUrl.isNullOrBlank()) {
+                    Modifier.clickable {
+                        attribution.songUrl?.let { url ->
+                            runCatching { uriHandler.openUri(url) }
+                        }
+                    }
+                } else {
+                    Modifier
+                },
+        )
+        val contributor = attribution.contributorName?.takeIf { it.isNotBlank() }
+        if (contributor != null) {
+            val submittedLabel = stringResource(Res.string.submitted_by, contributor)
+            Text(
+                text = submittedLabel,
+                style = typo().labelSmall,
+                color = Color.White.copy(alpha = 0.85f),
+                textDecoration = if (!attribution.contributorUrl.isNullOrBlank()) TextDecoration.Underline else null,
+                modifier =
+                    if (!attribution.contributorUrl.isNullOrBlank()) {
+                        Modifier.clickable {
+                            attribution.contributorUrl?.let { url ->
+                                runCatching { uriHandler.openUri(url) }
+                            }
+                        }
+                    } else {
+                        Modifier
+                    },
+            )
         }
     }
 }

@@ -310,6 +310,8 @@ import simpmusic.composeapp.generated.resources.your_playlists
 import simpmusic.composeapp.generated.resources.your_sp_dc_param_of_spotify_cookie
 import simpmusic.composeapp.generated.resources.your_youtube_cookie
 import simpmusic.composeapp.generated.resources.your_youtube_playlists
+import simpmusic.composeapp.generated.resources.netease
+import simpmusic.composeapp.generated.resources.unison
 import simpmusic.composeapp.generated.resources.youtube_music_official
 import simpmusic.composeapp.generated.resources.youtube_transcript
 import simpmusic.composeapp.generated.resources.youtube_url
@@ -1571,7 +1573,9 @@ fun NowPlayingBottomSheet(
                     DataStoreManager.YOUTUBE -> 2
                     DataStoreManager.BETTER_LYRICS -> 3
                     DataStoreManager.YTM_OFFICIAL -> 4
-                    else -> 3
+                    DataStoreManager.UNISON -> 5
+                    DataStoreManager.NETEASE -> 6
+                    else -> 1
                 },
             )
         }
@@ -1592,12 +1596,12 @@ fun NowPlayingBottomSheet(
                             Modifier
                                 .padding(horizontal = 4.dp)
                                 .fillMaxWidth()
-                                .clickable { selected = 3 },
+                                .clickable { selected = 4 },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = selected == 3, onClick = { selected = 3 })
+                        RadioButton(selected = selected == 4, onClick = { selected = 4 })
                         Spacer(modifier = Modifier.size(10.dp))
-                        Text(text = stringResource(Res.string.better_lyrics), style = typo().labelSmall)
+                        Text(text = stringResource(Res.string.youtube_music_official), style = typo().labelSmall)
                     }
                     Row(
                         modifier =
@@ -1616,6 +1620,30 @@ fun NowPlayingBottomSheet(
                             Modifier
                                 .padding(horizontal = 4.dp)
                                 .fillMaxWidth()
+                                .clickable { selected = 5 },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = selected == 5, onClick = { selected = 5 })
+                        Spacer(modifier = Modifier.size(10.dp))
+                        Text(text = stringResource(Res.string.unison), style = typo().labelSmall)
+                    }
+                    Row(
+                        modifier =
+                            Modifier
+                                .padding(horizontal = 4.dp)
+                                .fillMaxWidth()
+                                .clickable { selected = 6 },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = selected == 6, onClick = { selected = 6 })
+                        Spacer(modifier = Modifier.size(10.dp))
+                        Text(text = stringResource(Res.string.netease), style = typo().labelSmall)
+                    }
+                    Row(
+                        modifier =
+                            Modifier
+                                .padding(horizontal = 4.dp)
+                                .fillMaxWidth()
                                 .clickable { selected = 0 },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -1628,12 +1656,12 @@ fun NowPlayingBottomSheet(
                             Modifier
                                 .padding(horizontal = 4.dp)
                                 .fillMaxWidth()
-                                .clickable { selected = 4 },
+                                .clickable { selected = 3 },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = selected == 4, onClick = { selected = 4 })
+                        RadioButton(selected = selected == 3, onClick = { selected = 3 })
                         Spacer(modifier = Modifier.size(10.dp))
-                        Text(text = stringResource(Res.string.youtube_music_official), style = typo().labelSmall)
+                        Text(text = stringResource(Res.string.better_lyrics), style = typo().labelSmall)
                     }
                     Row(
                         modifier =
@@ -1660,7 +1688,9 @@ fun NowPlayingBottomSheet(
                                     2 -> DataStoreManager.YOUTUBE
                                     3 -> DataStoreManager.BETTER_LYRICS
                                     4 -> DataStoreManager.YTM_OFFICIAL
-                                    else -> DataStoreManager.BETTER_LYRICS
+                                    5 -> DataStoreManager.UNISON
+                                    6 -> DataStoreManager.NETEASE
+                                    else -> DataStoreManager.LRCLIB
                                 },
                             ),
                         )

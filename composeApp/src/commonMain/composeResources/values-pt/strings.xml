@@ -297,6 +297,10 @@
     <string name="lyrics_provider_youtube">Letras fornecidas pelo YouTube</string>
     <string name="lyrics_provider_ytm_official">Letra oficial do YouTube Music</string>
     <string name="youtube_music_official">YouTube Music (Oficial)</string>
+    <string name="lyrics_provider_unison">Letra fornecida pelo Unison</string>
+    <string name="lyrics_provider_netease">Letra fornecida pelo NetEase</string>
+    <string name="lyrics_from_unison">Letra por Unison</string>
+    <string name="submitted_by">Enviada por %1$s</string>
     <string name="lyrics_provider_betterlyrics">Letra fornecida por BetterLyrics</string>
     <string name="limit_player_cache">Limitar cache do jogador</string>
     <string name="unlimited">Ilimitado</string>

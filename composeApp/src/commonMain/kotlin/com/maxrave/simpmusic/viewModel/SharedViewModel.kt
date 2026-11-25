@@ -40,6 +40,7 @@ import com.maxrave.domain.extension.decodeHtmlEntities
 import com.maxrave.domain.extension.isSong
 import com.maxrave.domain.extension.isVideo
 import com.maxrave.domain.extension.toGenericMediaItem
+import com.maxrave.domain.lyrics.LyricsAttribution
 import com.maxrave.domain.lyrics.LyricsContentQualityGuard
 import com.maxrave.domain.lyrics.LyricsHeaderSanitizer
 import com.maxrave.domain.lyrics.LyricsLookupRequest
@@ -182,7 +183,7 @@ import kotlin.time.Duration.Companion.days
 const val FOOTGUNS_STAR_KEY = "footguns_starred"
 private const val USER_PROTECTED_SIGNATURES_KEY = "user_protected_lyrics_signatures"
 private const val MAX_PERSISTED_PROTECTED_SIGNATURES = 500
-private const val LYRICS_V2_REVALIDATED_KEY = "lyrics_v3_revalidated_ids"
+private const val LYRICS_V2_REVALIDATED_KEY = "lyrics_v4_revalidated_ids"
 private const val MAX_PERSISTED_REVALIDATED_V2_IDS = 400
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -1707,6 +1708,7 @@ class SharedViewModel(
         canContributeToSimpMusic: Boolean = false,
         expectedOriginalLyrics: Lyrics? = null,
         alreadyDecoded: Boolean = false,
+        attribution: LyricsAttribution? = null,
     ): Lyrics? {
         if (_nowPlayingState.value?.songEntity?.videoId != videoId) return null
 
@@ -1888,6 +1890,7 @@ class SharedViewModel(
                             NowPlayingScreenData.LyricsData(
                                 lyrics = lyrics,
                                 lyricsProvider = lyricsProvider,
+                                attribution = attribution,
                             ),
                     )
                 }
@@ -1973,6 +1976,7 @@ class SharedViewModel(
 
                     val preferredSource = dataStoreManager.lyricsProvider.first().toLyricsSource()
                     val allowSpotify = dataStoreManager.spotifyLyrics.first() == TRUE
+                    val preferYtmOfficialFirst = dataStoreManager.loggedIn.first() == TRUE
                     val needsV2Revalidation = song.videoId !in revalidatedV2Ids
                     val allowUpgradeScan = forceRefresh || needsV2Revalidation || song.videoId !in upgradedVideoIds
                     val request =
@@ -1987,6 +1991,7 @@ class SharedViewModel(
                             allowUpgradeScan = allowUpgradeScan,
                             userProtectedSignatures = userProtectedSignatures.toSet(),
                             revalidateStaleCache = needsV2Revalidation || forceRefresh,
+                            preferYtmOfficialFirst = preferYtmOfficialFirst,
                         )
 
                     var hadTransientExhaustion = false
@@ -2018,6 +2023,7 @@ class SharedViewModel(
                                         isTranslatedLyrics = false,
                                         lyricsProvider = uiProvider,
                                         persistToCache = !resolution.fromCache,
+                                        attribution = resolution.attribution,
                                         canContributeToSimpMusic =
                                             !resolution.fromCache &&
                                                 resolution.simpMusicNotFoundObserved &&
@@ -2025,6 +2031,8 @@ class SharedViewModel(
                                                 resolution.source != LyricsSource.SPOTIFY &&
                                                 resolution.source != LyricsSource.LETRAS &&
                                                 resolution.source != LyricsSource.YTM_OFFICIAL &&
+                                                resolution.source != LyricsSource.UNISON &&
+                                                resolution.source != LyricsSource.NETEASE &&
                                                 resolution.source != LyricsSource.OFFLINE,
                                     )
                                 if (appliedLyrics != null) {
@@ -2280,6 +2288,8 @@ class SharedViewModel(
             DataStoreManager.YOUTUBE -> LyricsSource.YOUTUBE
             DataStoreManager.YTM_OFFICIAL -> LyricsSource.YTM_OFFICIAL
             DataStoreManager.LRCLIB -> LyricsSource.LRCLIB
+            DataStoreManager.UNISON -> LyricsSource.UNISON
+            DataStoreManager.NETEASE -> LyricsSource.NETEASE
             DataStoreManager.BETTER_LYRICS -> LyricsSource.BETTER_LYRICS
             else -> LyricsSource.SIMPMUSIC
         }
@@ -2291,6 +2301,8 @@ class SharedViewModel(
             LyricsSource.YTM_OFFICIAL -> LyricsProvider.YTM_OFFICIAL
             LyricsSource.SPOTIFY -> LyricsProvider.SPOTIFY
             LyricsSource.LRCLIB -> LyricsProvider.LRCLIB
+            LyricsSource.UNISON -> LyricsProvider.UNISON
+            LyricsSource.NETEASE -> LyricsProvider.NETEASE
             LyricsSource.BETTER_LYRICS -> LyricsProvider.BETTER_LYRICS
             LyricsSource.LETRAS -> LyricsProvider.LETRAS
             LyricsSource.OFFLINE -> LyricsProvider.OFFLINE
@@ -3087,6 +3099,8 @@ enum class LyricsProvider {
     YTM_OFFICIAL,
     SPOTIFY,
     LRCLIB,
+    UNISON,
+    NETEASE,
     BETTER_LYRICS,
     LETRAS,
     AI,
@@ -3123,6 +3137,7 @@ data class NowPlayingScreenData(
         val lyrics: Lyrics,
         val translatedLyrics: Pair<Lyrics, LyricsProvider>? = null,
         val lyricsProvider: LyricsProvider,
+        val attribution: LyricsAttribution? = null,
     )
 
     companion object {

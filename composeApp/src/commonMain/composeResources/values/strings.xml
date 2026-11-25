@@ -300,6 +300,12 @@
     <string name="lyrics_provider_youtube">Lyrics provided by YouTube</string>
     <string name="lyrics_provider_ytm_official">Official lyrics by YouTube Music</string>
     <string name="youtube_music_official">YouTube Music (Official)</string>
+    <string name="unison" translatable="false">Unison</string>
+    <string name="netease" translatable="false">NetEase</string>
+    <string name="lyrics_provider_unison">Lyrics provided by Unison</string>
+    <string name="lyrics_provider_netease">Lyrics provided by NetEase</string>
+    <string name="lyrics_from_unison">Lyrics from Unison</string>
+    <string name="submitted_by">Submitted by %1$s</string>
     <string name="lyrics_provider_betterlyrics">Lyrics provided by BetterLyrics</string>
     <string name="limit_player_cache">Limit Player Cache</string>
     <string name="unlimited">Unlimited</string>
