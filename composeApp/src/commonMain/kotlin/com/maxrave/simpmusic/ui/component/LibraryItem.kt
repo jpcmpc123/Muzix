@@ -70,7 +70,6 @@ import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
-import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.most_played
 import simpmusic.composeapp.generated.resources.no_favorite_playlists
@@ -83,7 +82,7 @@ import com.maxrave.domain.mediaservice.handler.PlaylistType as DomainPlaylistTyp
 @Composable
 fun LibraryItem(
     state: LibraryItemState,
-    viewModel: LibraryViewModel = koinViewModel(),
+    viewModel: LibraryViewModel = koinInject(),
     sharedViewModel: SharedViewModel = koinInject(),
     navController: NavController,
     // Null means this row does not take part in multi-selection; the selection bar lives on the

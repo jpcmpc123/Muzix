@@ -89,7 +89,7 @@ val viewModelModule =
                 get(),
             )
         }
-        viewModel {
+        single {
             LibraryViewModel(
                 get(),
                 get(),
@@ -101,6 +101,8 @@ val viewModelModule =
                 get(),
                 get(),
             )
+        } onClose {
+            it?.clearViewModelScope()
         }
         viewModel {
             LibraryDynamicPlaylistViewModel(

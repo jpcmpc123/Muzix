@@ -118,15 +118,16 @@ import simpmusic.composeapp.generated.resources.your_library
 import simpmusic.composeapp.generated.resources.your_playlists
 import simpmusic.composeapp.generated.resources.your_youtube_playlists
 import simpmusic.composeapp.generated.resources.youtube_liked_music
-
-private const val LIKED_MUSIC_THUMBNAIL_URL =
-    "https://www.gstatic.com/youtube/media/ytm/images/pbg/liked-songs-delhi-1200.png"
+import com.maxrave.simpmusic.utils.THUMB_SMALL_PX
+import com.maxrave.simpmusic.utils.enqueueArtworkPrefetch
+import com.maxrave.simpmusic.utils.enqueueTrackArtworkPrefetch
+import com.maxrave.simpmusic.viewModel.YOUTUBE_LIKED_MUSIC_THUMBNAIL_URL
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     innerPadding: PaddingValues,
-    viewModel: LibraryViewModel = koinViewModel(),
+    viewModel: LibraryViewModel = koinInject(),
     sharedViewModel: SharedViewModel = koinInject(),
     navController: NavController,
     onScrolling: (onTop: Boolean) -> Unit = {},
@@ -139,6 +140,7 @@ fun LibraryScreen(
     val localTrackingEnabled by viewModel.localTrackingEnabled.collectAsStateWithLifecycle(initialValue = false)
     val monthlyRecaps by viewModel.monthlyRecaps.collectAsStateWithLifecycle()
     val youTubePlaylist by viewModel.youTubePlaylist.collectAsStateWithLifecycle()
+    val isRefreshingYouTubePlaylists by viewModel.isRefreshingYouTubePlaylists.collectAsStateWithLifecycle()
     val yourLocalPlaylist by viewModel.yourLocalPlaylist.collectAsStateWithLifecycle()
     val favoritePlaylist by viewModel.favoritePlaylist.collectAsStateWithLifecycle()
     val downloadedPlaylist by viewModel.downloadedPlaylist.collectAsStateWithLifecycle()
@@ -192,9 +194,7 @@ fun LibraryScreen(
 
             LibraryChipType.YOUR_LIBRARY -> {
                 if (loggedIn) {
-                    if (youTubePlaylist.data.isNullOrEmpty()) {
-                        viewModel.getYouTubePlaylist()
-                    }
+                    viewModel.warmUpYouTubePlaylists(forceRefresh = false)
                 } else {
                     viewModel.clearYouTubePlaylist()
                 }
@@ -246,45 +246,36 @@ fun LibraryScreen(
                 }
 
                 val pullToRefreshState = rememberPullToRefreshState()
-                var userRefreshing by remember { mutableStateOf(false) }
-                val rawPlaylists = youTubePlaylist.data ?: emptyList()
-                var lastLoadedPlaylists by remember { mutableStateOf(rawPlaylists) }
-                LaunchedEffect(youTubePlaylist) {
-                    when (youTubePlaylist) {
-                        is LocalResource.Loading -> Unit
-                        is LocalResource.Success -> {
-                            userRefreshing = false
-                            lastLoadedPlaylists = youTubePlaylist.data ?: emptyList()
-                        }
-                        is LocalResource.Error -> {
-                            userRefreshing = false
-                        }
+                val visibleYouTubePlaylists =
+                    remember(youTubePlaylist.data) {
+                        deduplicateYouTubePlaylistsWithoutLiked(youTubePlaylist.data ?: emptyList())
+                    }
+                val platformContext = LocalPlatformContext.current
+                LaunchedEffect(loggedIn, visibleYouTubePlaylists) {
+                    if (loggedIn) {
+                        enqueueArtworkPrefetch(
+                            platformContext = platformContext,
+                            rawUrl = YOUTUBE_LIKED_MUSIC_THUMBNAIL_URL,
+                            targetPx = THUMB_SMALL_PX,
+                        )
+                        enqueueTrackArtworkPrefetch(
+                            platformContext = platformContext,
+                            rawUrls = visibleYouTubePlaylists.map { it.thumbnails.lastOrNull()?.url },
+                            maxCount = 24,
+                        )
                     }
                 }
-                val visibleYouTubePlaylists =
-                    remember(youTubePlaylist, userRefreshing, lastLoadedPlaylists) {
-                        val base =
-                            if (youTubePlaylist is LocalResource.Loading && userRefreshing) {
-                                lastLoadedPlaylists
-                            } else {
-                                youTubePlaylist.data ?: emptyList()
-                            }
-                        deduplicateYouTubePlaylistsWithoutLiked(base)
-                    }
-                val showTopIndicator = userRefreshing && youTubePlaylist is LocalResource.Loading
+                val showTopIndicator = isRefreshingYouTubePlaylists
 
                 PullToRefreshBox(
                     modifier = Modifier.fillMaxSize(),
                     state = pullToRefreshState,
                     onRefresh = {
-                        userRefreshing = true
                         if (getPlatform() == Platform.Android) {
                             viewModel.refreshCachedPreview()
                         }
                         if (loggedIn) {
                             viewModel.getYouTubePlaylist()
-                        } else {
-                            userRefreshing = false
                         }
                     },
                     isRefreshing = showTopIndicator,
@@ -316,7 +307,6 @@ fun LibraryScreen(
                             } else {
                                 0.dp
                             }
-                        val platformContext = LocalPlatformContext.current
                         val likedMusicTitle = stringResource(Res.string.youtube_liked_music)
                         val likedPlaylist =
                             remember(likedMusicTitle) {
@@ -325,7 +315,7 @@ fun LibraryScreen(
                                     author = "YouTube Music",
                                     id = "LM",
                                     description = "PIN",
-                                    thumbnails = LIKED_MUSIC_THUMBNAIL_URL,
+                                    thumbnails = YOUTUBE_LIKED_MUSIC_THUMBNAIL_URL,
                                 )
                             }
 
@@ -388,6 +378,8 @@ fun LibraryScreen(
                                 item(key = "yt_liked_music_pinned", contentType = "youtube_playlist_row") {
                                     PlaylistFullWidthItems(
                                         data = likedPlaylist,
+                                        thumbSize = 56.dp,
+                                        compactStartPadding = true,
                                         onClickListener = {
                                             primeCollectionArtworkNavigation(
                                                 platformContext = platformContext,
@@ -419,6 +411,8 @@ fun LibraryScreen(
                                     ) { _, playlist ->
                                         PlaylistFullWidthItems(
                                             data = playlist,
+                                            thumbSize = 56.dp,
+                                            compactStartPadding = true,
                                             onClickListener = {
                                                 primeCollectionArtworkNavigation(
                                                     platformContext = platformContext,

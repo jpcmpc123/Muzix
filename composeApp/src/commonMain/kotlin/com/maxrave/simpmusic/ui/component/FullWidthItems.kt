@@ -53,12 +53,16 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
 import com.maxrave.simpmusic.utils.IMAGE_CROSSFADE_FAST_MS
 import com.maxrave.simpmusic.utils.THUMB_SMALL_PX
+import com.maxrave.simpmusic.utils.findExistingArtworkBitmap
 import com.maxrave.simpmusic.utils.rememberOptimizedImageRequest
+import com.maxrave.simpmusic.utils.rememberRamFirstTransform
 import com.maxrave.domain.data.entities.AlbumEntity
 import com.maxrave.domain.data.entities.ArtistEntity
 import com.maxrave.domain.data.entities.DownloadState
@@ -536,6 +540,8 @@ fun PlaylistFullWidthItems(
     rightView: @Composable (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     forceDark: Boolean = LocalForceDarkText.current,
+    thumbSize: Dp = 48.dp,
+    compactStartPadding: Boolean = false,
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -608,26 +614,39 @@ fun PlaylistFullWidthItems(
                 thirdRowSubtitle = data.description
             }
         }
+        val platformContext = LocalPlatformContext.current
+        val hasRamBitmap =
+            remember(thumb) {
+                thumb.isNotBlank() && findExistingArtworkBitmap(platformContext, thumb) != null
+            }
         val imageRequest =
             rememberOptimizedImageRequest(
                 rawUrl = thumb,
                 targetPx = THUMB_SMALL_PX,
-                crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
+                crossfadeMs = if (hasRamBitmap) 0 else IMAGE_CROSSFADE_FAST_MS,
             )
+        val holderPainter = rememberHolderPainter()
         Row(
             Modifier
-                .padding(vertical = 10.dp, horizontal = 15.dp)
-                .fillMaxWidth(),
+                .padding(
+                    vertical = if (compactStartPadding) 8.dp else 10.dp,
+                    horizontal = if (compactStartPadding) 16.dp else 15.dp,
+                ).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Spacer(modifier = Modifier.width(8.dp))
-            Box(modifier = Modifier.size(48.dp)) {
+            if (!compactStartPadding) {
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Box(modifier = Modifier.size(thumbSize)) {
                 AsyncImage(
                     model = imageRequest,
-                    placeholder = rememberHolderPainter(),
-                    error = rememberHolderPainter(),
+                    transform =
+                        rememberRamFirstTransform(
+                            fallbackPlaceholder = holderPainter,
+                            error = holderPainter,
+                        ),
                     contentDescription = null,
-                    contentScale = ContentScale.FillWidth,
+                    contentScale = ContentScale.Crop,
                     modifier =
                         Modifier
                             .fillMaxSize()
@@ -637,7 +656,7 @@ fun PlaylistFullWidthItems(
             Column(
                 Modifier
                     .weight(1f)
-                    .padding(start = 12.dp, end = 10.dp)
+                    .padding(start = if (compactStartPadding) 14.dp else 12.dp, end = 10.dp)
                     .align(Alignment.CenterVertically),
             ) {
                 Text(

@@ -89,7 +89,7 @@ import simpmusic.composeapp.generated.resources.radio
 fun LibraryHistoryScreen(
     innerPadding: PaddingValues,
     navController: NavController,
-    viewModel: LibraryViewModel = koinViewModel(),
+    viewModel: LibraryViewModel = koinInject(),
     sharedViewModel: SharedViewModel = koinInject(),
 ) {
     val density = LocalDensity.current

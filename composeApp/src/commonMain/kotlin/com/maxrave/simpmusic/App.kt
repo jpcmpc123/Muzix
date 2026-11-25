@@ -114,12 +114,19 @@ import com.maxrave.simpmusic.ui.theme.desktopWindowLight
 import com.maxrave.simpmusic.ui.theme.fontFamily
 import com.maxrave.simpmusic.ui.theme.parseThemeColorHex
 import com.maxrave.simpmusic.ui.theme.typo
+import coil3.compose.LocalPlatformContext
+import com.maxrave.simpmusic.utils.THUMB_SMALL_PX
 import com.maxrave.simpmusic.utils.VersionManager
+import com.maxrave.simpmusic.utils.enqueueArtworkPrefetch
+import com.maxrave.simpmusic.utils.enqueueTrackArtworkPrefetch
 import com.maxrave.simpmusic.utils.formatBytesLabel
 import com.maxrave.simpmusic.utils.isAppLinkAvailable
 import com.maxrave.simpmusic.utils.libraryTabOf
 import com.maxrave.simpmusic.utils.selectBestApkAsset
+import com.maxrave.simpmusic.viewModel.LibraryViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
+import com.maxrave.simpmusic.viewModel.YOUTUBE_LIKED_MUSIC_THUMBNAIL_URL
+import com.maxrave.simpmusic.viewModel.deduplicateYouTubePlaylistsWithoutLiked
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownTypography
 import dev.chrisbanes.haze.hazeSource
@@ -167,6 +174,7 @@ import kotlin.time.ExperimentalTime
 @Composable
 fun App(
     viewModel: SharedViewModel = koinInject(),
+    libraryViewModel: LibraryViewModel = koinInject(),
     showDesktopNotificationPermissionDialog: Boolean = false,
     onDismissDesktopNotificationPermissionDialog: (doNotShowAgain: Boolean) -> Unit = {},
     onOpenDesktopNotificationSettings: (doNotShowAgain: Boolean) -> Unit = {},
@@ -174,6 +182,7 @@ fun App(
     val windowSize = currentWindowAdaptiveInfo().windowSizeClass
     val navController = rememberNavController()
     val isDesktopShell = getPlatform() == Platform.Desktop
+    val platformContext = LocalPlatformContext.current
 
     val sleepTimerState by viewModel.sleepTimerState.collectAsStateWithLifecycle()
     val nowPlayingData by viewModel.nowPlayingState.collectAsStateWithLifecycle()
@@ -190,6 +199,29 @@ fun App(
     // same condition that used to hide the chip inside Library.
     val isYouTubeLoggedIn by viewModel.getYouTubeLoggedIn().collectAsStateWithLifecycle(DataStoreManager.FALSE)
     val showMixForYouTab = isYouTubeLoggedIn == TRUE
+    val preloadedYouTubePlaylists by libraryViewModel.youTubePlaylist.collectAsStateWithLifecycle()
+    LaunchedEffect(isYouTubeLoggedIn) {
+        if (isYouTubeLoggedIn == TRUE) {
+            libraryViewModel.warmUpYouTubePlaylists(forceRefresh = false)
+        }
+    }
+    LaunchedEffect(isYouTubeLoggedIn, preloadedYouTubePlaylists.data) {
+        if (isYouTubeLoggedIn == TRUE) {
+            enqueueArtworkPrefetch(
+                platformContext = platformContext,
+                rawUrl = YOUTUBE_LIKED_MUSIC_THUMBNAIL_URL,
+                targetPx = THUMB_SMALL_PX,
+            )
+            val playlists = deduplicateYouTubePlaylistsWithoutLiked(preloadedYouTubePlaylists.data.orEmpty())
+            if (playlists.isNotEmpty()) {
+                enqueueTrackArtworkPrefetch(
+                    platformContext = platformContext,
+                    rawUrls = playlists.map { it.thumbnails.lastOrNull()?.url },
+                    maxCount = 24,
+                )
+            }
+        }
+    }
 
     val themeMode by viewModel.getThemeMode().collectAsStateWithLifecycle(DataStoreManager.THEME_MODE_DARK)
     val themeColorSource by viewModel.getThemeColorSource().collectAsStateWithLifecycle(DataStoreManager.THEME_COLOR_DEFAULT)

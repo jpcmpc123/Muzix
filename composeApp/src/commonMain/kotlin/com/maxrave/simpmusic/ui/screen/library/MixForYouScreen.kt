@@ -58,7 +58,7 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import io.ktor.http.Url
 import org.jetbrains.compose.resources.stringResource
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.mix_for_you
 import simpmusic.composeapp.generated.resources.no_mixes_found
@@ -77,7 +77,7 @@ import simpmusic.composeapp.generated.resources.no_mixes_found
 @Composable
 fun MixForYouScreen(
     innerPadding: PaddingValues,
-    viewModel: LibraryViewModel = koinViewModel(),
+    viewModel: LibraryViewModel = koinInject(),
     navController: NavController,
     onScrolling: (onTop: Boolean) -> Unit = {},
 ) {

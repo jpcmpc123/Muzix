@@ -32,11 +32,13 @@ import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
@@ -84,6 +86,13 @@ class LibraryViewModel(
     private val _youTubePlaylist: MutableStateFlow<LocalResource<List<PlaylistsResult>>> =
         MutableStateFlow(LocalResource.Loading())
     val youTubePlaylist: StateFlow<LocalResource<List<PlaylistsResult>>> get() = _youTubePlaylist.asStateFlow()
+
+    private val _isRefreshingYouTubePlaylists: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    val isRefreshingYouTubePlaylists: StateFlow<Boolean> get() = _isRefreshingYouTubePlaylists.asStateFlow()
+
+    private var youTubePlaylistJob: Job? = null
+    private var syncedYouTubeCookieHash: Int? = null
+    private var lastAppliedCookieHash: Int? = null
 
     private val _youTubeMixForYou: MutableStateFlow<LocalResource<List<PlaylistsResult>>> =
         MutableStateFlow(LocalResource.Loading())
@@ -159,14 +168,35 @@ class LibraryViewModel(
                         }
                     }
                 }
-            val cookieJob =
+            val sessionJob =
                 launch {
-                    dataStoreManager.cookie.distinctUntilChanged().collect {
+                    combine(
+                        dataStoreManager.loggedIn.distinctUntilChanged(),
+                        dataStoreManager.cookie.distinctUntilChanged(),
+                    ) { logged, cookie ->
+                        (logged == DataStoreManager.TRUE) to cookie
+                    }.collect { (isLogged, cookie) ->
                         _accountThumbnail.value = dataStoreManager.getString("AccountThumbUrl").first().takeIf { !it.isNullOrEmpty() }
+                        val cookieHash = cookie.hashCode()
+                        if (!isLogged) {
+                            lastAppliedCookieHash = null
+                            syncedYouTubeCookieHash = null
+                            youTubePlaylistJob?.cancel()
+                            _isRefreshingYouTubePlaylists.value = false
+                            _youTubePlaylist.value = LocalResource.Success(emptyList())
+                            dataStoreManager.putString(YT_PLAYLISTS_CACHE_KEY, "")
+                        } else {
+                            if (lastAppliedCookieHash != null && lastAppliedCookieHash != cookieHash) {
+                                syncedYouTubeCookieHash = null
+                                _youTubePlaylist.value = LocalResource.Loading()
+                            }
+                            lastAppliedCookieHash = cookieHash
+                            warmUpYouTubePlaylists(forceRefresh = false)
+                        }
                     }
                 }
             currentScreenJob.join()
-            cookieJob.join()
+            sessionJob.join()
         }
         viewModelScope.launch {
             commonRepository.getLibraryOverview().collect { _libraryOverview.value = it }
@@ -207,16 +237,70 @@ class LibraryViewModel(
         }
     }
 
-    fun getYouTubePlaylist() {
-        _youTubePlaylist.value = LocalResource.Loading()
-        viewModelScope.launch {
-            playlistRepository.getLibraryPlaylist().collect { data ->
-                _youTubePlaylist.value = LocalResource.Success(data ?: emptyList())
+    fun warmUpYouTubePlaylists(forceRefresh: Boolean = false) {
+        if (!forceRefresh && youTubePlaylistJob?.isActive == true) return
+        youTubePlaylistJob?.cancel()
+        youTubePlaylistJob =
+            viewModelScope.launch {
+                val isLogged = dataStoreManager.loggedIn.first() == DataStoreManager.TRUE
+                if (!isLogged) {
+                    syncedYouTubeCookieHash = null
+                    _isRefreshingYouTubePlaylists.value = false
+                    _youTubePlaylist.value = LocalResource.Success(emptyList())
+                    return@launch
+                }
+                val cookieHash = dataStoreManager.cookie.first().hashCode()
+                val cachedFromDisk =
+                    if (_youTubePlaylist.value !is LocalResource.Success || _youTubePlaylist.value.data.isNullOrEmpty()) {
+                        decodeYouTubePlaylistsCache(
+                            raw = dataStoreManager.getString(YT_PLAYLISTS_CACHE_KEY).first(),
+                            expectedAccountHash = cookieHash,
+                        )?.also { restored ->
+                            _youTubePlaylist.value = LocalResource.Success(restored)
+                        }
+                    } else {
+                        null
+                    }
+                val hasVisibleData =
+                    !_youTubePlaylist.value.data.isNullOrEmpty() || !cachedFromDisk.isNullOrEmpty()
+                if (!forceRefresh && syncedYouTubeCookieHash == cookieHash && hasVisibleData) {
+                    return@launch
+                }
+                if (forceRefresh) {
+                    _isRefreshingYouTubePlaylists.value = true
+                } else if (!hasVisibleData) {
+                    _youTubePlaylist.value = LocalResource.Loading()
+                }
+                try {
+                    playlistRepository.getLibraryPlaylist().collect { data ->
+                        if (data != null) {
+                            syncedYouTubeCookieHash = cookieHash
+                            val current = _youTubePlaylist.value.data
+                            if (_youTubePlaylist.value !is LocalResource.Success || current != data) {
+                                _youTubePlaylist.value = LocalResource.Success(data)
+                            }
+                            dataStoreManager.putString(
+                                YT_PLAYLISTS_CACHE_KEY,
+                                encodeYouTubePlaylistsCache(cookieHash, data),
+                            )
+                        } else if (!hasVisibleData) {
+                            _youTubePlaylist.value = LocalResource.Success(emptyList())
+                        }
+                    }
+                } finally {
+                    _isRefreshingYouTubePlaylists.value = false
+                }
             }
-        }
+    }
+
+    fun getYouTubePlaylist() {
+        warmUpYouTubePlaylists(forceRefresh = true)
     }
 
     fun clearYouTubePlaylist() {
+        youTubePlaylistJob?.cancel()
+        syncedYouTubeCookieHash = null
+        _isRefreshingYouTubePlaylists.value = false
         _youTubePlaylist.value = LocalResource.Success(emptyList())
     }
 
@@ -416,5 +500,6 @@ class LibraryViewModel(
     companion object {
         /** How far back the Wrapped tab offers recaps, counting the current month as the first. */
         private const val MONTHS_OF_RECAP = 12
+        private const val YT_PLAYLISTS_CACHE_KEY = "yt_library_playlists_cache_v1"
     }
 }
