@@ -73,16 +73,58 @@ internal fun NowPlayingContentState.secondaryTextColor(): Color =
 // area below the gradient so all three match exactly and leave no seam.
 internal val PlayerBackdropColor = Color(0xFF121212)
 
-private val RICH_SYNC_TIMESTAMP_REGEX = Regex("""<\d{2}:\d{2}\.\d{2,3}>\s*""")
+private val VOICE_PREFIX_REGEX = Regex("""^\s*(?:v\d+|bg)\s*:\s*""", RegexOption.IGNORE_CASE)
+private val INLINE_HTML_TAG_REGEX = Regex("""</?(?:i|b|u|em|strong|span|br|font|ruby|rt|rp)(?:\s+[^>]*)?>""", RegexOption.IGNORE_CASE)
+private val RICH_SYNC_TIMESTAMP_REGEX = Regex("""<\d{1,3}:\d{2}(?:[.:]\d{1,3})?>|\[\d{1,3}:\d{2}(?:[.:]\d{1,3})?\]""")
 private val WHITESPACE_REGEX = Regex("""\s+""")
 
-// Word-by-word lyrics carry a timestamp per word; replace each with a space
-// (not ""), then collapse — otherwise the words run together.
-// Shared by every Now Playing content style (Spotify + M3 Expressive).
-internal fun String.stripRichSyncTimestamps(): String =
-    replace(RICH_SYNC_TIMESTAMP_REGEX, " ")
+private fun isCjkCodepoint(ch: Char): Boolean {
+    val code = ch.code
+    return code in 0x3040..0x30FF ||
+        code in 0x3400..0x4DBF ||
+        code in 0x4E00..0x9FFF ||
+        code in 0xAC00..0xD7AF ||
+        code in 0xF900..0xFAFF
+}
+
+// Word-by-word lyrics carry a timestamp per word; strip all inline time/voice/HTML tags cleanly
+// while preserving hyphenated words (`mestre-sala`), punctuation (`yeah,`), and CJK scripts.
+// Shared by every Now Playing content style and LyricsUiPrep.
+internal fun String.stripRichSyncTimestamps(): String {
+    if ('<' !in this && '[' !in this && ':' !in this) return trim()
+    val withoutVoiceOrHtml =
+        replace(VOICE_PREFIX_REGEX, "")
+            .replace(INLINE_HTML_TAG_REGEX, "")
+    val strippedTimes =
+        if (!RICH_SYNC_TIMESTAMP_REGEX.containsMatchIn(withoutVoiceOrHtml)) {
+            withoutVoiceOrHtml
+        } else {
+            val sb = StringBuilder(withoutVoiceOrHtml.length)
+            var lastEnd = 0
+            for (match in RICH_SYNC_TIMESTAMP_REGEX.findAll(withoutVoiceOrHtml)) {
+                sb.append(withoutVoiceOrHtml, lastEnd, match.range.first)
+                val prev = sb.lastOrNull()
+                val next = withoutVoiceOrHtml.getOrNull(match.range.last + 1)
+                val needsSpace =
+                    prev != null &&
+                        next != null &&
+                        !prev.isWhitespace() &&
+                        !next.isWhitespace() &&
+                        prev !in "-–—/([\"'“‘" &&
+                        next !in ",.!?;:)]}\"'”’-–—" &&
+                        !isCjkCodepoint(prev) &&
+                        !isCjkCodepoint(next)
+                if (needsSpace) sb.append(' ')
+                lastEnd = match.range.last + 1
+            }
+            sb.append(withoutVoiceOrHtml, lastEnd, withoutVoiceOrHtml.length)
+            sb.toString()
+        }
+    return strippedTimes
+        .replace(VOICE_PREFIX_REGEX, "")
         .replace(WHITESPACE_REGEX, " ")
         .trim()
+}
 
 internal fun mergeFormatWithActiveAudioTrack(
     dbFormat: com.maxrave.domain.data.entities.NewFormatEntity?,

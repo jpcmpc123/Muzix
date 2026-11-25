@@ -1290,14 +1290,17 @@ fun NowPlayingContentSpotify(
                                                             color = Color.White,
                                                             maxLines = 1,
                                                         )
+                                                        val lyricsPayload = state.screenData.lyricsData
+                                                        val isSynced =
+                                                            lyricsPayload?.lyrics?.syncType == "LINE_SYNCED" ||
+                                                                lyricsPayload?.lyrics?.syncType == "RICH_SYNCED"
                                                         val translatedLineText =
-                                                            state.screenData.lyricsData
-                                                                ?.translatedLyrics
-                                                                ?.first
-                                                                ?.lines
-                                                                ?.getOrNull(state.currentLyricLineIndex)
-                                                                ?.words
-                                                                ?.stripRichSyncTimestamps()
+                                                            com.maxrave.simpmusic.ui.component.LyricsUiPrep.resolveTranslatedLineAt(
+                                                                originalLines = lyricsPayload?.lyrics?.lines,
+                                                                translatedLines = lyricsPayload?.translatedLyrics?.first?.lines,
+                                                                lineIndex = state.currentLyricLineIndex,
+                                                                isSynced = isSynced,
+                                                            )
                                                         if (!translatedLineText.isNullOrBlank()) {
                                                             LyricText(
                                                                 modifier =

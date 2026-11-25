@@ -8,6 +8,7 @@ import com.maxrave.domain.extension.decodeHtmlEntities
 data class WordTiming(
     val text: String,
     val startTimeMs: Long,
+    val endTimeMs: Long? = null,
 )
 
 /**
@@ -19,7 +20,18 @@ data class ParsedRichSyncLine(
     val lineEndTimeMs: Long,
 )
 
-private val RICH_WORD_TIMESTAMP_REGEX = Regex("""<(\d{1,3}):(\d{2})[.:](\d{1,3})>""")
+private val RICH_WORD_TIMESTAMP_REGEX = Regex("""<(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?>""")
+private val STRAY_BRACKET_TIME_REGEX = Regex("""\[\d{1,3}:\d{2}(?:[.:]\d{1,3})?\]""")
+private val STRAY_HTML_TAG_REGEX = Regex("""</?(?:i|b|u|em|strong|span|br|font|ruby|rt|rp)(?:\s+[^>]*)?>""", RegexOption.IGNORE_CASE)
+private val STRAY_VOICE_PREFIX_REGEX = Regex("""^\s*(?:v\d+|bg)\s*:\s*""", RegexOption.IGNORE_CASE)
+
+private fun cleanRichWordToken(raw: String): String =
+    decodeHtmlEntities(
+        raw
+            .replace(STRAY_BRACKET_TIME_REGEX, "")
+            .replace(STRAY_HTML_TAG_REGEX, "")
+            .replace(STRAY_VOICE_PREFIX_REGEX, ""),
+    ).trim()
 
 private fun parseRichTimestampMs(match: MatchResult): Long {
     val (minutes, seconds, fraction) = match.destructured
@@ -38,8 +50,7 @@ private fun parseRichTimestampMs(match: MatchResult): Long {
 /**
  * Parses rich sync lyrics format into word-level timing data
  *
- * Expected format: <MM:SS.mm> word <MM:SS.mm> word ...
- * Example: <00:16.62> Và <00:16.64> em <00:16.68> nói
+ * Expected format: `<MM:SS.mm> word <MM:SS.mm> word ...` or `<MM:SS.mm>word<MM:SS.mm> <MM:SS.mm>word`
  *
  * @param words The rich sync string containing timestamps and words
  * @param lineStartTimeMs The start time of the line as a string
@@ -51,22 +62,40 @@ fun parseRichSyncWords(
     lineStartTimeMs: String,
     lineEndTimeMs: String,
 ): ParsedRichSyncLine? {
-    // Handle edge cases
     if (words.isBlank() || '<' !in words) {
         return null
     }
 
+    val lineStart = lineStartTimeMs.toLongOrNull() ?: 0L
+    val lineEnd = lineEndTimeMs.toLongOrNull() ?: Long.MAX_VALUE
+
     val wordTimings = mutableListOf<WordTiming>()
     var currentMatch: MatchResult? = null
     for (nextMatch in RICH_WORD_TIMESTAMP_REGEX.findAll(words)) {
+        val nextTs = parseRichTimestampMs(nextMatch)
         val prev = currentMatch
-        if (prev != null) {
-            val textBetween = words.substring(prev.range.last + 1, nextMatch.range.first).trim()
+        if (prev == null) {
+            if (nextMatch.range.first > 0) {
+                val leading = cleanRichWordToken(words.substring(0, nextMatch.range.first))
+                if (leading.isNotEmpty()) {
+                    wordTimings.add(
+                        WordTiming(
+                            text = leading,
+                            startTimeMs = lineStart,
+                            endTimeMs = nextTs.takeIf { it > lineStart },
+                        ),
+                    )
+                }
+            }
+        } else {
+            val textBetween = cleanRichWordToken(words.substring(prev.range.last + 1, nextMatch.range.first))
             if (textBetween.isNotEmpty()) {
+                val wordStart = parseRichTimestampMs(prev)
                 wordTimings.add(
                     WordTiming(
-                        text = decodeHtmlEntities(textBetween),
-                        startTimeMs = parseRichTimestampMs(prev),
+                        text = textBetween,
+                        startTimeMs = wordStart,
+                        endTimeMs = nextTs.takeIf { it > wordStart },
                     ),
                 )
             }
@@ -75,24 +104,21 @@ fun parseRichSyncWords(
     }
 
     val lastMatch = currentMatch ?: return null
-    val trailingText = words.substring(lastMatch.range.last + 1, words.length).trim()
+    val trailingText = cleanRichWordToken(words.substring(lastMatch.range.last + 1, words.length))
     if (trailingText.isNotEmpty()) {
+        val wordStart = parseRichTimestampMs(lastMatch)
         wordTimings.add(
             WordTiming(
-                text = decodeHtmlEntities(trailingText),
-                startTimeMs = parseRichTimestampMs(lastMatch),
+                text = trailingText,
+                startTimeMs = wordStart,
+                endTimeMs = lineEnd.takeIf { it != Long.MAX_VALUE && it > wordStart },
             ),
         )
     }
 
-    // If no valid words were parsed, return null (fallback to LINE_SYNCED)
     if (wordTimings.isEmpty()) {
         return null
     }
-
-    // Parse line timing
-    val lineStart = lineStartTimeMs.toLongOrNull() ?: 0L
-    val lineEnd = lineEndTimeMs.toLongOrNull() ?: Long.MAX_VALUE
 
     return ParsedRichSyncLine(
         words = wordTimings,

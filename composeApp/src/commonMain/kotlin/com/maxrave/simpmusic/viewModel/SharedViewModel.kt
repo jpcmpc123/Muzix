@@ -629,6 +629,9 @@ class SharedViewModel(
                             prev.copy(
                                 thumbnailURL = resolvedThumbnail ?: prev.thumbnailURL,
                                 isVideo = now.isVideo(),
+                                canvasData = null,
+                                lyricsData = null,
+                                songInfoData = null,
                             )
                         }
                     }

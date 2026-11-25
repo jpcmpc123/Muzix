@@ -13,14 +13,26 @@ private const val INTERLUDE_MIN_GAP_MS = 3_000L
 private const val INTERLUDE_DOT_COUNT = 3
 private const val INTERLUDE_DOT = "\u2022"
 private const val RICH_SYNC_CACHE_MAX_ENTRIES = 512
-private const val DISPLAY_LINES_CACHE_MAX_ENTRIES = 16
+private const val DISPLAY_LINES_CACHE_MAX_ENTRIES = 24
 private const val ROMANIZATION_CACHE_MAX_ENTRIES = 16
 private const val TRANSLATION_CACHE_MAX_ENTRIES = 16
 
 internal data class DisplayLines(
     val lines: List<Line>,
     val interludeIndices: Set<Int>,
+    val plainWords: List<String> = lines.map { it.words.stripRichSyncTimestamps() },
 )
+
+private class IdentityListKey(
+    val list: List<Line>,
+) {
+    override fun equals(other: Any?): Boolean = other is IdentityListKey && list === other.list
+
+    override fun hashCode(): Int {
+        val first = list.firstOrNull() ?: return 0
+        return (list.size * 31 + first.startTimeMs.hashCode()) * 31 + first.words.hashCode()
+    }
+}
 
 private data class RichSyncCacheKey(
     val words: String,
@@ -33,21 +45,20 @@ private class CachedRichSync(
 )
 
 private data class DisplayLinesCacheKey(
-    val lines: List<Line>,
+    val linesKey: IdentityListKey,
     val syncType: String?,
 )
 
 private data class RomanizationCacheKey(
-    val lines: List<Line>,
+    val linesKey: IdentityListKey,
     val interludeIndices: Set<Int>,
-    val syncType: String?,
     val languages: Set<RomanizationLanguage>,
     val japaneseReady: Boolean,
 )
 
 private data class TranslationCacheKey(
-    val originalLines: List<Line>,
-    val translatedLines: List<Line>,
+    val originalLinesKey: IdentityListKey,
+    val translatedLinesKey: IdentityListKey,
     val thresholdMs: Long,
 )
 
@@ -62,7 +73,7 @@ internal object LyricsUiPrep {
 
     private val displayLinesLock = Any()
     private val displayLinesCache =
-        object : LinkedHashMap<DisplayLinesCacheKey, DisplayLines>(16, 0.75f, true) {
+        object : LinkedHashMap<DisplayLinesCacheKey, DisplayLines>(24, 0.75f, true) {
             override fun removeEldestEntry(
                 eldest: MutableMap.MutableEntry<DisplayLinesCacheKey, DisplayLines>?,
             ): Boolean = size > DISPLAY_LINES_CACHE_MAX_ENTRIES
@@ -106,13 +117,21 @@ internal object LyricsUiPrep {
         syncType: String?,
     ): DisplayLines? {
         val source = lines.orEmpty()
-        if (syncType != "RICH_SYNCED" || source.size < 2) {
-            return DisplayLines(source, emptySet())
-        }
-        val key = DisplayLinesCacheKey(source, syncType)
+        if (source.isEmpty()) return DisplayLines(emptyList(), emptySet(), emptyList())
+        val key = DisplayLinesCacheKey(IdentityListKey(source), syncType)
         synchronized(displayLinesLock) {
             return displayLinesCache[key]
         }
+    }
+
+    fun buildImmediateFallbackDisplayLines(lines: List<Line>?): DisplayLines {
+        val source = lines.orEmpty()
+        if (source.isEmpty()) return DisplayLines(emptyList(), emptySet(), emptyList())
+        return DisplayLines(
+            lines = source,
+            interludeIndices = emptySet(),
+            plainWords = source.map { it.words.stripRichSyncTimestamps() },
+        )
     }
 
     fun getOrBuildDisplayLines(
@@ -120,10 +139,8 @@ internal object LyricsUiPrep {
         syncType: String?,
     ): DisplayLines {
         val source = lines.orEmpty()
-        if (syncType != "RICH_SYNCED" || source.size < 2) {
-            return DisplayLines(source, emptySet())
-        }
-        val key = DisplayLinesCacheKey(source, syncType)
+        if (source.isEmpty()) return DisplayLines(emptyList(), emptySet(), emptyList())
+        val key = DisplayLinesCacheKey(IdentityListKey(source), syncType)
         synchronized(displayLinesLock) {
             displayLinesCache[key]?.let { return it }
         }
@@ -142,7 +159,7 @@ internal object LyricsUiPrep {
         japaneseReady: Boolean,
     ): Map<Int, String>? {
         if (languages.isEmpty() || lines.isEmpty()) return emptyMap()
-        val key = RomanizationCacheKey(lines, interludeIndices, syncType, languages, japaneseReady)
+        val key = RomanizationCacheKey(IdentityListKey(lines), interludeIndices, languages, japaneseReady)
         synchronized(romanizationLock) {
             return romanizationCache[key]
         }
@@ -157,16 +174,15 @@ internal object LyricsUiPrep {
         romanizer: LyricsRomanizerRepository,
     ): Map<Int, String> {
         if (languages.isEmpty() || lines.isEmpty()) return emptyMap()
-        val key = RomanizationCacheKey(lines, interludeIndices, syncType, languages, japaneseReady)
+        val key = RomanizationCacheKey(IdentityListKey(lines), interludeIndices, languages, japaneseReady)
         synchronized(romanizationLock) {
             romanizationCache[key]?.let { return it }
         }
 
-        val isRichSynced = syncType == "RICH_SYNCED"
         val computed = HashMap<Int, String>(lines.size)
         lines.forEachIndexed { index, line ->
             if (index !in interludeIndices && line.words.isNotBlank()) {
-                val source = if (isRichSynced) line.words.stripRichSyncTimestamps() else line.words
+                val source = line.words.stripRichSyncTimestamps()
                 val romanized = romanizer.romanize(source, languages)
                 if (!romanized.isNullOrBlank()) {
                     computed[index] = romanized
@@ -186,7 +202,7 @@ internal object LyricsUiPrep {
     ): Map<Int, String>? {
         val translated = translatedLines.orEmpty()
         if (originalLines.isEmpty() || translated.isEmpty()) return emptyMap()
-        val key = TranslationCacheKey(originalLines, translated, thresholdMs)
+        val key = TranslationCacheKey(IdentityListKey(originalLines), IdentityListKey(translated), thresholdMs)
         synchronized(translationLock) {
             return translationCache[key]
         }
@@ -199,7 +215,7 @@ internal object LyricsUiPrep {
     ): Map<Int, String> {
         val translated = translatedLines.orEmpty()
         if (originalLines.isEmpty() || translated.isEmpty()) return emptyMap()
-        val key = TranslationCacheKey(originalLines, translated, thresholdMs)
+        val key = TranslationCacheKey(IdentityListKey(originalLines), IdentityListKey(translated), thresholdMs)
         synchronized(translationLock) {
             translationCache[key]?.let { return it }
         }
@@ -210,12 +226,32 @@ internal object LyricsUiPrep {
         return built
     }
 
+    fun resolveTranslatedLineAt(
+        originalLines: List<Line>?,
+        translatedLines: List<Line>?,
+        lineIndex: Int,
+        isSynced: Boolean = true,
+    ): String? {
+        if (lineIndex < 0 || originalLines.isNullOrEmpty() || translatedLines.isNullOrEmpty()) return null
+        if (!isSynced) {
+            return translatedLines
+                .getOrNull(lineIndex)
+                ?.words
+                ?.stripRichSyncTimestamps()
+                ?.takeIf { it.isNotBlank() }
+        }
+        return getOrBuildTranslatedLineMap(originalLines, translatedLines)[lineIndex]
+    }
+
     fun warmUp(lyrics: Lyrics) {
         val lines = lyrics.lines ?: return
-        if (lyrics.syncType != "RICH_SYNCED") return
         val display = getOrBuildDisplayLines(lines, lyrics.syncType)
-        display.lines.forEach { line ->
-            parseRichSyncLineCached(line.words, line.startTimeMs, line.endTimeMs)
+        if (lyrics.syncType == "RICH_SYNCED") {
+            // Also warm LINE_SYNCED shape in case the user has word-by-word highlight disabled.
+            getOrBuildDisplayLines(lines, "LINE_SYNCED")
+            display.lines.forEach { line ->
+                parseRichSyncLineCached(line.words, line.startTimeMs, line.endTimeMs)
+            }
         }
     }
 
@@ -226,6 +262,8 @@ internal object LyricsUiPrep {
     ) {
         val origLines = originalLyrics.lines ?: return
         val transLines = translatedLyrics.lines ?: return
+        // Warm both raw lines (used by mini-previews) and display lines (with interludes for LyricsView).
+        getOrBuildTranslatedLineMap(origLines, transLines, thresholdMs)
         val display = getOrBuildDisplayLines(origLines, originalLyrics.syncType)
         getOrBuildTranslatedLineMap(display.lines, transLines, thresholdMs)
     }
@@ -238,13 +276,7 @@ internal object LyricsUiPrep {
     }
 
     /**
-     * Maps each original line index to its closest translated line within [thresholdMs].
-     *
-     * Fast path (`O(N)`, zero sorting): when both lists have the exact same size and every entry's
-     * `startTimeMs` matches 1-to-1 (always true for Free/AI translations), maps directly in one
-     * pass. Falls back to the deterministic two-pointer alignment for community translations whose
-     * line counts or timestamps differ. Blank translated lines are omitted so Compose skips
-     * composing empty subtitle rows.
+     * Maps each original line index to its closest sanitized translated line within [thresholdMs].
      */
     internal fun computeSyncedTranslatedWordsByLineIndex(
         originalLines: List<Line>,
@@ -256,7 +288,7 @@ internal object LyricsUiPrep {
         if (originalLines.size == translatedLines.size && isAlignedOneToOne(originalLines, translatedLines, thresholdMs)) {
             val fastResult = HashMap<Int, String>(originalLines.size)
             for (i in originalLines.indices) {
-                val words = translatedLines[i].words.trim()
+                val words = translatedLines[i].words.stripRichSyncTimestamps()
                 if (words.isNotEmpty()) {
                     fastResult[i] = words
                 }
@@ -267,7 +299,7 @@ internal object LyricsUiPrep {
         val sortedTranslated =
             translatedLines
                 .mapNotNull { line ->
-                    val words = line.words.trim()
+                    val words = line.words.stripRichSyncTimestamps()
                     if (words.isEmpty()) return@mapNotNull null
                     val ts = line.startTimeMs.toLongOrNull() ?: return@mapNotNull null
                     ts to words
@@ -329,37 +361,25 @@ internal object LyricsUiPrep {
         return true
     }
 
-    /**
-     * Inserts a dots line into every silence of at least [INTERLUDE_MIN_GAP_MS] between two lines.
-     *
-     * The inserted line is an ordinary rich-synced [Line] carrying three dots, one timestamp each,
-     * dividing the silence into equal thirds. Written as real markup rather than handled by a special
-     * case in the renderer: it then goes through the same parser, the same wipe and the same layout as
-     * a sung line, which is the only way its dots land on the same baseline and left edge as the words
-     * above them.
-     *
-     * Rich sync only. It is the one format that records where a line STOPS, so it is the one format
-     * that can tell a real pause from a line whose end was simply never written down.
-     */
     private fun buildDisplayLines(
         source: List<Line>,
         syncType: String?,
     ): DisplayLines {
-        if (syncType != "RICH_SYNCED" || source.size < 2) return DisplayLines(source, emptySet())
+        if (syncType != "RICH_SYNCED" || source.size < 2) {
+            return DisplayLines(
+                lines = source,
+                interludeIndices = emptySet(),
+                plainWords = source.map { it.words.stripRichSyncTimestamps() },
+            )
+        }
 
         val out = ArrayList<Line>(source.size)
+        val outPlain = ArrayList<String>(source.size)
         val inserted = mutableSetOf<Int>()
         source.forEachIndexed { index, line ->
             out += line
+            outPlain += line.words.stripRichSyncTimestamps()
             val nextStartMs = source.getOrNull(index + 1)?.startTimeMs?.toLongOrNull() ?: return@forEachIndexed
-            // The rule, literally: once the line's LAST WORD has been lit for INTERLUDE_MIN_GAP_MS and
-            // the next line still has not begun, the dots take over from there.
-            //
-            // Measured from where that word STARTS, not where it ends, and the dots begin three seconds
-            // later rather than at the end of the line. Both of those matter for the same reason: the
-            // dots become the sung line the moment they start, so starting them any earlier drags the
-            // sheet away from a word the listener is still watching light up. For those three seconds
-            // the last lyric stays the sung line, which is what it still is.
             val lastWordStartMs =
                 parseRichSyncLineCached(line.words, line.startTimeMs, line.endTimeMs)
                     ?.words
@@ -371,8 +391,9 @@ internal object LyricsUiPrep {
             val interlude = interludeLine(dotsStartMs, nextStartMs) ?: return@forEachIndexed
             inserted += out.size
             out += interlude
+            outPlain += "$INTERLUDE_DOT $INTERLUDE_DOT $INTERLUDE_DOT"
         }
-        return DisplayLines(out, inserted)
+        return DisplayLines(out, inserted, outPlain)
     }
 
     /** Null when a timestamp will not fit the `MM:SS.cc` shape the rich-sync parser reads. */
@@ -399,7 +420,6 @@ internal object LyricsUiPrep {
     private fun richSyncTimestamp(ms: Long): String? {
         val centis = ms / 10
         val minutes = centis / 6000
-        // The parser's regex reads two digits of minutes for interludes.
         if (minutes > 99) return null
         return "<${twoDigits(minutes)}:${twoDigits((centis / 100) % 60)}.${twoDigits(centis % 100)}>"
     }

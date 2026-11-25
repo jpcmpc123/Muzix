@@ -253,9 +253,9 @@ internal fun rememberSoftwareBlurredLyricBitmap(
     paddingXPx: Int,
     mainStyle: TextStyle,
     subStyle: TextStyle?,
-    textMeasurer: TextMeasurer,
+    textMeasurer: TextMeasurer?,
 ): ImageBitmap? {
-    if (isHardwareRenderEffectBlurSupported()) return null
+    if (isHardwareRenderEffectBlurSupported() || textMeasurer == null) return null
     val targetBlur = resolveTargetBlurDp(distanceFromCurrent, blurEnabled, hasActiveLine, allLinesCurrent)
     val step = quantizeBlurStep(targetBlur.value)
     if (step <= 0 || fullWidthPx <= paddingXPx * 2 + 2) return null
@@ -375,46 +375,52 @@ fun AppleMusicLyricsLineItem(
     // would just look like a mistake.
     romanizedWords: String? = null,
     modifier: Modifier = Modifier,
+    mainStyleOverride: TextStyle? = null,
+    subStyleOverride: TextStyle? = null,
 ) {
+    val resolvedMainStyle =
+        mainStyleOverride
+            ?: typo().headlineLarge.copy(
+                fontSize = AppleMusicLyricFontSize,
+                lineHeight = AppleMusicLyricLineHeight,
+            )
+    val resolvedSubStyle =
+        if (romanizedWords != null || translatedWords != null) {
+            subStyleOverride
+                ?: typo().bodyMedium.copy(
+                    fontSize = AppleMusicSubLineFontSize,
+                    lineHeight = AppleMusicSubLineHeight,
+                )
+        } else {
+            null
+        }
     Column(modifier = modifier.fillMaxWidth()) {
         Spacer(modifier = Modifier.height(AppleMusicLyricGap))
         LyricText(
             text = originalWords,
             modifier = Modifier.fillMaxWidth(),
             color = if (isCurrent) Color.White else AppleMusicInactiveLineColor,
-            style =
-                typo().headlineLarge.copy(
-                    fontSize = AppleMusicLyricFontSize,
-                    lineHeight = AppleMusicLyricLineHeight,
-                ),
+            style = resolvedMainStyle,
         )
-        if (romanizedWords != null) {
+        if (romanizedWords != null && resolvedSubStyle != null) {
             Spacer(modifier = Modifier.height(AppleMusicMainToSubGap))
             LyricText(
                 text = romanizedWords,
                 alignmentText = originalWords,
                 modifier = Modifier.fillMaxWidth(),
-                style =
-                    typo().bodyMedium.copy(
-                        fontSize = AppleMusicSubLineFontSize,
-                        lineHeight = AppleMusicSubLineHeight,
-                    ),
+                style = resolvedSubStyle,
                 // Follows the line's own state exactly as the translation does: readable white-ish
                 // on the sung line, the same grey as the lyric everywhere else.
                 color = if (isCurrent) AppleMusicRomanizedColor else AppleMusicInactiveLineColor,
             )
         }
-        if (translatedWords != null) {
+        if (translatedWords != null && resolvedSubStyle != null) {
             Spacer(modifier = Modifier.height(AppleMusicMainToSubGap))
             LyricText(
                 text = translatedWords,
                 alignmentText = originalWords,
                 modifier = Modifier.fillMaxWidth(),
-                style =
-                    typo().bodyMedium.copy(
-                        fontSize = AppleMusicSubLineFontSize,
-                        lineHeight = AppleMusicSubLineHeight,
-                    ),
+                style = resolvedSubStyle,
                 // The colour still follows the line's own state; AMLL carries the whole sub-line at
                 // a flat 0.3 opacity on top of that, which is applied as a modifier so it composes
                 // with appleMusicLyricFocus's own dimming instead of fighting it.

@@ -45,9 +45,10 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -75,6 +76,7 @@ import com.maxrave.domain.data.model.lyrics.RomanizationDictionaryState
 import com.maxrave.domain.data.model.lyrics.RomanizationLanguage
 import com.maxrave.domain.lyrics.LyricsAttribution
 import com.maxrave.domain.repository.LyricsRomanizerRepository
+import com.maxrave.simpmusic.expect.ui.isHardwareRenderEffectBlurSupported
 import com.maxrave.simpmusic.expect.ui.isLyricsBlurSupported
 import com.maxrave.domain.data.model.metadata.Line
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentActions
@@ -307,10 +309,10 @@ fun LyricsView(
     // earlier moment is the one the sheet must light up for. Early in a track this can go negative,
     // which the `now <= 0L` guard below already reads as "no line yet" — correct, since in heard
     // time the song has not reached its first line.
-    val lyricsOffsetMs by dataStoreManager.lyricsOffsetMs.collectAsStateWithLifecycle(0)
+    val lyricsOffsetMsState = dataStoreManager.lyricsOffsetMs.collectAsStateWithLifecycle(0)
     val currentTimeMsState =
         remember {
-            derivedStateOf { timeLineState.value.current - lyricsOffsetMs }
+            derivedStateOf { timeLineState.value.current - lyricsOffsetMsState.value }
         }
 
     // Read here rather than taken as a parameter: all four call sites (the fullscreen sheet and
@@ -330,85 +332,89 @@ fun LyricsView(
             lyricsData.lyrics.syncType
         }
 
-    // Read here for the same reason the style is: all four call sites want the user's one choice,
-    // so threading it through each of them would be four copies of the same lookup. The stored
-    // value is a comma-separated list of enum names; parsing it per RECOMPOSITION would rebuild the
-    // set on every frame of the sung-line animation, hence the remember on the raw string.
     val romanizationStored by dataStoreManager.romanizationLanguages.collectAsStateWithLifecycle("")
     val romanizationLanguages =
         remember(romanizationStored) { RomanizationLanguage.parse(romanizationStored) }
-    // Lyrics on screen with Japanese selected is when the dictionary pack is needed, so a missing
-    // one is fetched from here: after a reinstall that restored a backup the selection is back but
-    // the pack is not, and before this only the settings dialog ever started a download. Keyed on
-    // the lyrics too, so a failed attempt is tried again on a later song (the repository spaces
-    // those retries out).
     LaunchedEffect(romanizationLanguages, lyricsData.lyrics) {
         if (RomanizationLanguage.JAPANESE in romanizationLanguages) romanizer.ensureJapaneseDictionary()
     }
-    // A Japanese line read before the pack is on disk comes back null, and the remember on each
-    // line would keep that null for as long as the line stays on screen. Keyed on this, the
-    // visible lines are read again the moment the pack lands — usually with these lyrics open,
-    // since the effect above is what started the download. Derived, so the other state changes
-    // (downloading, failed) do not touch the lines at all.
     val japaneseDictionaryState by romanizer.japaneseDictionaryState.collectAsStateWithLifecycle()
     val japaneseDictionaryReady by remember {
         derivedStateOf { japaneseDictionaryState == RomanizationDictionaryState.READY }
     }
 
-    // One text row plus the padding that separates two lyric items — the exact amount of the
-    // previous line that stays on screen above the sung one.
     val exposedRowPx =
         with(LocalDensity.current) {
             AppleMusicLyricLineHeight.toPx() + AppleMusicLyricGap.toPx()
         }
 
-    // The lines this sheet actually renders: the sheet's own, plus a dots line inserted into every
-    // long silence. Everything below counts indices against THIS list — the sung line, the blur
-    // distance, the scroll target and the translation lookup — so the dots line is a line like any
-    // other rather than something drawn on top of one.
-    val displayLines by produceState(
-        initialValue =
-            LyricsUiPrep.peekDisplayLines(lyricsData.lyrics.lines, effectiveSyncType)
-                ?: DisplayLines(lyricsData.lyrics.lines.orEmpty(), emptySet()),
-        key1 = lyricsData.lyrics.lines,
-        key2 = effectiveSyncType,
-    ) {
-        val cached = LyricsUiPrep.peekDisplayLines(lyricsData.lyrics.lines, effectiveSyncType)
-        value =
-            cached
-                ?: withContext(Dispatchers.Default) {
+    // Keyed remember avoids produceState's stale-value retention across song / syncType switches,
+    // preventing previous-song RICH_SYNCED markup (<mm:ss.xx>) from flashing on Frame 0.
+    val displayLinesTargetKey =
+        remember(lyricsData.lyrics.lines, effectiveSyncType) {
+            lyricsData.lyrics.lines to effectiveSyncType
+        }
+    var resolvedDisplayLines by remember(displayLinesTargetKey) {
+        mutableStateOf(LyricsUiPrep.peekDisplayLines(lyricsData.lyrics.lines, effectiveSyncType))
+    }
+    LaunchedEffect(displayLinesTargetKey) {
+        if (resolvedDisplayLines == null) {
+            resolvedDisplayLines =
+                withContext(Dispatchers.Default) {
                     LyricsUiPrep.getOrBuildDisplayLines(lyricsData.lyrics.lines, effectiveSyncType)
                 }
+        }
     }
+    val displayLines =
+        resolvedDisplayLines
+            ?: remember(displayLinesTargetKey) {
+                LyricsUiPrep.buildImmediateFallbackDisplayLines(lyricsData.lyrics.lines)
+            }
 
-    val romanizedByLineIndex by produceState<Map<Int, String>>(
-        initialValue =
-            LyricsUiPrep.peekRomanizedLines(
-                lines = displayLines.lines,
-                interludeIndices = displayLines.interludeIndices,
-                syncType = lyricsData.lyrics.syncType,
-                languages = romanizationLanguages,
-                japaneseReady = japaneseDictionaryReady,
-            ) ?: emptyMap(),
-        key1 = displayLines,
-        key2 = romanizationLanguages to lyricsData.lyrics.syncType,
-        key3 = japaneseDictionaryReady,
-    ) {
-        value =
+    val romanizedTargetKey =
+        remember(displayLines, romanizationLanguages, lyricsData.lyrics.syncType, japaneseDictionaryReady) {
+            listOf(displayLines, romanizationLanguages, lyricsData.lyrics.syncType, japaneseDictionaryReady)
+        }
+    var romanizedByLineIndex by remember(romanizedTargetKey) {
+        mutableStateOf(
             if (romanizationLanguages.isEmpty()) {
                 emptyMap()
             } else {
-                withContext(Dispatchers.Default) {
-                    LyricsUiPrep.getOrComputeRomanizedLines(
-                        lines = displayLines.lines,
-                        interludeIndices = displayLines.interludeIndices,
-                        syncType = lyricsData.lyrics.syncType,
-                        languages = romanizationLanguages,
-                        japaneseReady = japaneseDictionaryReady,
-                        romanizer = romanizer,
-                    )
-                }
-            }
+                LyricsUiPrep.peekRomanizedLines(
+                    lines = displayLines.lines,
+                    interludeIndices = displayLines.interludeIndices,
+                    syncType = lyricsData.lyrics.syncType,
+                    languages = romanizationLanguages,
+                    japaneseReady = japaneseDictionaryReady,
+                ) ?: emptyMap()
+            },
+        )
+    }
+    LaunchedEffect(romanizedTargetKey) {
+        if (romanizationLanguages.isEmpty()) {
+            romanizedByLineIndex = emptyMap()
+        } else {
+            val cached =
+                LyricsUiPrep.peekRomanizedLines(
+                    lines = displayLines.lines,
+                    interludeIndices = displayLines.interludeIndices,
+                    syncType = lyricsData.lyrics.syncType,
+                    languages = romanizationLanguages,
+                    japaneseReady = japaneseDictionaryReady,
+                )
+            romanizedByLineIndex =
+                cached
+                    ?: withContext(Dispatchers.Default) {
+                        LyricsUiPrep.getOrComputeRomanizedLines(
+                            lines = displayLines.lines,
+                            interludeIndices = displayLines.interludeIndices,
+                            syncType = lyricsData.lyrics.syncType,
+                            languages = romanizationLanguages,
+                            japaneseReady = japaneseDictionaryReady,
+                            romanizer = romanizer,
+                        )
+                    }
+        }
     }
 
     val timedLineIndexes =
@@ -418,17 +424,6 @@ fun LyricsView(
                     .mapIndexedNotNull { index, line ->
                         line.startTimeMs.toLongOrNull()?.let { TimedLineIndex(index, it) }
                     }
-            // An unsynced sheet still carries a startTimeMs on every line — the literal "0", on all
-            // 307 unsynced rows of the author's own library. Those parse perfectly well, so this
-            // list came out full of zeros and [activeIndexAt], asked for "the last line at or before
-            // now", answered with the LAST LINE OF THE SONG from the first second onward. Every
-            // other line then sat at a huge distance from it and blurred to maximum: the whole
-            // sheet unreadable, with the one sharp line parked off the bottom of the screen.
-            //
-            // Tested on the timestamps rather than on syncType because it is the timestamps the
-            // search actually reads: one distinct value cannot order anything, whatever the sheet
-            // calls itself. With the list empty, currentLineIndex stays -1, and the renderer's
-            // no-active-line branch dims every line uniformly and blurs none of them.
             if (timed.distinctBy { it.startTimeMs }.size <= 1) {
                 emptyList()
             } else {
@@ -438,45 +433,65 @@ fun LyricsView(
 
     val currentLineIndex by remember(timedLineIndexes) {
         derivedStateOf {
-            val now = timeLineState.value.current - lyricsOffsetMs
+            val now = timeLineState.value.current - lyricsOffsetMsState.value
             if (now <= 0L) -1 else timedLineIndexes.activeIndexAt(now)
         }
     }
 
-    // Read off the SAME list the blur fix built, not off syncType: it is the timestamps that decide
-    // whether a line can ever be "the sung one", and [timedLineIndexes] is already empty exactly
-    // when they cannot order anything. Every line then renders as the current line — white, fully
-    // opaque, unblurred — because a sheet with no sung line has no line to contrast one against.
-    // Distinct from a SYNCED sheet's pre-roll, where currentLineIndex is also -1 but a sung line is
-    // on its way and PRE_ROLL_LINE_ALPHA deliberately keeps the page dimmer than it.
     val allLinesCurrent = timedLineIndexes.isEmpty()
 
     val visibleTranslatedLines = if (isTranslationVisible) lyricsData.translatedLyrics?.first?.lines else null
-    val syncedTranslatedWordsByLineIndex by
-        produceState(
-            initialValue =
-                if (visibleTranslatedLines.isNullOrEmpty()) {
-                    emptyMap()
-                } else {
-                    LyricsUiPrep.peekTranslatedLineMap(displayLines.lines, visibleTranslatedLines) ?: emptyMap()
-                },
-            key1 = displayLines,
-            key2 = visibleTranslatedLines,
-        ) {
-            if (visibleTranslatedLines.isNullOrEmpty()) {
-                value = emptyMap()
-                return@produceState
-            }
-            val cached = LyricsUiPrep.peekTranslatedLineMap(displayLines.lines, visibleTranslatedLines)
-            if (cached != null) {
-                value = cached
-                return@produceState
-            }
-            value =
-                withContext(Dispatchers.Default) {
-                    LyricsUiPrep.getOrBuildTranslatedLineMap(displayLines.lines, visibleTranslatedLines)
-                }
+    val translationTargetKey =
+        remember(displayLines, visibleTranslatedLines) {
+            displayLines to visibleTranslatedLines
         }
+    var syncedTranslatedWordsByLineIndex by remember(translationTargetKey) {
+        mutableStateOf(
+            if (visibleTranslatedLines.isNullOrEmpty()) {
+                emptyMap()
+            } else {
+                LyricsUiPrep.peekTranslatedLineMap(displayLines.lines, visibleTranslatedLines) ?: emptyMap()
+            },
+        )
+    }
+    LaunchedEffect(translationTargetKey) {
+        if (visibleTranslatedLines.isNullOrEmpty()) {
+            syncedTranslatedWordsByLineIndex = emptyMap()
+            return@LaunchedEffect
+        }
+        val cached = LyricsUiPrep.peekTranslatedLineMap(displayLines.lines, visibleTranslatedLines)
+        if (cached != null) {
+            syncedTranslatedWordsByLineIndex = cached
+            return@LaunchedEffect
+        }
+        syncedTranslatedWordsByLineIndex =
+            withContext(Dispatchers.Default) {
+                LyricsUiPrep.getOrBuildTranslatedLineMap(displayLines.lines, visibleTranslatedLines)
+            }
+    }
+
+    val sheetKey =
+        remember(displayLines.lines, lyricsData.lyrics.syncType) {
+            displayLines.lines.firstOrNull()?.let { first ->
+                "${lyricsData.lyrics.syncType.orEmpty()}_${displayLines.lines.size}_${first.startTimeMs}_${first.words.hashCode()}"
+            } ?: "${lyricsData.lyrics.syncType.orEmpty()}_0"
+        }
+
+    LaunchedEffect(sheetKey) {
+        if (currentLineIndex < 0 && displayLines.lines.isNotEmpty()) {
+            listState.scrollToItem(0)
+        }
+    }
+
+    // Single smooth playhead shared across all rich-synced rows instead of one coroutine per item.
+    val sharedSmoothPlayhead =
+        rememberSmoothPlayhead(
+            rawMs = 0L,
+            rawMsState = currentTimeMsState,
+            enabled = effectiveSyncType == "RICH_SYNCED" && isPlaying && currentLineIndex >= 0,
+            running = isPlaying,
+        )
+
     // The Apple Music handover: rows set off one behind another instead of as one block. Per sheet,
     // so a new song's first line counts as the next line rather than as a jump.
     val stagger = remember(displayLines) { LyricsStagger() }
@@ -487,12 +502,6 @@ fun LyricsView(
             (lyricsData.lyrics.syncType == "LINE_SYNCED" || lyricsData.lyrics.syncType == "RICH_SYNCED")
         ) {
             if (appleStyle) {
-                // NEAR the top, not against it: Apple leaves exactly ONE physical row of the
-                // previous lyric visible above the line being sung. Scrolling to `index - 1`
-                // instead — which is what this did first — anchors the whole previous ITEM, and a
-                // lyric that wraps is one item spanning two or three rows, so the entire wrapped
-                // block hung above the sung line. Anchoring the sung line itself and backing off by
-                // one row's height is row-accurate no matter how the previous line wrapped.
                 listState.animateScrollAndAnchorItemTop(currentLineIndex, -exposedRowPx, stagger)
             } else {
                 listState.animateScrollAndCentralizeItem(currentLineIndex)
@@ -501,10 +510,6 @@ fun LyricsView(
     }
 
     BoxWithConstraints(modifier = modifier) {
-        // Apple keeps the sung line at the TOP even when it is the last line of the song — which
-        // is only possible if there is empty space below it to scroll into. Without this tail the
-        // list simply runs out of content and the closing lines pile up against the bottom edge,
-        // so the final third of every song reads bottom-anchored instead of top-anchored.
         val tailPadding = if (appleStyle) maxHeight * 0.72f else 0.dp
         val baseBodyMedium = typo().bodyMedium
         val baseHeadlineLarge = typo().headlineLarge
@@ -530,7 +535,8 @@ fun LyricsView(
                     null
                 }
             }
-        val softwareTextMeasurer = rememberTextMeasurer()
+        val hardwareBlur = appleStyle && isHardwareRenderEffectBlurSupported()
+        val softwareTextMeasurer = if (appleStyle && !hardwareBlur) rememberTextMeasurer() else null
         val localDensity = LocalDensity.current
         val appleFullWidthPx = with(localDensity) { maxWidth.roundToPx() }
         val applePaddingXPx = with(localDensity) { AppleMusicLyricPaddingX.roundToPx() }
@@ -541,20 +547,10 @@ fun LyricsView(
         ) {
             items(
                 count = displayLines.lines.size,
-                // A Line has no id, and its startTimeMs alone is not unique — an unsynced sheet
-                // carries "0" on every row and the inserted interlude lines share their
-                // neighbours' times — so the key pairs the line's own start time with its index.
-                // The display list is built once per sheet and never reordered, so the pair is
-                // stable for the list's whole life.
-                key = { index -> "${displayLines.lines[index].startTimeMs}_$index" },
+                key = { index -> "${sheetKey}_${displayLines.lines[index].startTimeMs}_$index" },
             ) { index ->
                 val line = displayLines.lines.getOrNull(index)
-                // A dots line stands for silence, so it has nothing to translate or romanize. Worth
-                // saying out loud for the translation: that map matches by TIME, and the silence
-                // begins close enough to the line before it that it would otherwise pick up that
-                // line's translation and print it under the dots.
                 val isInterlude = index in displayLines.interludeIndices
-                // Translated lyrics: synced -> precomputed map by line index, unsynced -> by index.
                 val translatedWords =
                     when {
                         !isTranslationVisible || isInterlude -> null
@@ -564,22 +560,13 @@ fun LyricsView(
                             visibleTranslatedLines
                                 ?.getOrNull(index)
                                 ?.words
+                                ?.stripRichSyncTimestamps()
                                 ?.takeIf { it.isNotBlank() }
                     }
 
                 line?.words?.let { words ->
-                    // Signed distance from the line being sung. The shell is the only place that
-                    // knows it, and it is the ONLY extra input the Apple Music renderer needs —
-                    // which is why the split lives here and not inside the line items.
                     val distanceFromCurrent = if (currentLineIndex < 0) 0 else index - currentLineIndex
 
-                    // Romanization is its OWN row, between the original and the translation, so the
-                    // reader can follow the original script and still know how to pronounce it.
-                    //
-                    // Being a separate row is also what makes rich sync painless: the original
-                    // keeps its <mm:ss.xx> markers untouched and goes on lighting up word by word,
-                    // while this row is plain static text. It only has to have the markers STRIPPED
-                    // before romanizing, or the timestamps themselves would be transliterated.
                     val romanizedWords =
                         if (isInterlude || romanizationLanguages.isEmpty()) {
                             null
@@ -588,17 +575,11 @@ fun LyricsView(
                         }
 
                     val plainDisplayWords =
-                        remember(words, lyricsData.lyrics.syncType) {
-                            if (lyricsData.lyrics.syncType == "RICH_SYNCED") {
-                                words.stripRichSyncTimestamps()
-                            } else {
-                                words
-                            }
-                        }
+                        displayLines.plainWords.getOrNull(index)
+                            ?: remember(words) { words.stripRichSyncTimestamps() }
 
                     val renderLine: @Composable () -> Unit = {
                         when {
-                            // Rich sync: parse and use RichSyncLyricsLineItem when word-by-word highlight is enabled
                             effectiveSyncType == "RICH_SYNCED" -> {
                                 val parsedLine =
                                     remember(words, line.startTimeMs, line.endTimeMs) {
@@ -606,10 +587,6 @@ fun LyricsView(
                                     }
 
                                 if (parsedLine != null) {
-                                    // Reused verbatim by BOTH styles: word-by-word highlighting is
-                                    // already what Apple does with a rich-synced line, so there is
-                                    // nothing to re-implement — only the focus treatment differs,
-                                    // and that is applied by the wrapper below.
                                     RichSyncLyricsLineItem(
                                         parsedLine = parsedLine,
                                         translatedWords = translatedWords,
@@ -624,9 +601,6 @@ fun LyricsView(
                                         translatedStyleOverride = appleSubLineStyle,
                                         customPadding = if (appleStyle) AppleMusicLyricGap else 12.dp,
                                         wrappedLineSpacing = if (appleStyle) AppleMusicWrappedLineSpacing else 0.dp,
-                                        // Apple takes its click from the wrapper Column below, which
-                                        // covers the translation too; a click here as well would put
-                                        // a second, smaller target on top of it.
                                         modifier =
                                             if (appleStyle) {
                                                 Modifier
@@ -640,23 +614,18 @@ fun LyricsView(
                                                 }
                                             },
                                         currentTimeMsState = currentTimeMsState,
+                                        sharedPlayheadMsState = sharedSmoothPlayhead,
                                     )
                                 } else if (appleStyle) {
-                                    // Parsing failed — fall back to a plain line, but still the
-                                    // Apple-shaped one, or a single unparsable line would render
-                                    // at a different size than every line around it.
                                     AppleMusicLyricsLineItem(
                                         originalWords = plainDisplayWords,
                                         translatedWords = translatedWords,
-                                        // Same clause as the line-synced branch below, and it has to
-                                        // be here too: [allLinesCurrent] already lifts this line's
-                                        // opacity to full through appleMusicLyricFocus, so without it
-                                        // the line would come out fully opaque in grey ink.
                                         isCurrent = index == currentLineIndex || allLinesCurrent,
                                         romanizedWords = romanizedWords,
+                                        mainStyleOverride = appleMainStyle,
+                                        subStyleOverride = appleSubLineStyle,
                                     )
                                 } else {
-                                    // Fallback to regular line item if parsing fails
                                     LyricsLineItem(
                                         originalWords = plainDisplayWords,
                                         translatedWords = translatedWords,
@@ -676,23 +645,17 @@ fun LyricsView(
                                 }
                             }
 
-                            // Line sync (or rich sync displayed whole-line) or unsynced
                             appleStyle -> {
                                 AppleMusicLyricsLineItem(
                                     originalWords = plainDisplayWords,
                                     translatedWords = translatedWords,
                                     romanizedWords = romanizedWords,
-                                    // Strictly the sung line — NOT Classic's `|| syncType != LINE_SYNCED`.
-                                    // That clause keys off syncType, which lit every line of a
-                                    // LINE_SYNCED sheet too and put two lit lines on screen at once.
-                                    // [allLinesCurrent] is the narrow version: it fires only when the
-                                    // timestamps genuinely cannot order anything, i.e. an unsynced
-                                    // sheet, where every line being current is the wanted result.
                                     isCurrent = index == currentLineIndex || allLinesCurrent,
+                                    mainStyleOverride = appleMainStyle,
+                                    subStyleOverride = appleSubLineStyle,
                                 )
                             }
 
-                            // Line sync (or rich sync displayed whole-line) or unsynced: use existing LyricsLineItem
                             else -> {
                                 LyricsLineItem(
                                     originalWords = plainDisplayWords,
@@ -1087,14 +1050,16 @@ fun RichSyncLyricsLineItem(
     wrappedLineSpacing: Dp = 0.dp,
     modifier: Modifier = Modifier,
     currentTimeMsState: State<Long>? = null,
+    sharedPlayheadMsState: State<Long>? = null,
 ) {
     val playhead =
-        rememberSmoothPlayhead(
-            rawMs = currentTimeMs,
-            rawMsState = currentTimeMsState,
-            enabled = isCurrent,
-            running = isPlaying,
-        )
+        sharedPlayheadMsState
+            ?: rememberSmoothPlayhead(
+                rawMs = currentTimeMs,
+                rawMsState = currentTimeMsState,
+                enabled = isCurrent,
+                running = isPlaying,
+            )
     val originalWords = remember(parsedLine.words) { parsedLine.words.joinToString(" ") { it.text } }
     val lineDirection = rememberLyricLayoutDirection(originalWords)
 
@@ -1123,22 +1088,21 @@ fun RichSyncLyricsLineItem(
                     if (wrappedLineSpacing > 0.dp) Arrangement.spacedBy(wrappedLineSpacing) else Arrangement.Center,
             ) {
                 parsedLine.words.forEachIndexed { index, wordTiming ->
-                    // Calculate word end time (start time of next word or line end time)
-                    // If last word and lineEndTimeMs is invalid (Long.MAX_VALUE), estimate based on previous word duration
+                    // Calculate word end time (explicit closing tag -> next word start -> line end -> estimate)
                     val wordEndTimeMs =
-                        if (index < parsedLine.words.size - 1) {
-                            parsedLine.words[index + 1].startTimeMs
-                        } else if (parsedLine.lineEndTimeMs == Long.MAX_VALUE || parsedLine.lineEndTimeMs <= wordTiming.startTimeMs) {
-                            // Estimate: use previous word duration or default 500ms
-                            if (index > 0 && parsedLine.words[index - 1].startTimeMs < wordTiming.startTimeMs) {
-                                val prevWordDuration = wordTiming.startTimeMs - parsedLine.words[index - 1].startTimeMs
-                                wordTiming.startTimeMs + prevWordDuration
+                        wordTiming.endTimeMs?.takeIf { it > wordTiming.startTimeMs }
+                            ?: if (index < parsedLine.words.size - 1) {
+                                parsedLine.words[index + 1].startTimeMs
+                            } else if (parsedLine.lineEndTimeMs == Long.MAX_VALUE || parsedLine.lineEndTimeMs <= wordTiming.startTimeMs) {
+                                if (index > 0 && parsedLine.words[index - 1].startTimeMs < wordTiming.startTimeMs) {
+                                    val prevWordDuration = wordTiming.startTimeMs - parsedLine.words[index - 1].startTimeMs
+                                    wordTiming.startTimeMs + prevWordDuration
+                                } else {
+                                    wordTiming.startTimeMs + 500L
+                                }
                             } else {
-                                wordTiming.startTimeMs + 500L // Default 500ms if no reference
+                                parsedLine.lineEndTimeMs
                             }
-                        } else {
-                            parsedLine.lineEndTimeMs
-                        }
                     AnimatedWord(
                         word = wordTiming.text,
                         lineDirection = lineDirection,
@@ -1154,6 +1118,7 @@ fun RichSyncLyricsLineItem(
                         glow = glow,
                         isLastWord = index == parsedLine.words.lastIndex,
                         pendingColorOverride = pendingColorOverride,
+                        lineKey = parsedLine,
                     )
                 }
             }
@@ -1205,6 +1170,7 @@ private fun AnimatedWord(
     isLastWord: Boolean = false,
     // Null keeps Classic's DimRichPendingColor untouched.
     pendingColorOverride: Color? = null,
+    lineKey: Any? = null,
 ) {
     val wordBidi =
         remember(word, lineDirection) {
@@ -1231,7 +1197,7 @@ private fun AnimatedWord(
     // avoids per-word coroutine startup delay and backward snap jitter on fast vocals.
     val wordDurationMs = (wordEndTimeMs - wordStartTimeMs).coerceAtLeast(1L)
     val progressTracker =
-        remember(wordStartTimeMs, wordEndTimeMs) {
+        remember(lineKey, wordStartTimeMs, wordEndTimeMs) {
             WordProgressTracker(maxProgress = if (isPast) 1f else 0f)
         }
 
