@@ -1,13 +1,19 @@
 package com.maxrave.simpmusic.ui.component
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -24,6 +30,15 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+
+/**
+ * Whether playback is actively running (`controllerState.isPlaying`).
+ * Provided at the root in [com.maxrave.simpmusic.App] so song rows collapse their equalizer bars
+ * smoothly to a silent/paused state without extra per-row state collection.
+ */
+val LocalIsPlaybackActive = compositionLocalOf { false }
+
+private const val AUDIO_BAR_PAUSED_HEIGHT = 8f
 
 /**
  * The two looping indicators that used to be Lottie files.
@@ -44,26 +59,75 @@ import kotlin.math.sin
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Six-bar equalizer shown in place of the artwork while a row is the playing one.
+ * Six-bar equalizer shown in place of the artwork while a row is the active track.
  *
- * What the source actually does, all of which is easy to get wrong by eye:
- * - Bars grow from the VERTICAL CENTRE (every keyframe is centred on y=75 of a 150-tall comp),
- *   not up from a baseline.
- * - They occupy the middle THIRD of the width: six 6-wide capsules on a 12 pitch, spanning
- *   x 70.8..130.9 of 200. Spreading them across the full box is far too wide.
- * - The fill is a fixed cyan, not a theme colour.
- * - One loop is 1.44s — seven keyframes, 24 frames apart, at 100fps.
- *
- * The motion lives in animated PATHS (the rectangle is redrawn vertex by vertex each keyframe),
- * not in any transform, which is why every layer and parent in the file reads `p=(0,0)`.
+ * When [isAnimating] is false (paused), the bars smoothly collapse over 280 ms down to minimal
+ * resting bars ("muted/paused") and tear down the `InfiniteTransition` so paused lists incur zero
+ * background frame wakeups.
  */
 @Composable
 fun AudioPlayingIndicator(
     modifier: Modifier = Modifier,
     color: Color = AudioIndicatorCyan,
+    isAnimating: Boolean = true,
 ) {
+    val amplitude by animateFloatAsState(
+        targetValue = if (isAnimating) 1f else 0f,
+        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+        label = "audioBarAmplitude",
+    )
+    val barAlpha by animateFloatAsState(
+        targetValue = if (isAnimating) 1f else 0.58f,
+        animationSpec = tween(durationMillis = 280),
+        label = "audioBarAlpha",
+    )
+    val livePhase: State<Float>? =
+        if (isAnimating) {
+            rememberAudioPlayingPhase()
+        } else {
+            null
+        }
+    val frozenPhase = remember { mutableFloatStateOf(0f) }
+
+    Canvas(modifier = modifier) {
+        val currentPhase =
+            if (livePhase != null) {
+                livePhase.value.also { frozenPhase.floatValue = it }
+            } else {
+                frozenPhase.floatValue
+            }
+        val activeAmplitude = amplitude
+        val effectiveColor = color.copy(alpha = color.alpha * barAlpha)
+        val scale = minOf(size.width / AUDIO_COMP_WIDTH, size.height / AUDIO_COMP_HEIGHT)
+        val originX = (size.width - AUDIO_COMP_WIDTH * scale) / 2f
+        val originY = (size.height - AUDIO_COMP_HEIGHT * scale) / 2f
+        val centreY = originY + AUDIO_COMP_CENTRE_Y * scale
+        val strokeWidth = AUDIO_BAR_WIDTH * scale
+        val capRadius = strokeWidth / 2f
+
+        AUDIO_BAR_X.forEachIndexed { bar, barX ->
+            val animatedHeight = audioBarHeight(bar, currentPhase)
+            val height =
+                (AUDIO_BAR_PAUSED_HEIGHT + (animatedHeight - AUDIO_BAR_PAUSED_HEIGHT) * activeAmplitude) * scale
+            // Round caps extend half a stroke past each end, so the drawn segment is the bar minus
+            // its two caps — otherwise every bar renders one full stroke width too tall.
+            val half = (height / 2f - capRadius).coerceAtLeast(0f)
+            val x = originX + barX * scale
+            drawLine(
+                color = effectiveColor,
+                start = Offset(x, centreY - half),
+                end = Offset(x, centreY + half),
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round,
+            )
+        }
+    }
+}
+
+@Composable
+private fun rememberAudioPlayingPhase(): State<Float> {
     val transition = rememberInfiniteTransition(label = "audioPlaying")
-    val phase = transition.animateFloat(
+    return transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec =
@@ -73,31 +137,6 @@ fun AudioPlayingIndicator(
             ),
         label = "phase",
     )
-
-    Canvas(modifier = modifier) {
-        val currentPhase = phase.value
-        val scale = minOf(size.width / AUDIO_COMP_WIDTH, size.height / AUDIO_COMP_HEIGHT)
-        val originX = (size.width - AUDIO_COMP_WIDTH * scale) / 2f
-        val originY = (size.height - AUDIO_COMP_HEIGHT * scale) / 2f
-        val centreY = originY + AUDIO_COMP_CENTRE_Y * scale
-        val strokeWidth = AUDIO_BAR_WIDTH * scale
-        val capRadius = strokeWidth / 2f
-
-        AUDIO_BAR_X.forEachIndexed { bar, barX ->
-            val height = audioBarHeight(bar, currentPhase) * scale
-            // Round caps extend half a stroke past each end, so the drawn segment is the bar minus
-            // its two caps — otherwise every bar renders one full stroke width too tall.
-            val half = (height / 2f - capRadius).coerceAtLeast(0f)
-            val x = originX + barX * scale
-            drawLine(
-                color = color,
-                start = Offset(x, centreY - half),
-                end = Offset(x, centreY + half),
-                strokeWidth = strokeWidth,
-                cap = StrokeCap.Round,
-            )
-        }
-    }
 }
 
 /**

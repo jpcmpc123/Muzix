@@ -1216,53 +1216,28 @@ fun PlaylistScreen(
                         val item = filteredTrack.getOrNull(index)
                         if (item != null) {
                             Column {
-                                if (playingTrack?.videoId == item.videoId && isPlaying) {
-                                    SongFullWidthItems(
-                                        forceDark = true,
-                                        isPlaying = true,
-                                        track = item,
-                                        localSongOverride = localSongById[item.videoId],
-                                        hasLocalSongOverride = true,
-                                        onMoreClickListener = { onItemMoreClick(it) },
-                                        onClickListener = {
-                                            Logger.w("PlaylistScreen", "index: $index")
-                                            onPlaylistItemClick(it)
-                                        },
-                                        onAddToQueue = {
-                                            sharedViewModel.addListToQueue(
-                                                arrayListOf(item),
-                                            )
-                                        },
-                                        selectionMode = selectionState.isActive,
-                                        isSelected = selectionState.isSelected(item.videoId),
-                                        onLongClick = { selectionState.start(it) },
-                                        onSelectToggle = { selectionState.toggle(it) },
-                                        modifier = Modifier,
-                                    )
-                                } else {
-                                    SongFullWidthItems(
-                                        forceDark = true,
-                                        isPlaying = false,
-                                        track = item,
-                                        localSongOverride = localSongById[item.videoId],
-                                        hasLocalSongOverride = true,
-                                        onMoreClickListener = { onItemMoreClick(it) },
-                                        onClickListener = {
-                                            Logger.w("PlaylistScreen", "index: $index")
-                                            onPlaylistItemClick(it)
-                                        },
-                                        onAddToQueue = {
-                                            sharedViewModel.addListToQueue(
-                                                arrayListOf(item),
-                                            )
-                                        },
-                                        selectionMode = selectionState.isActive,
-                                        isSelected = selectionState.isSelected(item.videoId),
-                                        onLongClick = { selectionState.start(it) },
-                                        onSelectToggle = { selectionState.toggle(it) },
-                                        modifier = Modifier,
-                                    )
-                                }
+                                SongFullWidthItems(
+                                    forceDark = true,
+                                    isPlaying = playingTrack?.videoId == item.videoId,
+                                    track = item,
+                                    localSongOverride = localSongById[item.videoId],
+                                    hasLocalSongOverride = true,
+                                    onMoreClickListener = { onItemMoreClick(it) },
+                                    onClickListener = {
+                                        Logger.w("PlaylistScreen", "index: $index")
+                                        onPlaylistItemClick(it)
+                                    },
+                                    onAddToQueue = {
+                                        sharedViewModel.addListToQueue(
+                                            arrayListOf(item),
+                                        )
+                                    },
+                                    selectionMode = selectionState.isActive,
+                                    isSelected = selectionState.isSelected(item.videoId),
+                                    onLongClick = { selectionState.start(it) },
+                                    onSelectToggle = { selectionState.toggle(it) },
+                                    modifier = Modifier,
+                                )
                                 if (index < filteredTrack.size - 1) {
                                     HorizontalDivider(
                                         modifier = Modifier.padding(start = 72.dp, end = 16.dp),

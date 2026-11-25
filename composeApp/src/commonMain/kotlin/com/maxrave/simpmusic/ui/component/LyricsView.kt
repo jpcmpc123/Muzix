@@ -210,16 +210,16 @@ private fun empEasing(x: Float): Float =
 
 // Repeated lyrics palette tokens hoisted to file scope: avoids re-allocating
 // the same Color() objects on every recomposition of every line item.
-private val DimOriginalColor = Color.LightGray.copy(alpha = 0.35f)
-private val ClassicTranslatedColor = Color.White.copy(alpha = 0.86f)
-private val ClassicDimTranslatedColor = Color.White.copy(alpha = 0.42f)
+private val DimOriginalColor = Color.White.copy(alpha = 0.54f)
+private val ClassicTranslatedColor = Color.White.copy(alpha = 0.90f)
+private val ClassicDimTranslatedColor = Color.White.copy(alpha = 0.58f)
 
 // A pronunciation guide sits BETWEEN the original and its translation in meaning, so it does the
 // same visually: neutral grey rather than the translation's yellow, dimmer than the original it
 // belongs to. Two values because the sung line lifts everything on it.
-private val DimRomanizedCurrentColor = Color.White.copy(alpha = 0.7f)
-private val DimRomanizedColor = Color.LightGray.copy(alpha = 0.3f)
-private val DimRichPendingColor = Color.LightGray.copy(alpha = 0.6f)
+private val DimRomanizedCurrentColor = Color.White.copy(alpha = 0.78f)
+private val DimRomanizedColor = Color.White.copy(alpha = 0.48f)
+private val DimRichPendingColor = Color.White.copy(alpha = 0.64f)
 
 internal data class TimedLineIndex(
     val index: Int,

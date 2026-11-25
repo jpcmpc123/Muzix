@@ -98,6 +98,7 @@ import com.maxrave.simpmusic.extension.formatDuration
 import com.maxrave.simpmusic.extension.lengthLabel
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.hsvToColor
+import com.maxrave.simpmusic.extension.toReadableLyricsBackdrop
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.lyrics.ShareLyricsSheet
 import com.maxrave.simpmusic.ui.component.lyrics.toShareLyricsLines
@@ -289,11 +290,12 @@ fun FullscreenLyricsContent(
                 )
             }
         } else {
+            val safeLyricsColor = remember(color) { color.toReadableLyricsBackdrop(maxLuminance = 0.13f) }
             Box(modifier = Modifier.fillMaxSize()) {
                 // Animated gradient background. The glass source whenever glass is on: the Desktop
                 // chrome draws from it, and so does the lyrics timing button on both platforms.
                 AnimatedLyricsGradientBackground(
-                    color = color,
+                    color = safeLyricsColor,
                     modifier = if (LocalLiquidGlassEnabled.current) Modifier.layerBackdrop(backdrop) else Modifier,
                 )
 
@@ -475,7 +477,7 @@ fun FullscreenLyricsContent(
                         FullscreenLyricsList(
                             lyricsData = screenDataState.lyricsData,
                             sharedViewModel = sharedViewModel,
-                            color = color,
+                            color = safeLyricsColor,
                             backdrop = backdrop,
                         )
                     }
@@ -511,7 +513,7 @@ fun FullscreenLyricsContent(
                             // Center (when full controls collapse): circular white Play/Pause button
                             // Right: Info + Queue when controls are expanded, Share when collapsed
                             val playGlyphTint =
-                                if (color.luminance() < 0.55f) color.copy(alpha = 1f) else Color(0xFF1A1A1A)
+                                if (safeLyricsColor.luminance() < 0.25f) safeLyricsColor.copy(alpha = 1f) else Color(0xFF1A1A1A)
                             Box(
                                 modifier =
                                     Modifier
@@ -522,7 +524,7 @@ fun FullscreenLyricsContent(
                                 if (screenDataState.lyricsData != null) {
                                     FullscreenLyricsTranslateButton(
                                         translationStateFlow = sharedViewModel.lyricsTranslationUiState,
-                                        accentBackgroundColor = color,
+                                        accentBackgroundColor = safeLyricsColor,
                                         onClick = { sharedViewModel.toggleLyricsTranslation() },
                                         onLongClick = { sharedViewModel.retranslateLyrics() },
                                         modifier = Modifier.align(Alignment.CenterStart),
@@ -1205,6 +1207,7 @@ private fun FullscreenLyricsList(
 ) {
     val lyricsOffsetMs by sharedViewModel.getLyricsOffsetMs().collectAsStateWithLifecycle(0)
     val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
+    val safeColor = remember(color) { color.toReadableLyricsBackdrop(maxLuminance = 0.13f) }
     Box(modifier = Modifier.fillMaxSize()) {
         Crossfade(
             targetState = lyricsData != null,
@@ -1221,7 +1224,7 @@ private fun FullscreenLyricsList(
                         },
                         modifier = Modifier.fillMaxSize(),
                         showScrollShadows = true,
-                        backgroundColor = color,
+                        backgroundColor = safeColor,
                         translationStateFlow = sharedViewModel.lyricsTranslationUiState,
                     )
                 }
@@ -1246,7 +1249,7 @@ private fun FullscreenLyricsList(
             if (showFloatingTranslateButton) {
                 FullscreenLyricsTranslateButton(
                     translationStateFlow = sharedViewModel.lyricsTranslationUiState,
-                    accentBackgroundColor = color,
+                    accentBackgroundColor = safeColor,
                     onClick = { sharedViewModel.toggleLyricsTranslation() },
                     onLongClick = { sharedViewModel.retranslateLyrics() },
                     modifier =
@@ -1298,10 +1301,11 @@ internal fun AnimatedLyricsGradientBackground(
     color: Color,
     modifier: Modifier = Modifier,
 ) {
+    val safeColor = remember(color) { color.toReadableLyricsBackdrop(maxLuminance = 0.13f) }
     // Animated gradient colors - SMOOTH ANIMATION
-    val startColor = remember { Animatable(color) }
-    val midColor1 = remember { Animatable(color.copy(alpha = 0.95f)) }
-    val midColor2 = remember { Animatable(color.copy(alpha = 0.85f)) }
+    val startColor = remember { Animatable(safeColor) }
+    val midColor1 = remember { Animatable(safeColor.copy(alpha = 0.95f)) }
+    val midColor2 = remember { Animatable(safeColor.copy(alpha = 0.85f)) }
     val endColor = remember { Animatable(Color.Black) }
 
     // Dynamic gradient animation - MULTIPLE DIRECTIONS
@@ -1339,23 +1343,23 @@ internal fun AnimatedLyricsGradientBackground(
         label = "lyricsGradientOffsetY",
     )
 
-    // Smooth color animation based on lyrics color
-    LaunchedEffect(color) {
+    // Smooth color animation based on safe lyrics color
+    LaunchedEffect(safeColor) {
         launch {
             startColor.animateTo(
-                targetValue = color,
+                targetValue = safeColor,
                 animationSpec = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
             )
         }
         launch {
             midColor1.animateTo(
-                targetValue = color.copy(alpha = 0.95f),
+                targetValue = safeColor.copy(alpha = 0.95f),
                 animationSpec = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
             )
         }
         launch {
             midColor2.animateTo(
-                targetValue = color.copy(alpha = 0.85f),
+                targetValue = safeColor.copy(alpha = 0.85f),
                 animationSpec = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
             )
         }

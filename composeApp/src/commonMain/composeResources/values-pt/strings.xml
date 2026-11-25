@@ -295,6 +295,8 @@
     <string name="translation_language_message">Digite o código do idioma (ex.: pt) (2 letras). Para usar o mesmo idioma do Muzix, deixe o campo vazio.</string>
     <string name="invalid_language_code">Código de idioma inválido</string>
     <string name="lyrics_provider_youtube">Letras fornecidas pelo YouTube</string>
+    <string name="lyrics_provider_ytm_official">Letra oficial do YouTube Music</string>
+    <string name="youtube_music_official">YouTube Music (Oficial)</string>
     <string name="lyrics_provider_betterlyrics">Letra fornecida por BetterLyrics</string>
     <string name="limit_player_cache">Limitar cache do jogador</string>
     <string name="unlimited">Ilimitado</string>

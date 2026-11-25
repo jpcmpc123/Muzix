@@ -63,6 +63,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
@@ -743,6 +744,36 @@ fun Palette?.toImmersiveBackground(): Color {
     val darkenFactor = 0.35f + 0.45f * luminance
     return androidx.compose.ui.graphics.lerp(base, Color.Black, darkenFactor)
 }
+
+/**
+ * Clamps light/vivid album colors to a dark, readable luminance ceiling while preserving the
+ * artwork's hue, guaranteeing high contrast for active and inactive white lyrics lines.
+ */
+fun Color.toReadableLyricsBackdrop(maxLuminance: Float = 0.14f): Color {
+    val clampedLuminance = maxLuminance.coerceIn(0.04f, 0.25f)
+    val base = this.copy(alpha = 1f)
+    val targetDark = Color(0xFF0A0D10)
+    if (base.luminance() <= clampedLuminance) {
+        return androidx.compose.ui.graphics.lerp(base, targetDark, 0.10f)
+    }
+    var low = 0f
+    var high = 1f
+    var result = targetDark
+    repeat(10) {
+        val mid = (low + high) * 0.5f
+        val probe = androidx.compose.ui.graphics.lerp(base, targetDark, mid)
+        if (probe.luminance() > clampedLuminance) {
+            low = mid
+        } else {
+            high = mid
+            result = probe
+        }
+    }
+    return result
+}
+
+fun Color.toReadableLyricsCardColor(maxLuminance: Float = 0.16f): Color =
+    toReadableLyricsBackdrop(maxLuminance = maxLuminance)
 
 /**
  * A colour read off an artwork [palette] ([pick], the immersive page background by default), held

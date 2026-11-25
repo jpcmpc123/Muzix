@@ -124,6 +124,7 @@ import com.maxrave.simpmusic.extension.formatDuration
 import com.maxrave.simpmusic.extension.lengthLabel
 import com.maxrave.simpmusic.extension.mouseDragScroll
 import com.maxrave.simpmusic.extension.getColorFromPalette
+import com.maxrave.simpmusic.extension.toReadableLyricsCardColor
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.isElementVisible
 import com.maxrave.simpmusic.extension.parseTimestampToMilliseconds
@@ -1334,6 +1335,7 @@ fun NowPlayingContentSpotify(
                     }
                     Column(Modifier.padding(horizontal = 20.dp)) {
                         // Lyrics Layout
+                        val lyricsCardColor = state.startColor.value.toReadableLyricsCardColor(maxLuminance = 0.15f)
                         AnimatedVisibility(
                             visible = state.screenData.lyricsData != null,
                             modifier = Modifier.padding(top = 10.dp),
@@ -1343,7 +1345,7 @@ fun NowPlayingContentSpotify(
                                 shape = RoundedCornerShape(8.dp),
                                 colors =
                                     CardDefaults.elevatedCardColors().copy(
-                                        containerColor = state.startColor.value,
+                                        containerColor = lyricsCardColor,
                                     ),
                             ) {
                                 Column(modifier = Modifier.padding(15.dp)) {
@@ -1397,7 +1399,7 @@ fun NowPlayingContentSpotify(
                                         }
                                         com.maxrave.simpmusic.ui.component.CompactLyricsTranslateButton(
                                             translationStateFlow = state.lyricsTranslationStateFlow,
-                                            cardColor = state.startColor.value,
+                                            cardColor = lyricsCardColor,
                                             onClick = actions.onToggleLyricsTranslation,
                                             onLongClick = actions.onRetranslateLyrics,
                                             trailingSpacing = 8.dp,
@@ -1459,6 +1461,7 @@ fun NowPlayingContentSpotify(
                                                 onLineClick = { f ->
                                                     actions.onUIEvent(UIEvent.UpdateProgress(f))
                                                 },
+                                                backgroundColor = lyricsCardColor,
                                                 translationStateFlow = state.lyricsTranslationStateFlow,
                                             )
                                         }

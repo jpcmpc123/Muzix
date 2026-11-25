@@ -125,7 +125,9 @@ import com.mikepenz.markdown.m3.markdownTypography
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
@@ -563,7 +565,15 @@ fun App(
         // Backdrop base must match the page, so glass over an empty area reads as the page itself.
         // On Desktop the page is the panel: its colour is painted outside the recorded layer, and
         // colorScheme.background carries the seed's hue, which the glass's saturation boost brings out.
+        val isPlaybackActive by remember(viewModel) {
+            viewModel.controllerState
+                .map { it.isPlaying }
+                .distinctUntilChanged()
+        }.collectAsStateWithLifecycle(false)
         val backdrop = rememberBackdrop(if (isDesktopShell) desktopPanel else MaterialTheme.colorScheme.background)
+        CompositionLocalProvider(
+            com.maxrave.simpmusic.ui.component.LocalIsPlaybackActive provides isPlaybackActive,
+        ) {
         Scaffold(
             // Watches for userStarted without consuming anything. Dialogs and sheets are windows or
             // layers of their own, so a press inside one (closing the update dialog, say) does not count.
@@ -1334,5 +1344,6 @@ fun App(
                 }
             },
         )
+        }
     }
 }

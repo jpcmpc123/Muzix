@@ -182,6 +182,8 @@ import kotlin.time.Duration.Companion.days
 const val FOOTGUNS_STAR_KEY = "footguns_starred"
 private const val USER_PROTECTED_SIGNATURES_KEY = "user_protected_lyrics_signatures"
 private const val MAX_PERSISTED_PROTECTED_SIGNATURES = 500
+private const val LYRICS_V2_REVALIDATED_KEY = "lyrics_v2_revalidated_ids"
+private const val MAX_PERSISTED_REVALIDATED_V2_IDS = 400
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SharedViewModel(
@@ -268,6 +270,8 @@ class SharedViewModel(
     private val upgradedVideoIds = mutableSetOf<String>()
     private val userProtectedSignatures = LinkedHashSet<Int>()
     private var userProtectedSignaturesLoaded = false
+    private val revalidatedV2Ids = LinkedHashSet<String>()
+    private var revalidatedV2IdsLoaded = false
     private var pendingLyricsRetryVideoId: String? = null
 
     private val _intent: MutableStateFlow<GenericIntent?> = MutableStateFlow(null)
@@ -1449,9 +1453,35 @@ class SharedViewModel(
             viewModelScope.launch {
                 if (mediaId != null) {
                     songRepository.getSongInfo(mediaId).collect { song ->
-                        _nowPlayingScreenData.update {
-                            it.copy(
+                        val creditNames = LyricsHeaderSanitizer.extractCreditNamesFromDescription(song?.description)
+                        _nowPlayingScreenData.update { current ->
+                            val currentLyricsData = current.lyricsData
+                            val updatedLyricsData =
+                                if (creditNames.isNotEmpty() && currentLyricsData != null) {
+                                    val sig = LyricsQuality.contentSignature(currentLyricsData.lyrics)
+                                    if (sig !in userProtectedSignatures) {
+                                        val cleaned =
+                                            LyricsHeaderSanitizer.sanitize(
+                                                lyrics = currentLyricsData.lyrics,
+                                                songTitle = current.nowPlayingTitle,
+                                                artistName = current.artistName,
+                                                extraCreditNames = creditNames,
+                                            )
+                                        if (cleaned != currentLyricsData.lyrics) {
+                                            LyricsUiPrep.warmUp(cleaned)
+                                            currentLyricsData.copy(lyrics = cleaned)
+                                        } else {
+                                            currentLyricsData
+                                        }
+                                    } else {
+                                        currentLyricsData
+                                    }
+                                } else {
+                                    currentLyricsData
+                                }
+                            current.copy(
                                 songInfoData = song,
+                                lyricsData = updatedLyricsData,
                             )
                         }
                     }
@@ -1707,7 +1737,9 @@ class SharedViewModel(
             withContext(Dispatchers.Default) {
                 val decoded = if (alreadyDecoded) inputLyrics else decodeLyricsEntities(inputLyrics)
                 if (!isTranslatedLyrics) {
-                    val sanitized = LyricsHeaderSanitizer.sanitize(decoded, trackTitle, trackArtists)
+                    val songDescription = _nowPlayingScreenData.value.songInfoData?.description
+                    val extraCreditNames = LyricsHeaderSanitizer.extractCreditNamesFromDescription(songDescription)
+                    val sanitized = LyricsHeaderSanitizer.sanitize(decoded, trackTitle, trackArtists, extraCreditNames)
                     if (!LyricsContentQualityGuard.isAcceptableContent(sanitized)) {
                         return@withContext null
                     }
@@ -1922,6 +1954,7 @@ class SharedViewModel(
                 try {
                     if (_nowPlayingState.value?.songEntity?.videoId != song.videoId) return@launch
                     ensureUserProtectedSignaturesLoaded()
+                    ensureRevalidatedV2IdsLoaded()
 
                     log("Resolve lyrics for ${song.videoId} (preferCache=$preferCache, forceRefresh=$forceRefresh)", LogLevel.WARN)
                     val validArtists =
@@ -1940,7 +1973,8 @@ class SharedViewModel(
 
                     val preferredSource = dataStoreManager.lyricsProvider.first().toLyricsSource()
                     val allowSpotify = dataStoreManager.spotifyLyrics.first() == TRUE
-                    val allowUpgradeScan = forceRefresh || song.videoId !in upgradedVideoIds
+                    val needsV2Revalidation = song.videoId !in revalidatedV2Ids
+                    val allowUpgradeScan = forceRefresh || needsV2Revalidation || song.videoId !in upgradedVideoIds
                     val request =
                         LyricsLookupRequest(
                             videoId = song.videoId,
@@ -1952,13 +1986,18 @@ class SharedViewModel(
                             preferCache = preferCache,
                             allowUpgradeScan = allowUpgradeScan,
                             userProtectedSignatures = userProtectedSignatures.toSet(),
+                            revalidateStaleCache = needsV2Revalidation || forceRefresh,
                         )
 
                     var hadTransientExhaustion = false
+                    var sawFreshOnlineOrProtectedResolution = false
                     lyricsCanvasRepository.resolveLyrics(request).collect { event ->
                         when (event) {
                             is LyricsResolutionEvent.Found -> {
                                 val resolution = event.resolution
+                                if (!resolution.fromCache || resolution.isUserProtected) {
+                                    sawFreshOnlineOrProtectedResolution = true
+                                }
                                 if (_nowPlayingState.value?.songEntity?.videoId != resolution.videoId) {
                                     return@collect
                                 }
@@ -1985,6 +2024,7 @@ class SharedViewModel(
                                                 resolution.source != LyricsSource.SIMPMUSIC &&
                                                 resolution.source != LyricsSource.SPOTIFY &&
                                                 resolution.source != LyricsSource.LETRAS &&
+                                                resolution.source != LyricsSource.YTM_OFFICIAL &&
                                                 resolution.source != LyricsSource.OFFLINE,
                                     )
                                 if (appliedLyrics != null) {
@@ -2004,6 +2044,9 @@ class SharedViewModel(
                             }
 
                             is LyricsResolutionEvent.Exhausted -> {
+                                if (event.definitiveNotFound || event.confirmedInstrumental) {
+                                    sawFreshOnlineOrProtectedResolution = true
+                                }
                                 if (event.confirmedInstrumental || event.cacheInvalidated) {
                                     if (event.confirmedInstrumental) {
                                         pendingLyricsRetryVideoId = null
@@ -2054,6 +2097,9 @@ class SharedViewModel(
 
                     if (allowUpgradeScan && !hadTransientExhaustion) {
                         upgradedVideoIds.add(song.videoId)
+                    }
+                    if (needsV2Revalidation && sawFreshOnlineOrProtectedResolution && !hadTransientExhaustion) {
+                        recordRevalidatedV2Id(song.videoId)
                     }
                 } catch (e: CancellationException) {
                     throw e
@@ -2195,6 +2241,31 @@ class SharedViewModel(
         )
     }
 
+    private suspend fun ensureRevalidatedV2IdsLoaded() {
+        if (revalidatedV2IdsLoaded) return
+        val stored = dataStoreManager.getString(LYRICS_V2_REVALIDATED_KEY).firstOrNull()
+        stored
+            ?.split(',')
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.forEach { revalidatedV2Ids.add(it) }
+        revalidatedV2IdsLoaded = true
+    }
+
+    private suspend fun recordRevalidatedV2Id(videoId: String) {
+        if (videoId.isBlank()) return
+        ensureRevalidatedV2IdsLoaded()
+        if (!revalidatedV2Ids.add(videoId)) return
+        while (revalidatedV2Ids.size > MAX_PERSISTED_REVALIDATED_V2_IDS) {
+            val oldest = revalidatedV2Ids.firstOrNull() ?: break
+            revalidatedV2Ids.remove(oldest)
+        }
+        dataStoreManager.putString(
+            LYRICS_V2_REVALIDATED_KEY,
+            revalidatedV2Ids.joinToString(","),
+        )
+    }
+
     private suspend fun isLyricsInTargetLanguage(lyrics: Lyrics): Boolean {
         val targetLang =
             dataStoreManager.translationLanguage
@@ -2207,6 +2278,7 @@ class SharedViewModel(
     private fun String.toLyricsSource(): LyricsSource =
         when (this) {
             DataStoreManager.YOUTUBE -> LyricsSource.YOUTUBE
+            DataStoreManager.YTM_OFFICIAL -> LyricsSource.YTM_OFFICIAL
             DataStoreManager.LRCLIB -> LyricsSource.LRCLIB
             DataStoreManager.BETTER_LYRICS -> LyricsSource.BETTER_LYRICS
             else -> LyricsSource.SIMPMUSIC
@@ -2216,6 +2288,7 @@ class SharedViewModel(
         when (this) {
             LyricsSource.SIMPMUSIC -> LyricsProvider.SIMPMUSIC
             LyricsSource.YOUTUBE -> LyricsProvider.YOUTUBE
+            LyricsSource.YTM_OFFICIAL -> LyricsProvider.YTM_OFFICIAL
             LyricsSource.SPOTIFY -> LyricsProvider.SPOTIFY
             LyricsSource.LRCLIB -> LyricsProvider.LRCLIB
             LyricsSource.BETTER_LYRICS -> LyricsProvider.BETTER_LYRICS
@@ -3011,6 +3084,7 @@ data class LyricsTranslationUiState(
 enum class LyricsProvider {
     SIMPMUSIC,
     YOUTUBE,
+    YTM_OFFICIAL,
     SPOTIFY,
     LRCLIB,
     BETTER_LYRICS,

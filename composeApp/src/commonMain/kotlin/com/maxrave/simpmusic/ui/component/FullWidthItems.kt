@@ -132,6 +132,7 @@ fun SongFullWidthItems(
     modifier: Modifier,
     rightView: @Composable (() -> Unit)? = null,
     forceDark: Boolean = LocalForceDarkText.current,
+    isPlaybackActive: Boolean = LocalIsPlaybackActive.current,
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -284,6 +285,7 @@ fun SongFullWidthItems(
                     Crossfade(isPlaying) {
                         if (it) {
                             AudioPlayingIndicator(
+                                isAnimating = isPlaybackActive,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         } else if (index == null) {
@@ -427,6 +429,7 @@ fun SuggestItems(
     onClickListener: (() -> Unit)? = null,
     onAddClickListener: (() -> Unit)? = null,
     forceDark: Boolean = LocalForceDarkText.current,
+    isPlaybackActive: Boolean = LocalIsPlaybackActive.current,
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -449,6 +452,7 @@ fun SuggestItems(
                 Crossfade(isPlaying) {
                     if (it) {
                         AudioPlayingIndicator(
+                            isAnimating = isPlaybackActive,
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {

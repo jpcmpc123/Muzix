@@ -14,6 +14,7 @@ import com.maxrave.domain.manager.DataStoreManager.Values.BETTER_LYRICS
 import com.maxrave.domain.manager.DataStoreManager.Values.LRCLIB
 import com.maxrave.domain.manager.DataStoreManager.Values.SIMPMUSIC
 import com.maxrave.domain.manager.DataStoreManager.Values.YOUTUBE
+import com.maxrave.domain.manager.DataStoreManager.Values.YTM_OFFICIAL
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.mediaservice.handler.PlaylistType
 import com.maxrave.domain.mediaservice.handler.QueueData
@@ -114,6 +115,10 @@ class NowPlayingBottomSheetViewModel(
 
                             YOUTUBE -> {
                                 _uiState.update { it.copy(mainLyricsProvider = YOUTUBE) }
+                            }
+
+                            YTM_OFFICIAL -> {
+                                _uiState.update { it.copy(mainLyricsProvider = YTM_OFFICIAL) }
                             }
 
                             LRCLIB -> {
@@ -343,7 +348,7 @@ class NowPlayingBottomSheetViewModel(
                 }
 
                 is NowPlayingBottomSheetUIEvent.ChangeLyricsProvider -> {
-                    if (listOf(SIMPMUSIC, YOUTUBE, LRCLIB, BETTER_LYRICS).contains(ev.lyricsProvider)) {
+                    if (listOf(SIMPMUSIC, YOUTUBE, YTM_OFFICIAL, LRCLIB, BETTER_LYRICS).contains(ev.lyricsProvider)) {
                         dataStoreManager.setLyricsProvider(ev.lyricsProvider)
                     } else {
                         return@launch

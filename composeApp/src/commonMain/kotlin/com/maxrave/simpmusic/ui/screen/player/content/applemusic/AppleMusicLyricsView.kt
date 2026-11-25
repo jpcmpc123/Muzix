@@ -75,6 +75,7 @@ import simpmusic.composeapp.generated.resources.lyrics_provider_letras
 import simpmusic.composeapp.generated.resources.lyrics_provider_lrc
 import simpmusic.composeapp.generated.resources.lyrics_provider_simpmusic
 import simpmusic.composeapp.generated.resources.lyrics_provider_youtube
+import simpmusic.composeapp.generated.resources.lyrics_provider_ytm_official
 import simpmusic.composeapp.generated.resources.offline_mode
 import simpmusic.composeapp.generated.resources.rich_synced
 import simpmusic.composeapp.generated.resources.spotify_lyrics_provider
@@ -347,6 +348,7 @@ private fun appleMusicLyricsProviderText(lyricsData: NowPlayingScreenData.Lyrics
         LyricsProvider.SIMPMUSIC -> stringResource(Res.string.lyrics_provider_simpmusic)
         LyricsProvider.LRCLIB -> stringResource(Res.string.lyrics_provider_lrc)
         LyricsProvider.YOUTUBE -> stringResource(Res.string.lyrics_provider_youtube)
+        LyricsProvider.YTM_OFFICIAL -> stringResource(Res.string.lyrics_provider_ytm_official)
         LyricsProvider.SPOTIFY -> stringResource(Res.string.spotify_lyrics_provider)
         LyricsProvider.OFFLINE -> stringResource(Res.string.offline_mode)
         LyricsProvider.BETTER_LYRICS -> stringResource(Res.string.lyrics_provider_betterlyrics)

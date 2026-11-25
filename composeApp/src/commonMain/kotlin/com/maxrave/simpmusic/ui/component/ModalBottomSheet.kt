@@ -310,6 +310,7 @@ import simpmusic.composeapp.generated.resources.your_playlists
 import simpmusic.composeapp.generated.resources.your_sp_dc_param_of_spotify_cookie
 import simpmusic.composeapp.generated.resources.your_youtube_cookie
 import simpmusic.composeapp.generated.resources.your_youtube_playlists
+import simpmusic.composeapp.generated.resources.youtube_music_official
 import simpmusic.composeapp.generated.resources.youtube_transcript
 import simpmusic.composeapp.generated.resources.youtube_url
 
@@ -1569,7 +1570,8 @@ fun NowPlayingBottomSheet(
                     DataStoreManager.LRCLIB -> 1
                     DataStoreManager.YOUTUBE -> 2
                     DataStoreManager.BETTER_LYRICS -> 3
-                    else -> 0
+                    DataStoreManager.YTM_OFFICIAL -> 4
+                    else -> 3
                 },
             )
         }
@@ -1590,12 +1592,12 @@ fun NowPlayingBottomSheet(
                             Modifier
                                 .padding(horizontal = 4.dp)
                                 .fillMaxWidth()
-                                .clickable { selected = 0 },
+                                .clickable { selected = 3 },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = selected == 0, onClick = { selected = 0 })
+                        RadioButton(selected = selected == 3, onClick = { selected = 3 })
                         Spacer(modifier = Modifier.size(10.dp))
-                        Text(text = stringResource(Res.string.simpmusic_lyrics), style = typo().labelSmall)
+                        Text(text = stringResource(Res.string.better_lyrics), style = typo().labelSmall)
                     }
                     Row(
                         modifier =
@@ -1614,24 +1616,36 @@ fun NowPlayingBottomSheet(
                             Modifier
                                 .padding(horizontal = 4.dp)
                                 .fillMaxWidth()
-                                .clickable { selected = 2 },
+                                .clickable { selected = 0 },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = selected == 2, onClick = { selected = 2 })
+                        RadioButton(selected = selected == 0, onClick = { selected = 0 })
                         Spacer(modifier = Modifier.size(10.dp))
-                        Text(text = stringResource(Res.string.youtube_transcript), style = typo().labelSmall)
+                        Text(text = stringResource(Res.string.simpmusic_lyrics), style = typo().labelSmall)
                     }
                     Row(
                         modifier =
                             Modifier
                                 .padding(horizontal = 4.dp)
                                 .fillMaxWidth()
-                                .clickable { selected = 3 },
+                                .clickable { selected = 4 },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = selected == 3, onClick = { selected = 3 })
+                        RadioButton(selected = selected == 4, onClick = { selected = 4 })
                         Spacer(modifier = Modifier.size(10.dp))
-                        Text(text = stringResource(Res.string.better_lyrics), style = typo().labelSmall)
+                        Text(text = stringResource(Res.string.youtube_music_official), style = typo().labelSmall)
+                    }
+                    Row(
+                        modifier =
+                            Modifier
+                                .padding(horizontal = 4.dp)
+                                .fillMaxWidth()
+                                .clickable { selected = 2 },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = selected == 2, onClick = { selected = 2 })
+                        Spacer(modifier = Modifier.size(10.dp))
+                        Text(text = stringResource(Res.string.youtube_transcript), style = typo().labelSmall)
                     }
                 }
             },
@@ -1645,7 +1659,8 @@ fun NowPlayingBottomSheet(
                                     1 -> DataStoreManager.LRCLIB
                                     2 -> DataStoreManager.YOUTUBE
                                     3 -> DataStoreManager.BETTER_LYRICS
-                                    else -> DataStoreManager.SIMPMUSIC
+                                    4 -> DataStoreManager.YTM_OFFICIAL
+                                    else -> DataStoreManager.BETTER_LYRICS
                                 },
                             ),
                         )

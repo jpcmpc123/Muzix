@@ -1494,57 +1494,30 @@ fun LocalPlaylistScreen(
             val item = trackPagingItems[index]?.first
             if (item != null) {
                 val content = @Composable { mod: Modifier ->
-                    if (playingTrack?.videoId == item.videoId && isPlaying) {
-                        SongFullWidthItems(
-                            forceDark = true,
-                            isPlaying = true,
-                            shouldShowDragHandle = changingOrder,
-                            songEntity = item,
-                            localSongOverride = item,
-                            hasLocalSongOverride = true,
-                            onMoreClickListener = { onItemMoreClick(it) },
-                            onClickListener = {
-                                Logger.w("PlaylistScreen", "index: $index")
-                                onPlaylistItemClick(it)
-                            },
-                            onAddToQueue = {
-                                sharedViewModel.addListToQueue(
-                                    arrayListOf(item.toTrack()),
-                                )
-                            },
-                            selectionMode = selectionState.isActive,
-                            isSelected = selectionState.isSelected(item.videoId),
-                            // No long press while reordering: that gesture already belongs to drag.
-                            onLongClick = if (changingOrder) null else ({ selectionState.start(it) }),
-                            onSelectToggle = { selectionState.toggle(it) },
-                            modifier = mod,
-                        )
-                    } else {
-                        SongFullWidthItems(
-                            forceDark = true,
-                            isPlaying = false,
-                            shouldShowDragHandle = changingOrder,
-                            songEntity = item,
-                            localSongOverride = item,
-                            hasLocalSongOverride = true,
-                            onMoreClickListener = { onItemMoreClick(it) },
-                            onClickListener = {
-                                Logger.w("PlaylistScreen", "index: $index")
-                                onPlaylistItemClick(it)
-                            },
-                            onAddToQueue = {
-                                sharedViewModel.addListToQueue(
-                                    arrayListOf(item.toTrack()),
-                                )
-                            },
-                            selectionMode = selectionState.isActive,
-                            isSelected = selectionState.isSelected(item.videoId),
-                            // No long press while reordering: that gesture already belongs to drag.
-                            onLongClick = if (changingOrder) null else ({ selectionState.start(it) }),
-                            onSelectToggle = { selectionState.toggle(it) },
-                            modifier = mod,
-                        )
-                    }
+                    SongFullWidthItems(
+                        forceDark = true,
+                        isPlaying = playingTrack?.videoId == item.videoId,
+                        shouldShowDragHandle = changingOrder,
+                        songEntity = item,
+                        localSongOverride = item,
+                        hasLocalSongOverride = true,
+                        onMoreClickListener = { onItemMoreClick(it) },
+                        onClickListener = {
+                            Logger.w("PlaylistScreen", "index: $index")
+                            onPlaylistItemClick(it)
+                        },
+                        onAddToQueue = {
+                            sharedViewModel.addListToQueue(
+                                arrayListOf(item.toTrack()),
+                            )
+                        },
+                        selectionMode = selectionState.isActive,
+                        isSelected = selectionState.isSelected(item.videoId),
+                        // No long press while reordering: that gesture already belongs to drag.
+                        onLongClick = if (changingOrder) null else ({ selectionState.start(it) }),
+                        onSelectToggle = { selectionState.toggle(it) },
+                        modifier = mod,
+                    )
                 }
                 if (changingOrder) {
                     DraggableItem(
@@ -1831,7 +1804,7 @@ fun LocalPlaylistScreen(
                 ) { (song, _) ->
                     SongFullWidthItems(
                         forceDark = true,
-                        isPlaying = playingTrack?.videoId == song.videoId && isPlaying,
+                        isPlaying = playingTrack?.videoId == song.videoId,
                         songEntity = song,
                         localSongOverride = song,
                         hasLocalSongOverride = true,

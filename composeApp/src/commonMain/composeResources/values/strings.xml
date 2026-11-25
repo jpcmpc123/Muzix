@@ -298,6 +298,8 @@
     <string name="translation_language_message">Type language code (Eg: en) (2 letters). If you want to set same with Muzix's language, please make edit box empty.</string>
     <string name="invalid_language_code">Invalid language code</string>
     <string name="lyrics_provider_youtube">Lyrics provided by YouTube</string>
+    <string name="lyrics_provider_ytm_official">Official lyrics by YouTube Music</string>
+    <string name="youtube_music_official">YouTube Music (Official)</string>
     <string name="lyrics_provider_betterlyrics">Lyrics provided by BetterLyrics</string>
     <string name="limit_player_cache">Limit Player Cache</string>
     <string name="unlimited">Unlimited</string>

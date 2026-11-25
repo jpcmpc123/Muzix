@@ -78,6 +78,7 @@ import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.hsvToColor
 import com.maxrave.simpmusic.extension.parseTimestampToMilliseconds
 import com.maxrave.simpmusic.extension.rememberIsInPipMode
+import com.maxrave.simpmusic.extension.toReadableLyricsBackdrop
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.AddLyricsSheet
 import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
@@ -521,8 +522,9 @@ fun NowPlayingScreenContent(
         snapshotFlow { paletteState.palette }
             .distinctUntilChanged()
             .collectLatest {
-                spotShadowColor = it.getColorFromPalette()
-                startColor.animateTo(it.getColorFromPalette())
+                val safePaletteColor = it.getColorFromPalette().toReadableLyricsBackdrop(maxLuminance = 0.16f)
+                spotShadowColor = safePaletteColor
+                startColor.animateTo(safePaletteColor)
                 // Lands on the same backdrop colour the fade and the area below the gradient
                 // use, so the palette ramp resolves into the surface instead of a black patch.
                 endColor.animateTo(if (isPureBlack) Color.Black else PlayerBackdropColor)
