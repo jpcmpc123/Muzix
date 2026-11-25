@@ -182,7 +182,7 @@ import kotlin.time.Duration.Companion.days
 const val FOOTGUNS_STAR_KEY = "footguns_starred"
 private const val USER_PROTECTED_SIGNATURES_KEY = "user_protected_lyrics_signatures"
 private const val MAX_PERSISTED_PROTECTED_SIGNATURES = 500
-private const val LYRICS_V2_REVALIDATED_KEY = "lyrics_v2_revalidated_ids"
+private const val LYRICS_V2_REVALIDATED_KEY = "lyrics_v3_revalidated_ids"
 private const val MAX_PERSISTED_REVALIDATED_V2_IDS = 400
 
 @OptIn(ExperimentalCoroutinesApi::class)
