@@ -235,6 +235,9 @@ import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.downloading_audio
 import simpmusic.composeapp.generated.resources.downloading_video
+import simpmusic.composeapp.generated.resources.dynamic_range
+import simpmusic.composeapp.generated.resources.dynamic_range_drc
+import simpmusic.composeapp.generated.resources.dynamic_range_original
 import simpmusic.composeapp.generated.resources.custom
 import simpmusic.composeapp.generated.resources.edit_thumbnail
 import simpmusic.composeapp.generated.resources.edit_title
@@ -714,7 +717,42 @@ fun InfoPlayerBottomSheet(
                     color = rememberSurfaceDarkColors().content,
                 )
                 Text(
-                    text = format?.bitrate?.toString() ?: stringResource(Res.string.unknown),
+                    text =
+                        format?.bitrate?.let { bps ->
+                            if (bps > 0) "${(bps + 500) / 1000} kbps ($bps bps)" else bps.toString()
+                        } ?: stringResource(Res.string.unknown),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .wrapContentHeight(align = Alignment.CenterVertically)
+                            .basicMarquee(
+                                iterations = Int.MAX_VALUE,
+                                animationMode = MarqueeAnimationMode.Immediately,
+                            ).focusable()
+                            .padding(horizontal = 10.dp),
+                    style = typo().bodyMedium,
+                    maxLines = 1,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = stringResource(Res.string.dynamic_range),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 10.dp),
+                    textAlign = TextAlign.Center,
+                    style = typo().labelMedium,
+                    color = rememberSurfaceDarkColors().content,
+                )
+                Text(
+                    text =
+                        format?.audioUrl?.let { audioUrl ->
+                            if (com.maxrave.simpmusic.ui.screen.player.content.isDrcAudioStreamUrl(audioUrl)) {
+                                stringResource(Res.string.dynamic_range_drc)
+                            } else {
+                                stringResource(Res.string.dynamic_range_original)
+                            }
+                        } ?: stringResource(Res.string.unknown),
                     modifier =
                         Modifier
                             .fillMaxWidth()

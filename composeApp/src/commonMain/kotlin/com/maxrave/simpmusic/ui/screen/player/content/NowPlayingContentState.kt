@@ -85,19 +85,55 @@ internal fun String.stripRichSyncTimestamps(): String =
         .trim()
 
 /**
- * "154 kbps · 48 kHz" — the Apple Music style's quality line, read off the format YouTube served
- * for the track now playing: its `bitrate` (the figure the Info sheet prints in bps) and its
- * `sampleRate`. A figure the format does not carry is dropped rather than guessed, and null comes
- * back when neither is known, so the line hides instead of showing a placeholder.
+ * "Opus · 154 kbps · 48 kHz" — the Apple Music style's quality line, read off the format YouTube
+ * served for the track now playing: its codec, `bitrate` (the figure the Info sheet prints in bps),
+ * and `sampleRate`. Any field the format does not carry is omitted cleanly, and null comes back
+ * when nothing is known.
  */
 internal fun NewFormatEntity?.toAudioQualityLabel(): String? {
     val format = this ?: return null
+    val codec = resolveFriendlyAudioCodec(format.codecs, format.mimeType, format.itag)
     val parts =
         buildList {
+            codec?.let { add(it) }
             format.bitrate?.takeIf { it > 0 }?.let { add("${(it / 1000.0).roundToInt()} kbps") }
             format.sampleRate?.takeIf { it > 0 }?.let { add(it.toKhzLabel()) }
         }
     return parts.joinToString(" · ").takeIf { it.isNotEmpty() }
+}
+
+private fun resolveFriendlyAudioCodec(
+    codecs: String?,
+    mimeType: String?,
+    itag: Int,
+): String? {
+    val combined = "${codecs.orEmpty()} ${mimeType.orEmpty()}".lowercase()
+    return when {
+        "flac" in combined -> "FLAC"
+        "opus" in combined || itag in setOf(249, 250, 251, 774) -> "Opus"
+        "mp4a" in combined || "aac" in combined || itag in setOf(139, 140, 141) -> "AAC"
+        else -> null
+    }
+}
+
+private val XTAGS_PARAM_REGEX = Regex("[?&]xtags=([^&]+)")
+
+internal fun isDrcAudioStreamUrl(url: String): Boolean {
+    val xtags =
+        XTAGS_PARAM_REGEX
+            .find(url)
+            ?.groupValues
+            ?.get(1)
+            ?.replace("%3D", "=", ignoreCase = true)
+            ?.replace("%3A", ":", ignoreCase = true)
+            ?: return false
+    return xtags
+        .split(':')
+        .any { part ->
+            val key = part.substringBefore('=')
+            val value = part.substringAfter('=', "")
+            key == "drc" && (value == "1" || value.equals("true", ignoreCase = true))
+        }
 }
 
 // 48000 → "48 kHz", 44100 → "44.1 kHz": one decimal, and none when it would be ".0".
