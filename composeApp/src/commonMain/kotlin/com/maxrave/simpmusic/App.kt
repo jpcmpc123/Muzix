@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -56,6 +57,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -67,9 +70,12 @@ import com.maxrave.domain.data.player.GenericMediaItem
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.manager.DataStoreManager.Values.TRUE
 import com.maxrave.logger.Logger
+import com.maxrave.simpmusic.expect.InAppUpdateState
 import com.maxrave.simpmusic.expect.Orientation
 import com.maxrave.simpmusic.expect.currentOrientation
+import com.maxrave.simpmusic.expect.deviceSupportedAbis
 import com.maxrave.simpmusic.expect.openUrl
+import com.maxrave.simpmusic.expect.supportsInAppApkUpdate
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.extension.copy
@@ -109,8 +115,10 @@ import com.maxrave.simpmusic.ui.theme.fontFamily
 import com.maxrave.simpmusic.ui.theme.parseThemeColorHex
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.utils.VersionManager
+import com.maxrave.simpmusic.utils.formatBytesLabel
 import com.maxrave.simpmusic.utils.isAppLinkAvailable
 import com.maxrave.simpmusic.utils.libraryTabOf
+import com.maxrave.simpmusic.utils.selectBestApkAsset
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownTypography
@@ -129,18 +137,27 @@ import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.allow_install_unknown_apps
 import simpmusic.composeapp.generated.resources.cancel
+import simpmusic.composeapp.generated.resources.continue_in_background
 import simpmusic.composeapp.generated.resources.do_not_show_again
 import simpmusic.composeapp.generated.resources.download
+import simpmusic.composeapp.generated.resources.downloading_update
 import simpmusic.composeapp.generated.resources.good_night
+import simpmusic.composeapp.generated.resources.install_update
 import simpmusic.composeapp.generated.resources.notification
+import simpmusic.composeapp.generated.resources.open_on_github
+import simpmusic.composeapp.generated.resources.retry
 import simpmusic.composeapp.generated.resources.settings
 import simpmusic.composeapp.generated.resources.sleep_timer_off
 import simpmusic.composeapp.generated.resources.this_app_needs_to_access_your_notification
 import simpmusic.composeapp.generated.resources.this_link_is_not_supported
 import simpmusic.composeapp.generated.resources.unknown
+import simpmusic.composeapp.generated.resources.unknown_apps_permission_hint
 import simpmusic.composeapp.generated.resources.update_available
+import simpmusic.composeapp.generated.resources.update_download_failed
 import simpmusic.composeapp.generated.resources.update_message
+import simpmusic.composeapp.generated.resources.verifying_update
 import simpmusic.composeapp.generated.resources.yes
 import kotlin.time.ExperimentalTime
 
@@ -159,6 +176,7 @@ fun App(
     val sleepTimerState by viewModel.sleepTimerState.collectAsStateWithLifecycle()
     val nowPlayingData by viewModel.nowPlayingState.collectAsStateWithLifecycle()
     val updateData by viewModel.updateResponse.collectAsStateWithLifecycle()
+    val inAppUpdateState by viewModel.inAppUpdateState.collectAsStateWithLifecycle()
     val intent by viewModel.intent.collectAsStateWithLifecycle()
     val showNotificationPermissionDialog by viewModel.showNotificationPermissionDialog.collectAsStateWithLifecycle()
 
@@ -451,6 +469,13 @@ fun App(
         // build ahead of the latest release (dev, beta) to "update" back down to it, and told every
         // F-Droid-channel user to update on each launch: that channel's tag carries no leading "v".
         if (viewModel.showedUpdateDialog && VersionManager.isBehind(response.tagName)) {
+            shouldShowUpdateDialog = true
+        }
+    }
+
+    LaunchedEffect(inAppUpdateState) {
+        val state = inAppUpdateState
+        if (state is InAppUpdateState.ReadyToInstall && state.needsPermission) {
             shouldShowUpdateDialog = true
         }
     }
@@ -912,43 +937,133 @@ fun App(
                     )
                 }
 
+                if (inAppUpdateState is InAppUpdateState.ReadyToInstall) {
+                    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+                        viewModel.onResumeCheckInAppUpdatePermission()
+                    }
+                }
+
                 if (shouldShowUpdateDialog) {
                     val response = updateData ?: return@Scaffold
+                    val matchedAsset =
+                        remember(response) {
+                            if (supportsInAppApkUpdate()) {
+                                selectBestApkAsset(response.assets, deviceSupportedAbis())
+                            } else {
+                                null
+                            }
+                        }
+                    val closeUpdateDialog: () -> Unit = {
+                        shouldShowUpdateDialog = false
+                        viewModel.showedUpdateDialog = false
+                        if (inAppUpdateState !is InAppUpdateState.Downloading &&
+                            inAppUpdateState !is InAppUpdateState.Verifying
+                        ) {
+                            viewModel.resetInAppUpdateState()
+                        }
+                    }
+
                     AlertDialog(
                         properties =
                             DialogProperties(
                                 dismissOnBackPress = false,
                                 dismissOnClickOutside = false,
                             ),
-                        onDismissRequest = {
-                            shouldShowUpdateDialog = false
-                            viewModel.showedUpdateDialog = false
-                        },
+                        onDismissRequest = closeUpdateDialog,
                         confirmButton = {
-                            TextButton(
-                                onClick = {
-                                    shouldShowUpdateDialog = false
-                                    viewModel.showedUpdateDialog = false
-                                    openUrl("https://github.com/jpcmpc123/Muzix/releases/latest")
-                                },
-                            ) {
-                                Text(
-                                    stringResource(Res.string.download),
-                                    style = typo().bodySmall,
-                                )
+                            when (val updateUi = inAppUpdateState) {
+                                is InAppUpdateState.Idle -> {
+                                    TextButton(
+                                        onClick = {
+                                            if (matchedAsset != null) {
+                                                viewModel.startInAppUpdate(response)
+                                            } else {
+                                                closeUpdateDialog()
+                                                viewModel.openUpdateReleasePage(response)
+                                            }
+                                        },
+                                    ) {
+                                        Text(
+                                            stringResource(Res.string.download),
+                                            style = typo().bodySmall,
+                                        )
+                                    }
+                                }
+
+                                is InAppUpdateState.Downloading,
+                                is InAppUpdateState.Verifying,
+                                -> {
+                                    TextButton(
+                                        onClick = {
+                                            shouldShowUpdateDialog = false
+                                            viewModel.showedUpdateDialog = false
+                                        },
+                                    ) {
+                                        Text(
+                                            stringResource(Res.string.continue_in_background),
+                                            style = typo().bodySmall,
+                                        )
+                                    }
+                                }
+
+                                is InAppUpdateState.ReadyToInstall -> {
+                                    TextButton(
+                                        onClick = {
+                                            viewModel.installDownloadedUpdate()
+                                        },
+                                    ) {
+                                        Text(
+                                            stringResource(
+                                                if (updateUi.needsPermission) {
+                                                    Res.string.allow_install_unknown_apps
+                                                } else {
+                                                    Res.string.install_update
+                                                },
+                                            ),
+                                            style = typo().bodySmall,
+                                        )
+                                    }
+                                }
+
+                                is InAppUpdateState.Error -> {
+                                    TextButton(
+                                        onClick = {
+                                            viewModel.startInAppUpdate(response)
+                                        },
+                                    ) {
+                                        Text(
+                                            stringResource(Res.string.retry),
+                                            style = typo().bodySmall,
+                                        )
+                                    }
+                                }
                             }
                         },
                         dismissButton = {
-                            TextButton(
-                                onClick = {
-                                    shouldShowUpdateDialog = false
-                                    viewModel.showedUpdateDialog = false
-                                },
-                            ) {
-                                Text(
-                                    stringResource(Res.string.cancel),
-                                    style = typo().bodySmall,
-                                )
+                            when (inAppUpdateState) {
+                                is InAppUpdateState.Downloading,
+                                is InAppUpdateState.Verifying,
+                                -> {
+                                    TextButton(
+                                        onClick = {
+                                            viewModel.cancelInAppUpdate()
+                                        },
+                                    ) {
+                                        Text(
+                                            stringResource(Res.string.cancel),
+                                            style = typo().bodySmall,
+                                        )
+                                    }
+                                }
+
+                                else -> {
+                                    TextButton(onClick = closeUpdateDialog) {
+                                        Text(
+                                            stringResource(Res.string.cancel),
+                                            style = typo().bodySmall,
+                                        )
+                                    }
+                                }
                             }
                         },
                         title = {
@@ -995,7 +1110,7 @@ fun App(
                             Column(
                                 Modifier
                                     .heightIn(
-                                        max = 400.dp,
+                                        max = 420.dp,
                                     ).verticalScroll(
                                         rememberScrollState(),
                                     ),
@@ -1008,6 +1123,93 @@ fun App(
                                             vertical = 8.dp,
                                         ),
                                 )
+                                when (val updateUi = inAppUpdateState) {
+                                    is InAppUpdateState.Idle -> {
+                                        if (matchedAsset != null) {
+                                            val sizeSuffix =
+                                                if (matchedAsset.sizeBytes > 0L) {
+                                                    " (${formatBytesLabel(matchedAsset.sizeBytes)})"
+                                                } else {
+                                                    ""
+                                                }
+                                            Text(
+                                                text = "${matchedAsset.name}$sizeSuffix",
+                                                style = typo().bodySmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.padding(bottom = 8.dp),
+                                            )
+                                        }
+                                    }
+
+                                    is InAppUpdateState.Downloading -> {
+                                        Text(
+                                            text = stringResource(Res.string.downloading_update),
+                                            style = typo().labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
+                                        )
+                                        if (updateUi.progress != null) {
+                                            LinearProgressIndicator(
+                                                progress = { updateUi.progress },
+                                                modifier = Modifier.fillMaxWidth(),
+                                            )
+                                            val percent = (updateUi.progress * 100f).roundToInt().coerceIn(0, 100)
+                                            Text(
+                                                text =
+                                                    "${formatBytesLabel(updateUi.downloadedBytes)} / " +
+                                                        "${formatBytesLabel(updateUi.totalBytes)} ($percent%)",
+                                                style = typo().bodySmall,
+                                                modifier = Modifier.padding(top = 6.dp, bottom = 8.dp),
+                                            )
+                                        } else {
+                                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                            Text(
+                                                text = formatBytesLabel(updateUi.downloadedBytes),
+                                                style = typo().bodySmall,
+                                                modifier = Modifier.padding(top = 6.dp, bottom = 8.dp),
+                                            )
+                                        }
+                                    }
+
+                                    is InAppUpdateState.Verifying -> {
+                                        Text(
+                                            text = stringResource(Res.string.verifying_update),
+                                            style = typo().labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
+                                        )
+                                        LinearProgressIndicator(
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                        )
+                                    }
+
+                                    is InAppUpdateState.ReadyToInstall -> {
+                                        if (updateUi.needsPermission) {
+                                            Text(
+                                                text = stringResource(Res.string.unknown_apps_permission_hint),
+                                                style = typo().bodySmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.padding(vertical = 6.dp),
+                                            )
+                                        } else {
+                                            Text(
+                                                text = updateUi.assetName,
+                                                style = typo().bodySmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.padding(vertical = 6.dp),
+                                            )
+                                        }
+                                    }
+
+                                    is InAppUpdateState.Error -> {
+                                        Text(
+                                            text = stringResource(Res.string.update_download_failed, updateUi.message),
+                                            style = typo().bodySmall,
+                                            color = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.padding(vertical = 6.dp),
+                                        )
+                                    }
+                                }
                                 Markdown(
                                     response.body,
                                     typography =
@@ -1028,6 +1230,20 @@ fun App(
                                                     ),
                                                 ),
                                         ),
+                                )
+                                Text(
+                                    text = stringResource(Res.string.open_on_github),
+                                    style =
+                                        typo().bodySmall.copy(
+                                            textDecoration = TextDecoration.Underline,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        ),
+                                    modifier =
+                                        Modifier
+                                            .padding(top = 12.dp)
+                                            .clickable {
+                                                viewModel.openUpdateReleasePage(response)
+                                            },
                                 )
                             }
                         },

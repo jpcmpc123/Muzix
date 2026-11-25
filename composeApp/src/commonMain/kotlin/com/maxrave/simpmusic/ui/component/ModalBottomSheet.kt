@@ -642,7 +642,7 @@ fun InfoPlayerBottomSheet(
                     color = rememberSurfaceDarkColors().content,
                 )
                 Text(
-                    text = format?.itag?.toString() ?: stringResource(Res.string.unknown),
+                    text = format?.itag?.takeIf { it > 0 }?.toString() ?: stringResource(Res.string.unknown),
                     modifier =
                         Modifier
                             .fillMaxWidth()

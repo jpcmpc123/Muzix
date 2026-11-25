@@ -84,6 +84,50 @@ internal fun String.stripRichSyncTimestamps(): String =
         .replace(WHITESPACE_REGEX, " ")
         .trim()
 
+internal fun mergeFormatWithActiveAudioTrack(
+    dbFormat: com.maxrave.domain.data.entities.NewFormatEntity?,
+    activeTrack: com.maxrave.domain.data.player.ActiveAudioTrackInfo?,
+    currentMediaId: String?,
+): com.maxrave.domain.data.entities.NewFormatEntity? {
+    val matchingTrack =
+        activeTrack?.takeIf { info ->
+            val cleanCurrent = currentMediaId?.removePrefix(com.maxrave.common.MERGING_DATA_TYPE.VIDEO)
+            val cleanInfo = info.mediaId.removePrefix(com.maxrave.common.MERGING_DATA_TYPE.VIDEO)
+            cleanCurrent == null || cleanInfo == cleanCurrent
+        }
+    if (dbFormat != null) {
+        if (matchingTrack == null) return dbFormat
+        return dbFormat.copy(
+            mimeType = dbFormat.mimeType?.takeIf { it.isNotBlank() } ?: matchingTrack.mimeType,
+            codecs = dbFormat.codecs?.takeIf { it.isNotBlank() } ?: matchingTrack.codecs,
+            bitrate = dbFormat.bitrate?.takeIf { it > 0 } ?: matchingTrack.bitrate,
+            sampleRate = dbFormat.sampleRate?.takeIf { it > 0 } ?: matchingTrack.sampleRate,
+        )
+    }
+    if (matchingTrack == null) return null
+    val hasAnyMetadata =
+        !matchingTrack.mimeType.isNullOrBlank() ||
+            !matchingTrack.codecs.isNullOrBlank() ||
+            (matchingTrack.bitrate ?: 0) > 0 ||
+            (matchingTrack.sampleRate ?: 0) > 0
+    if (!hasAnyMetadata) return null
+    return com.maxrave.domain.data.entities.NewFormatEntity(
+        videoId = currentMediaId ?: matchingTrack.mediaId,
+        itag = 0,
+        mimeType = matchingTrack.mimeType,
+        codecs = matchingTrack.codecs,
+        bitrate = matchingTrack.bitrate,
+        sampleRate = matchingTrack.sampleRate,
+        contentLength = null,
+        loudnessDb = null,
+        lengthSeconds = null,
+        playbackTrackingVideostatsPlaybackUrl = null,
+        playbackTrackingAtrUrl = null,
+        playbackTrackingVideostatsWatchtimeUrl = null,
+        cpn = null,
+    )
+}
+
 /**
  * "Opus · 154 kbps · 48 kHz" — the Apple Music style's quality line, read off the format YouTube
  * served for the track now playing: its codec, `bitrate` (the figure the Info sheet prints in bps),
@@ -110,8 +154,11 @@ private fun resolveFriendlyAudioCodec(
     val combined = "${codecs.orEmpty()} ${mimeType.orEmpty()}".lowercase()
     return when {
         "flac" in combined -> "FLAC"
+        "alac" in combined -> "ALAC"
         "opus" in combined || itag in setOf(249, 250, 251, 774) -> "Opus"
         "mp4a" in combined || "aac" in combined || itag in setOf(139, 140, 141) -> "AAC"
+        "vorbis" in combined || itag in setOf(171, 172) -> "Vorbis"
+        "mpeg" in combined || "mp3" in combined -> "MP3"
         else -> null
     }
 }

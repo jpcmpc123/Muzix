@@ -32,6 +32,7 @@ import com.maxrave.domain.data.model.intent.GenericIntent
 import com.maxrave.domain.data.model.metadata.Lyrics
 import com.maxrave.domain.data.model.promo.Promo
 import com.maxrave.domain.data.model.streams.TimeLine
+import com.maxrave.domain.data.model.update.ReleaseAsset
 import com.maxrave.domain.data.model.update.UpdateData
 import com.maxrave.domain.data.player.GenericCastState
 import com.maxrave.domain.data.player.LiveStreamRegistry
@@ -84,15 +85,26 @@ import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.LogLevel
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.InAppUpdateState
+import com.maxrave.simpmusic.expect.canInstallApkUpdates
+import com.maxrave.simpmusic.expect.cleanupOldUpdateApks
+import com.maxrave.simpmusic.expect.deviceSupportedAbis
+import com.maxrave.simpmusic.expect.downloadApkUpdate
 import com.maxrave.simpmusic.expect.getDownloadFolderPath
 import com.maxrave.simpmusic.expect.isOnUnmeteredNetwork
+import com.maxrave.simpmusic.expect.launchApkInstaller
+import com.maxrave.simpmusic.expect.openUnknownSourcesSettings
+import com.maxrave.simpmusic.expect.openUrl
+import com.maxrave.simpmusic.expect.supportsInAppApkUpdate
 import com.maxrave.simpmusic.expect.ui.toByteArray
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.LyricsUiPrep
+import com.maxrave.simpmusic.ui.screen.player.content.mergeFormatWithActiveAudioTrack
 import com.maxrave.simpmusic.utils.LyricsPromo
 import com.maxrave.simpmusic.utils.VersionManager
 import com.maxrave.simpmusic.utils.decodeLyricsPromos
 import com.maxrave.simpmusic.utils.decodePromos
+import com.maxrave.simpmusic.utils.selectBestApkAsset
 import com.maxrave.simpmusic.utils.shownPromoIds
 import com.maxrave.simpmusic.utils.withShownPromo
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
@@ -118,8 +130,10 @@ import kotlinx.coroutines.flow.cancellable
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -203,8 +217,23 @@ class SharedViewModel(
     private var regionCode: String? = null
     private var language: String? = null
 
-    private var _format: MutableStateFlow<NewFormatEntity?> = MutableStateFlow(null)
-    val format: SharedFlow<NewFormatEntity?> = _format.asSharedFlow()
+    private val _dbFormat: MutableStateFlow<NewFormatEntity?> = MutableStateFlow(null)
+    val format: StateFlow<NewFormatEntity?> =
+        combine(
+            _dbFormat,
+            mediaPlayerHandler.activeAudioTrackInfo,
+            mediaPlayerHandler.nowPlayingState,
+        ) { dbFormat, trackInfo, playing ->
+            mergeFormatWithActiveAudioTrack(
+                dbFormat = dbFormat,
+                activeTrack = trackInfo,
+                currentMediaId = playing.mediaItem.mediaId.takeIf { it.isNotEmpty() } ?: dbFormat?.videoId,
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
+
+    private val _inAppUpdateState = MutableStateFlow<InAppUpdateState>(InAppUpdateState.Idle)
+    val inAppUpdateState: StateFlow<InAppUpdateState> = _inAppUpdateState.asStateFlow()
+    private var inAppUpdateJob: Job? = null
 
     /**
      * Which extractor and cipher decoder produced the current track's URLs, shown in the info sheet.
@@ -366,6 +395,9 @@ class SharedViewModel(
                 dataStoreManager.setAppVersion(
                     VersionManager.getVersionName(),
                 )
+                launch(Dispatchers.IO) {
+                    runCatching { cleanupOldUpdateApks() }
+                }
             }
             dataStoreManager.openApp()
             launch { ensureUserProtectedSignaturesLoaded() }
@@ -1394,19 +1426,15 @@ class SharedViewModel(
     }
 
     private fun getFormat(mediaId: String?) {
-        if (mediaId != _format.value?.videoId && !mediaId.isNullOrEmpty()) {
-            _format.value = null
+        if (mediaId != _dbFormat.value?.videoId && !mediaId.isNullOrEmpty()) {
+            _dbFormat.value = null
             _extractSource.value = streamRepository.getExtractSource(mediaId)
             getFormatFlowJob?.cancel()
             getFormatFlowJob =
                 viewModelScope.launch {
                     streamRepository.getFormatFlow(mediaId).cancellable().collectLatest { f ->
                         Logger.d(tag, "Get format for $mediaId: itag ${f?.itag}, expires ${f?.expiredTime}")
-                        if (f != null) {
-                            _format.emit(f)
-                        } else {
-                            _format.emit(null)
-                        }
+                        _dbFormat.emit(f)
                         // Re-read on every emission: the first one usually lands before the
                         // extractor has finished, so the source is only known on a later pass.
                         _extractSource.value = streamRepository.getExtractSource(mediaId)
@@ -1457,10 +1485,32 @@ class SharedViewModel(
                             }
                             val obj = Json.parseToJsonElement(httpResponse.bodyAsText()).jsonObject
                             val tagName = obj["tag_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@use null
+                            val assets =
+                                obj["assets"]
+                                    ?.jsonArray
+                                    ?.mapNotNull { element ->
+                                        val assetObj = runCatching { element.jsonObject }.getOrNull() ?: return@mapNotNull null
+                                        val name = assetObj["name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.endsWith(".apk", ignoreCase = true) } ?: return@mapNotNull null
+                                        val downloadUrl = assetObj["browser_download_url"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                                        val sizeBytes = assetObj["size"]?.jsonPrimitive?.longOrNull ?: 0L
+                                        val digestRaw = assetObj["digest"]?.jsonPrimitive?.contentOrNull
+                                        val sha256 =
+                                            digestRaw
+                                                ?.substringAfter("sha256:", missingDelimiterValue = "")
+                                                ?.takeIf { it.length == 64 }
+                                        ReleaseAsset(
+                                            name = name,
+                                            downloadUrl = downloadUrl,
+                                            sizeBytes = sizeBytes,
+                                            sha256 = sha256,
+                                        )
+                                    }.orEmpty()
                             UpdateData(
                                 tagName = tagName,
                                 releaseTime = obj["published_at"]?.jsonPrimitive?.contentOrNull,
                                 body = obj["body"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                                releaseUrl = obj["html_url"]?.jsonPrimitive?.contentOrNull,
+                                assets = assets,
                             )
                         }
                     }
@@ -1480,6 +1530,88 @@ class SharedViewModel(
             // must never stay raised.
             _isCheckingUpdate.value = false
         }
+    }
+
+    fun startInAppUpdate(update: UpdateData) {
+        val asset =
+            if (supportsInAppApkUpdate()) {
+                selectBestApkAsset(update.assets, deviceSupportedAbis())
+            } else {
+                null
+            }
+        if (asset == null) {
+            openUpdateReleasePage(update)
+            return
+        }
+        if (inAppUpdateJob?.isActive == true) return
+        inAppUpdateJob =
+            viewModelScope.launch {
+                _inAppUpdateState.value =
+                    InAppUpdateState.Downloading(
+                        assetName = asset.name,
+                        downloadedBytes = 0L,
+                        totalBytes = asset.sizeBytes,
+                        progress = if (asset.sizeBytes > 0L) 0f else null,
+                    )
+                val result =
+                    downloadApkUpdate(asset) { state ->
+                        _inAppUpdateState.value = state
+                    }
+                result
+                    .onSuccess { filePath ->
+                        val hasPermission = canInstallApkUpdates()
+                        _inAppUpdateState.value =
+                            InAppUpdateState.ReadyToInstall(
+                                filePath = filePath,
+                                assetName = asset.name,
+                                needsPermission = !hasPermission,
+                            )
+                        if (hasPermission) {
+                            launchApkInstaller(filePath)
+                        }
+                    }.onFailure { error ->
+                        if (error is CancellationException) throw error
+                        _inAppUpdateState.value =
+                            InAppUpdateState.Error(
+                                error.message ?: "Download failed",
+                            )
+                    }
+            }
+    }
+
+    fun cancelInAppUpdate() {
+        inAppUpdateJob?.cancel()
+        inAppUpdateJob = null
+        _inAppUpdateState.value = InAppUpdateState.Idle
+    }
+
+    fun installDownloadedUpdate() {
+        val ready = _inAppUpdateState.value as? InAppUpdateState.ReadyToInstall ?: return
+        if (canInstallApkUpdates()) {
+            _inAppUpdateState.value = ready.copy(needsPermission = false)
+            launchApkInstaller(ready.filePath)
+        } else {
+            _inAppUpdateState.value = ready.copy(needsPermission = true)
+            openUnknownSourcesSettings()
+        }
+    }
+
+    fun onResumeCheckInAppUpdatePermission() {
+        val ready = _inAppUpdateState.value as? InAppUpdateState.ReadyToInstall ?: return
+        if (ready.needsPermission && canInstallApkUpdates()) {
+            _inAppUpdateState.value = ready.copy(needsPermission = false)
+            launchApkInstaller(ready.filePath)
+        }
+    }
+
+    fun resetInAppUpdateState() {
+        if (inAppUpdateJob?.isActive != true) {
+            _inAppUpdateState.value = InAppUpdateState.Idle
+        }
+    }
+
+    fun openUpdateReleasePage(update: UpdateData?) {
+        openUrl(update?.releaseUrl ?: "https://github.com/jpcmpc123/Muzix/releases/latest")
     }
 
     /**

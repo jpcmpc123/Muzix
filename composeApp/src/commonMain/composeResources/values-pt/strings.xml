@@ -1261,4 +1261,12 @@
     <string name="equalizer_autoeq_import_invalid">Não foi possível reconhecer filtros de EQ válidos nesse texto</string>
     <string name="equalizer_autoeq_parametric_badge">Paramétrico</string>
     <string name="equalizer_autoeq_custom_badge">Importado</string>
+    <string name="downloading_update">Baixando atualização…</string>
+    <string name="verifying_update">Verificando integridade do pacote…</string>
+    <string name="install_update">Instalar agora</string>
+    <string name="allow_install_unknown_apps">Permitir instalação</string>
+    <string name="unknown_apps_permission_hint">É necessário permitir a instalação de APKs pelo Muzix para concluir a atualização.</string>
+    <string name="open_on_github">Abrir no GitHub</string>
+    <string name="continue_in_background">Segundo plano</string>
+    <string name="update_download_failed">Falha ao baixar atualização: %1$s</string>
 </resources>
