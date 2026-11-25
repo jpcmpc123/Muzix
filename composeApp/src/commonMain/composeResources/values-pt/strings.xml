@@ -684,7 +684,7 @@
     <string name="discord_open_authorize_page">Abrir Discord</string>
     <string name="discord_login_failed">Não foi possível entrar no Discord. Tente novamente.</string>
     <string name="logged_in_as">Conectado como %1$s</string>
-    <string name="youtube_liked_music">Músicas curtidas do YouTube</string>
+    <string name="youtube_liked_music">Músicas que Gostei</string>
     <string name="keep_your_youtube_playlist_offline">Continuar mostrando sua playlist do YouTube offline</string>
     <string name="keep_your_youtube_playlist_offline_description">Salvar sua playlist do YT localmente e mantê-la visível quando estiver offline</string>
     <string name="combine_local_and_youtube_liked_songs">Substituir Favoritos pelas músicas marcadas com 'Gostei' do YouTube ao fazer login</string>
@@ -1275,4 +1275,11 @@
     <string name="open_on_github">Abrir no GitHub</string>
     <string name="continue_in_background">Segundo plano</string>
     <string name="update_download_failed">Falha ao baixar atualização: %1$s</string>
+    <string name="history">Histórico</string>
+    <string name="history_today">Hoje</string>
+    <string name="history_yesterday">Ontem</string>
+    <string name="history_this_week">Esta semana</string>
+    <string name="history_this_month">Este mês</string>
+    <string name="history_older">Mais antigos</string>
+    <string name="no_history">Nenhum histórico ainda</string>
 </resources>

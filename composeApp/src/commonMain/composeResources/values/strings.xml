@@ -700,7 +700,7 @@
     <string name="discord_open_authorize_page">Open Discord</string>
     <string name="discord_login_failed">Could not log in to Discord. Please try again.</string>
     <string name="logged_in_as">Logged in as %1$s</string>
-    <string name="youtube_liked_music">YouTube Liked Music</string>
+    <string name="youtube_liked_music">Liked Music</string>
     <string name="keep_your_youtube_playlist_offline">Keep showing your YouTube playlist when offline</string>
     <string name="keep_your_youtube_playlist_offline_description">Save your YT playlist to local and keep to show when offline</string>
     <string name="combine_local_and_youtube_liked_songs">Replace Favorite by YouTube Liked when logged in</string>
@@ -1297,4 +1297,11 @@
     <string name="open_on_github">Open on GitHub</string>
     <string name="continue_in_background">Background</string>
     <string name="update_download_failed">Update download failed: %1$s</string>
+    <string name="history">History</string>
+    <string name="history_today">Today</string>
+    <string name="history_yesterday">Yesterday</string>
+    <string name="history_this_week">This week</string>
+    <string name="history_this_month">This month</string>
+    <string name="history_older">Older</string>
+    <string name="no_history">No listening history yet</string>
 </resources>

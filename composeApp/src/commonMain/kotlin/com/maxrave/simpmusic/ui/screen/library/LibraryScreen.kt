@@ -14,11 +14,11 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,14 +31,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -52,87 +55,72 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
-import coil3.request.ImageRequest
-import coil3.request.crossfade
 import com.maxrave.common.LibraryChipType
-import com.maxrave.domain.data.entities.AlbumEntity
-import com.maxrave.domain.data.entities.ArtistEntity
 import com.maxrave.domain.data.entities.PlaylistEntity
-import com.maxrave.domain.data.entities.PodcastsEntity
-import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.data.model.taste.TasteProfile
-import com.maxrave.domain.data.type.RecentlyType
 import com.maxrave.domain.utils.LocalResource
-import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.ui.DesktopMiniPlayerClearance
 import com.maxrave.simpmusic.expect.ui.VerticalScrollBar
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.extension.copy
+import com.maxrave.simpmusic.extension.glassHazeSource
 import com.maxrave.simpmusic.extension.isScrollingUp
-import com.maxrave.simpmusic.extension.ultraThinBarStyle
 import com.maxrave.simpmusic.extension.ultraThinBarBlur
 import com.maxrave.simpmusic.getPlatform
-import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
+import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.Chip
 import com.maxrave.simpmusic.ui.component.CreateLocalPlaylistSheet
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.GridLibraryPlaylist
-import com.maxrave.simpmusic.ui.component.LibraryItem
-import com.maxrave.simpmusic.ui.component.LibraryItemState
-import com.maxrave.simpmusic.ui.component.LibraryItemType
 import com.maxrave.simpmusic.ui.component.LibraryTilingBox
-import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
-import com.maxrave.simpmusic.ui.component.RecentlyAddedRow
+import com.maxrave.simpmusic.ui.component.ListenTogetherIconButton
+import com.maxrave.simpmusic.ui.component.PlaylistFullWidthItems
+import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.taste.ShareTasteSheet
 import com.maxrave.simpmusic.ui.component.taste.TasteCard
-import com.maxrave.simpmusic.ui.component.ListenTogetherIconButton
-import com.maxrave.simpmusic.ui.component.RippleIconButton
-import com.maxrave.simpmusic.ui.component.selection.SelectedSongsBottomSheet
-import com.maxrave.simpmusic.ui.component.selection.SongSelectionTopAppBar
-import com.maxrave.simpmusic.ui.component.selection.rememberSongSelectionState
-import com.maxrave.simpmusic.ui.icon.Groups
+import com.maxrave.simpmusic.ui.icon.History
 import com.maxrave.simpmusic.ui.icon.PeopleAlt
+import com.maxrave.simpmusic.ui.icon.Refresh
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.ListenTogetherDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.SettingsDestination
+import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryHistoryDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.theme.LocalLiquidGlassEnabled
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.utils.primeCollectionArtworkNavigation
 import com.maxrave.simpmusic.viewModel.LibraryViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
-import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
 import com.maxrave.simpmusic.viewModel.TasteUiState
 import com.maxrave.simpmusic.viewModel.TasteViewModel
-import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.blur.hazeBlur
-import com.maxrave.simpmusic.extension.glassHazeSource
-import dev.chrisbanes.haze.hazeSource
-import kotlinx.coroutines.flow.distinctUntilChanged
+import com.maxrave.simpmusic.viewModel.deduplicateYouTubePlaylistsWithoutLiked
 import dev.chrisbanes.haze.rememberHazeState
-import org.jetbrains.compose.resources.painterResource
+import kotlinx.coroutines.flow.distinctUntilChanged
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.chart
 import simpmusic.composeapp.generated.resources.downloaded_playlists
 import simpmusic.composeapp.generated.resources.favorite_playlists
 import simpmusic.composeapp.generated.resources.favorite_podcasts
 import simpmusic.composeapp.generated.resources.library
 import simpmusic.composeapp.generated.resources.mix_for_you
-import simpmusic.composeapp.generated.resources.no_YouTube_playlists
 import simpmusic.composeapp.generated.resources.no_charts_found
 import simpmusic.composeapp.generated.resources.no_favorite_playlists
 import simpmusic.composeapp.generated.resources.no_favorite_podcasts
 import simpmusic.composeapp.generated.resources.no_playlists_added
 import simpmusic.composeapp.generated.resources.no_playlists_downloaded
-import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.simpmusic_charts
 import simpmusic.composeapp.generated.resources.wrapped
 import simpmusic.composeapp.generated.resources.your_library
 import simpmusic.composeapp.generated.resources.your_playlists
 import simpmusic.composeapp.generated.resources.your_youtube_playlists
+import simpmusic.composeapp.generated.resources.youtube_liked_music
+
+private const val LIKED_MUSIC_THUMBNAIL_URL =
+    "https://www.gstatic.com/youtube/media/ytm/images/pbg/liked-songs-delhi-1200.png"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -150,15 +138,12 @@ fun LibraryScreen(
     // setting the Analytics tab does.
     val localTrackingEnabled by viewModel.localTrackingEnabled.collectAsStateWithLifecycle(initialValue = false)
     val monthlyRecaps by viewModel.monthlyRecaps.collectAsStateWithLifecycle()
-    val nowPlaying by viewModel.nowPlayingVideoId.collectAsStateWithLifecycle()
     val youTubePlaylist by viewModel.youTubePlaylist.collectAsStateWithLifecycle()
-    val listCanvasSong by viewModel.listCanvasSong.collectAsStateWithLifecycle()
     val yourLocalPlaylist by viewModel.yourLocalPlaylist.collectAsStateWithLifecycle()
     val favoritePlaylist by viewModel.favoritePlaylist.collectAsStateWithLifecycle()
     val downloadedPlaylist by viewModel.downloadedPlaylist.collectAsStateWithLifecycle()
     val favoritePodcasts by viewModel.favoritePodcasts.collectAsStateWithLifecycle()
     val chartPlaylists by viewModel.chartPlaylists.collectAsStateWithLifecycle()
-    val recentlyAdded by viewModel.recentlyAdded.collectAsStateWithLifecycle()
     val libraryOverview by viewModel.libraryOverview.collectAsStateWithLifecycle()
     val cachedPreview by viewModel.cachedPreview.collectAsStateWithLifecycle()
     // The player cache is no table to observe, so the Cached card is read again each time the
@@ -167,27 +152,17 @@ fun LibraryScreen(
         LaunchedEffect(Unit) { viewModel.refreshCachedPreview() }
     }
 
-    val selectionState = rememberSongSelectionState()
-    val selectionViewModel: SongSelectionViewModel = koinViewModel()
     val tasteViewModel: TasteViewModel = koinViewModel()
     // Held here rather than inside the list item, so the sheet does not close if its card scrolls
     // out of composition behind it.
     var sharingTaste by remember { mutableStateOf<TasteProfile?>(null) }
-    var showSelectionSheet by rememberSaveable { mutableStateOf(false) }
-    var showSelectionAddToPlaylist by rememberSaveable { mutableStateOf(false) }
     val accountThumbnail by viewModel.accountThumbnail.collectAsStateWithLifecycle()
-    val hazeState =
-        rememberHazeState()
+    val hazeState = rememberHazeState()
 
     var topAppBarHeight by remember {
         mutableStateOf(0.dp)
     }
     var showAddSheet by remember { mutableStateOf(false) }
-
-    LaunchedEffect(nowPlaying) {
-        Logger.w("LibraryScreen", "Check nowPlaying: $nowPlaying")
-        viewModel.getRecentlyAdded()
-    }
 
     val chipRowState = rememberScrollState()
     val currentFilter by viewModel.currentScreen.collectAsStateWithLifecycle()
@@ -195,29 +170,34 @@ fun LibraryScreen(
     val libraryTabRequest by sharedViewModel.libraryTabRequest.collectAsStateWithLifecycle()
     LaunchedEffect(libraryTabRequest) {
         libraryTabRequest?.let {
-            viewModel.setCurrentScreen(it)
+            val target =
+                if (it == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST || it == LibraryChipType.YOUTUBE_MIX_FOR_YOU) {
+                    LibraryChipType.YOUR_LIBRARY
+                } else {
+                    it
+                }
+            viewModel.setCurrentScreen(target)
             sharedViewModel.requestLibraryTab(null)
         }
     }
 
-    LaunchedEffect(currentFilter) {
+    LaunchedEffect(currentFilter, loggedIn) {
         when (currentFilter) {
-            LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> {
-                if (youTubePlaylist.data.isNullOrEmpty()) {
-                    viewModel.getYouTubePlaylist()
-                }
-            }
-
-            // Mix for you has its own nav tab now. The filter is persisted, so a build upgraded
-            // while it was selected would land here with no chip to match — send it back to the
-            // default. The enum value itself stays so older persisted values still parse.
+            // Your YouTube Playlists now lives directly inside Your library, and Mix for you has
+            // its own nav tab. Redirect persisted or deep-linked selections back to YOUR_LIBRARY.
+            LibraryChipType.YOUTUBE_MUSIC_PLAYLIST,
             LibraryChipType.YOUTUBE_MIX_FOR_YOU -> {
                 viewModel.setCurrentScreen(LibraryChipType.YOUR_LIBRARY)
             }
 
             LibraryChipType.YOUR_LIBRARY -> {
-                viewModel.getCanvasSong()
-                viewModel.getRecentlyAdded()
+                if (loggedIn) {
+                    if (youTubePlaylist.data.isNullOrEmpty()) {
+                        viewModel.getYouTubePlaylist()
+                    }
+                } else {
+                    viewModel.clearYouTubePlaylist()
+                }
             }
 
             LibraryChipType.LOCAL_PLAYLIST -> {
@@ -264,161 +244,213 @@ fun LibraryScreen(
                         .distinctUntilChanged()
                         .collect { onScrolling.invoke(it) }
                 }
-                // Desktop windows run wide; this tab keeps to the floating capsule player's width
-                // so its cards line up with the capsule instead of stretching edge to edge. Done
-                // as content padding rather than by narrowing the list, so the side gutters stay
-                // part of it and the wheel still scrolls there.
-                BoxWithConstraints(Modifier.fillMaxSize()) {
-                    val layoutDirection = LocalLayoutDirection.current
-                    val innerStart = innerPadding.calculateStartPadding(layoutDirection)
-                    val innerEnd = innerPadding.calculateEndPadding(layoutDirection)
-                    val sideInset =
-                        if (getPlatform() == Platform.Desktop) {
-                            ((maxWidth - innerStart - innerEnd - YOUR_LIBRARY_MAX_WIDTH) / 2).coerceAtLeast(0.dp)
-                        } else {
-                            0.dp
-                        }
-                    val recentItems =
-                        remember(recentlyAdded) {
-                            if (recentlyAdded is LocalResource.Loading) {
-                                emptyList()
-                            } else {
-                                (recentlyAdded.data ?: emptyList()).filterIsInstance<RecentlyType>()
-                            }
-                        }
-                    val recentKeys =
-                        remember(recentItems) {
-                            val seen = HashMap<String, Int>(recentItems.size)
-                            recentItems.map { entry ->
-                                val base =
-                                    when (entry) {
-                                        is SongEntity -> "song_${entry.videoId}"
-                                        is ArtistEntity -> "artist_${entry.channelId}"
-                                        is AlbumEntity -> "album_${entry.browseId}"
-                                        is PlaylistEntity -> "playlist_${entry.id}"
-                                        is PodcastsEntity -> "podcast_${entry.podcastId}"
-                                        else -> "recent_${entry.hashCode()}"
-                                    }
-                                val count = seen[base] ?: 0
-                                seen[base] = count + 1
-                                if (count == 0) base else "$base#$count"
-                            }
-                        }
-                    val radioSuffix = stringResource(Res.string.radio)
-                    var recentSheetSong by remember { mutableStateOf<SongEntity?>(null) }
-                    if (recentSheetSong != null) {
-                        NowPlayingBottomSheet(
-                            onDismiss = { recentSheetSong = null },
-                            navController = navController,
-                            song = recentSheetSong!!,
-                            onLibraryDelete = {
-                                recentSheetSong?.videoId?.let { viewModel.deleteSong(it) }
-                            },
-                        )
-                    }
-                    LazyColumn(
-                        contentPadding =
-                            innerPadding.copy(
-                                start = innerStart + sideInset,
-                                top = topAppBarHeight,
-                                end = innerEnd + sideInset,
-                            ),
-                        state = state,
-                    ) {
-                        item {
-                            LibraryTilingBox(navController, libraryOverview, cachedPreview)
-                        }
 
-                        // The reading is drawn from playback_event, so the card follows the same
-                        // setting the Wrapped chip and the Analytics tab do.
-                        if (localTrackingEnabled) {
-                            item(key = "taste") {
-                                val tasteState by tasteViewModel.uiState.collectAsStateWithLifecycle()
-                                if (tasteState != TasteUiState.Hidden) {
-                                    TasteCard(
-                                        state = tasteState,
-                                        onGenerate = tasteViewModel::generate,
-                                        onOpenSettings = { navController.navigate(SettingsDestination) },
-                                        onShare = { sharingTaste = it },
-                                        modifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 8.dp),
-                                    )
+                val pullToRefreshState = rememberPullToRefreshState()
+                var userRefreshing by remember { mutableStateOf(false) }
+                val rawPlaylists = youTubePlaylist.data ?: emptyList()
+                var lastLoadedPlaylists by remember { mutableStateOf(rawPlaylists) }
+                LaunchedEffect(youTubePlaylist) {
+                    when (youTubePlaylist) {
+                        is LocalResource.Loading -> Unit
+                        is LocalResource.Success -> {
+                            userRefreshing = false
+                            lastLoadedPlaylists = youTubePlaylist.data ?: emptyList()
+                        }
+                        is LocalResource.Error -> {
+                            userRefreshing = false
+                        }
+                    }
+                }
+                val visibleYouTubePlaylists =
+                    remember(youTubePlaylist, userRefreshing, lastLoadedPlaylists) {
+                        val base =
+                            if (youTubePlaylist is LocalResource.Loading && userRefreshing) {
+                                lastLoadedPlaylists
+                            } else {
+                                youTubePlaylist.data ?: emptyList()
+                            }
+                        deduplicateYouTubePlaylistsWithoutLiked(base)
+                    }
+                val showTopIndicator = userRefreshing && youTubePlaylist is LocalResource.Loading
+
+                PullToRefreshBox(
+                    modifier = Modifier.fillMaxSize(),
+                    state = pullToRefreshState,
+                    onRefresh = {
+                        userRefreshing = true
+                        if (getPlatform() == Platform.Android) {
+                            viewModel.refreshCachedPreview()
+                        }
+                        if (loggedIn) {
+                            viewModel.getYouTubePlaylist()
+                        } else {
+                            userRefreshing = false
+                        }
+                    },
+                    isRefreshing = showTopIndicator,
+                    indicator = {
+                        PullToRefreshDefaults.Indicator(
+                            state = pullToRefreshState,
+                            isRefreshing = showTopIndicator,
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = topAppBarHeight),
+                            containerColor = PullToRefreshDefaults.indicatorContainerColor,
+                            color = PullToRefreshDefaults.indicatorColor,
+                            maxDistance = PullToRefreshDefaults.PositionalThreshold,
+                        )
+                    },
+                ) {
+                    // Desktop windows run wide; this tab keeps to the floating capsule player's width
+                    // so its cards line up with the capsule instead of stretching edge to edge. Done
+                    // as content padding rather than by narrowing the list, so the side gutters stay
+                    // part of it and the wheel still scrolls there.
+                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val layoutDirection = LocalLayoutDirection.current
+                        val innerStart = innerPadding.calculateStartPadding(layoutDirection)
+                        val innerEnd = innerPadding.calculateEndPadding(layoutDirection)
+                        val sideInset =
+                            if (getPlatform() == Platform.Desktop) {
+                                ((maxWidth - innerStart - innerEnd - YOUR_LIBRARY_MAX_WIDTH) / 2).coerceAtLeast(0.dp)
+                            } else {
+                                0.dp
+                            }
+                        val platformContext = LocalPlatformContext.current
+                        val likedMusicTitle = stringResource(Res.string.youtube_liked_music)
+                        val likedPlaylist =
+                            remember(likedMusicTitle) {
+                                PlaylistEntity(
+                                    title = likedMusicTitle,
+                                    author = "YouTube Music",
+                                    id = "LM",
+                                    description = "PIN",
+                                    thumbnails = LIKED_MUSIC_THUMBNAIL_URL,
+                                )
+                            }
+
+                        LazyColumn(
+                            contentPadding =
+                                innerPadding.copy(
+                                    start = innerStart + sideInset,
+                                    top = topAppBarHeight,
+                                    end = innerEnd + sideInset,
+                                ),
+                            state = state,
+                        ) {
+                            item {
+                                LibraryTilingBox(navController, libraryOverview, cachedPreview)
+                            }
+
+                            // The reading is drawn from playback_event, so the card follows the same
+                            // setting the Wrapped chip and the Analytics tab do.
+                            if (localTrackingEnabled) {
+                                item(key = "taste") {
+                                    val tasteState by tasteViewModel.uiState.collectAsStateWithLifecycle()
+                                    if (tasteState != TasteUiState.Hidden) {
+                                        TasteCard(
+                                            state = tasteState,
+                                            onGenerate = tasteViewModel::generate,
+                                            onOpenSettings = { navController.navigate(SettingsDestination) },
+                                            onShare = { sharingTaste = it },
+                                            modifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 8.dp),
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        if (!listCanvasSong.data.isNullOrEmpty()) {
+                            if (loggedIn) {
+                                item(key = "youtube_playlists_header", contentType = "library_section_header") {
+                                    Row(
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = 12.dp, bottom = 4.dp, start = 16.dp, end = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = stringResource(Res.string.your_youtube_playlists),
+                                            style = typo().headlineMedium,
+                                            color = MaterialTheme.colorScheme.onBackground,
+                                            maxLines = 1,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        RippleIconButton(
+                                            imageVector = SimpIcons.Refresh,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(36.dp),
+                                        ) {
+                                            viewModel.getYouTubePlaylist()
+                                        }
+                                    }
+                                }
+
+                                item(key = "yt_liked_music_pinned", contentType = "youtube_playlist_row") {
+                                    PlaylistFullWidthItems(
+                                        data = likedPlaylist,
+                                        onClickListener = {
+                                            primeCollectionArtworkNavigation(
+                                                platformContext = platformContext,
+                                                collectionId = likedPlaylist.id,
+                                                rawThumbUrl = likedPlaylist.thumbnails,
+                                            )
+                                            navController.navigate(PlaylistDestination(likedPlaylist.id))
+                                        },
+                                    )
+                                }
+
+                                if (youTubePlaylist is LocalResource.Loading && visibleYouTubePlaylists.isEmpty()) {
+                                    item(key = "yt_playlists_loading") {
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .height(96.dp),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            CenterLoadingBox(Modifier.size(32.dp))
+                                        }
+                                    }
+                                } else {
+                                    itemsIndexed(
+                                        items = visibleYouTubePlaylists,
+                                        key = { index, item -> "ytpl_${item.browseId}_$index" },
+                                        contentType = { _, _ -> "youtube_playlist_row" },
+                                    ) { _, playlist ->
+                                        PlaylistFullWidthItems(
+                                            data = playlist,
+                                            onClickListener = {
+                                                primeCollectionArtworkNavigation(
+                                                    platformContext = platformContext,
+                                                    collectionId = playlist.browseId,
+                                                    rawThumbUrl = playlist.thumbnails.lastOrNull()?.url,
+                                                )
+                                                navController.navigate(
+                                                    PlaylistDestination(
+                                                        playlistId = playlist.browseId,
+                                                        isYourYouTubePlaylist = true,
+                                                    ),
+                                                )
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+
                             item {
-                                LibraryItem(
-                                    state =
-                                        LibraryItemState(
-                                            type = LibraryItemType.CanvasSong,
-                                            data = listCanvasSong.data ?: emptyList(),
-                                            isLoading = listCanvasSong is LocalResource.Loading,
-                                        ),
-                                    navController = navController,
-                                )
+                                EndOfPage()
                             }
                         }
-
-                        item(key = "recently_added_header", contentType = "library_section_header") {
-                            LibraryItem(
-                                state =
-                                    LibraryItemState(
-                                        type =
-                                            LibraryItemType.RecentlyAdded(
-                                                playingVideoId = nowPlaying,
-                                                skipInlineList = true,
-                                            ),
-                                        data = recentlyAdded.data ?: emptyList(),
-                                        isLoading = recentlyAdded is LocalResource.Loading,
-                                    ),
-                                navController = navController,
-                                selectionState = selectionState,
-                            )
-                        }
-                        if (recentItems.isNotEmpty()) {
-                            itemsIndexed(
-                                items = recentItems,
-                                key = { index, _ -> recentKeys[index] },
-                                contentType = { _, entry -> entry.objectType().name },
-                            ) { _, entry ->
-                                RecentlyAddedRow(
-                                    item = entry,
-                                    playingVideoId = nowPlaying,
-                                    radioSuffix = radioSuffix,
-                                    navController = navController,
-                                    viewModel = viewModel,
-                                    sharedViewModel = sharedViewModel,
-                                    selectionState = selectionState,
-                                    onShowBottomSheet = { clicked -> recentSheetSong = clicked },
-                                )
-                            }
-                        }
-                        item {
-                            EndOfPage()
-                        }
+                        VerticalScrollBar(
+                            scrollState = state,
+                            modifier = Modifier.padding(top = topAppBarHeight, bottom = DesktopMiniPlayerClearance),
+                        )
                     }
-                    VerticalScrollBar(
-                        scrollState = state,
-                        modifier = Modifier.padding(top = topAppBarHeight, bottom = DesktopMiniPlayerClearance),
-                    )
                 }
             }
 
-            LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> {
-                GridLibraryPlaylist(
-                    navController,
-                    innerPadding.copy(top = topAppBarHeight),
-                    youTubePlaylist,
-                    emptyText = Res.string.no_YouTube_playlists,
-                    onScrolling = onScrolling,
-                ) {
-                    viewModel.getYouTubePlaylist()
-                }
-            }
-
-            // Nothing to draw: MixForYouScreen owns this content now, and the effect above bounces
-            // the filter back to YOUR_LIBRARY the moment it lands here.
+            // Nothing to draw: YouTube playlists live in YOUR_LIBRARY and MixForYouScreen owns Mix for you.
+            LibraryChipType.YOUTUBE_MUSIC_PLAYLIST,
             LibraryChipType.YOUTUBE_MIX_FOR_YOU -> Unit
 
             LibraryChipType.LOCAL_PLAYLIST -> {
@@ -549,33 +581,15 @@ fun LibraryScreen(
                     )
                 }
             },
-            // The Library bar had no actions slot at all — added for the Listen Together entry,
-            // which the design canvas puts on Home AND Library.
             actions = {
+                RippleIconButton(
+                    imageVector = SimpIcons.History,
+                    tint = MaterialTheme.colorScheme.onBackground,
+                    onClick = { navController.navigate(LibraryHistoryDestination) },
+                )
                 ListenTogetherIconButton { navController.navigate(ListenTogetherDestination) }
             },
         )
-        AnimatedVisibility(visible = selectionState.isActive) {
-            SongSelectionTopAppBar(
-                state = selectionState,
-                // Stacked BELOW the Library TopAppBar in the same Column, which already consumed
-                // the status-bar inset — leaving the default here reserved it twice and opened a
-                // status-bar-sized band of dead blur between the two bars. Same fix as Search;
-                // the overlay-style call sites (Album, Artist, Recently…) keep the default because
-                // they COVER their normal bar instead of standing under it.
-                windowInsets = WindowInsets(0),
-                onSelectAll = {
-                    selectionState.toggleSelectAll(
-                        (recentlyAdded.data ?: emptyList())
-                            .filterIsInstance<SongEntity>()
-                            .map { it.videoId },
-                    )
-                },
-                onOpenActions = { showSelectionSheet = true },
-                containerColor = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.onBackground,
-            )
-        }
         Row(
             modifier =
                 Modifier
@@ -586,15 +600,13 @@ fun LibraryScreen(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             LibraryChipType.entries.forEach { type ->
-                // Mix for you left this row for a tab of its own.
-                if (type == LibraryChipType.YOUTUBE_MIX_FOR_YOU) {
+                // Your YouTube Playlists now lives in YOUR_LIBRARY, and Mix for you has its own tab.
+                if (type == LibraryChipType.YOUTUBE_MIX_FOR_YOU ||
+                    type == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST
+                ) {
                     return@forEach
                 }
-                if (type == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST && !loggedIn) {
-                    return@forEach
-                }
-                // Nothing to recap without the plays — gated exactly as the YouTube chip above
-                // is gated on being logged in.
+                // Nothing to recap without the plays — gated consistently with Analytics.
                 if (type == LibraryChipType.WRAPPED && !localTrackingEnabled) {
                     return@forEach
                 }
@@ -619,45 +631,6 @@ fun LibraryScreen(
                 }
             }
         }
-        if (showSelectionSheet) {
-            val selectedIds = selectionState.selected.toList()
-            SelectedSongsBottomSheet(
-                count = selectedIds.size,
-                onDismiss = { showSelectionSheet = false },
-                onPlayNext = {
-                    selectionViewModel.playNext(selectedIds)
-                    selectionState.exit()
-                },
-                onAddToQueue = {
-                    selectionViewModel.addToQueue(selectedIds)
-                    selectionState.exit()
-                },
-                onAddToPlaylist = { showSelectionAddToPlaylist = true },
-                onDownload = {
-                    selectionViewModel.download(selectedIds)
-                    selectionState.exit()
-                },
-                onAddToFavorite = {
-                    selectionViewModel.addToFavorite(selectedIds)
-                    selectionState.exit()
-                },
-            )
-        }
-        if (showSelectionAddToPlaylist) {
-            val selectedIds = selectionState.selected.toList()
-            val localPlaylists by selectionViewModel.listLocalPlaylist.collectAsStateWithLifecycle()
-            AddToPlaylistModalBottomSheet(
-                isBottomSheetVisible = true,
-                listLocalPlaylist = localPlaylists,
-                listYouTubePlaylist = emptyList(),
-                onDismiss = { showSelectionAddToPlaylist = false },
-                onClick = { playlist ->
-                    selectionViewModel.addToPlaylist(playlist.id, selectedIds)
-                    selectionState.exit()
-                },
-                onYTPlaylistClick = {},
-            )
-        }
     }
 }
 
@@ -668,4 +641,4 @@ fun LibraryScreen(
  * 16 + 200 (controls) + 29 (divider) + 300 (track) + 29 (divider) + 232 (heart cell 40 + four
  * 48dp icon buttons) + 16 = 822dp — so this must follow if that row changes.
  */
-private val YOUR_LIBRARY_MAX_WIDTH = 842.dp
+internal val YOUR_LIBRARY_MAX_WIDTH = 842.dp

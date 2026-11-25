@@ -56,7 +56,6 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_local_playlist
 import simpmusic.composeapp.generated.resources.wrapped_recap_month
 import simpmusic.composeapp.generated.resources.wrapped_recap_month_year
-import simpmusic.composeapp.generated.resources.youtube_liked_music
 
 class LibraryViewModel(
     private val dataStoreManager: DataStoreManager,
@@ -202,18 +201,6 @@ class LibraryViewModel(
                         temp.remove(it)
                     }
                 temp.removeIf { it is SongEntity && it.inLibrary == Config.REMOVED_SONG_DATE_TIME }
-                if (dataStoreManager.loggedIn.first() == DataStoreManager.TRUE) {
-                    temp.removeIf { it is PlaylistEntity && it.id == "LM" }
-                    temp.add(
-                        PlaylistEntity(
-                            title = getString(Res.string.youtube_liked_music),
-                            author = "YouTube Music",
-                            id = "LM",
-                            description = "PIN",
-                            thumbnails = "https://www.gstatic.com/youtube/media/ytm/images/pbg/liked-songs-delhi-1200.png",
-                        ),
-                    )
-                }
                 temp.reverse()
                 _recentlyAdded.value = LocalResource.Success(temp.toImmutableList())
             }
@@ -227,6 +214,10 @@ class LibraryViewModel(
                 _youTubePlaylist.value = LocalResource.Success(data ?: emptyList())
             }
         }
+    }
+
+    fun clearYouTubePlaylist() {
+        _youTubePlaylist.value = LocalResource.Success(emptyList())
     }
 
     fun getYouTubeMixedForYou() {

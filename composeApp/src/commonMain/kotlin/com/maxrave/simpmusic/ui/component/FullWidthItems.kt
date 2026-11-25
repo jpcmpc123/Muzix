@@ -588,7 +588,10 @@ fun PlaylistFullWidthItems(
             is PlaylistsResult -> {
                 title = data.title
                 thumb = data.thumbnails.lastOrNull()?.url ?: ""
-                secondSubtitle = data.author
+                secondSubtitle =
+                    listOf(data.author, data.itemCount)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" • ")
             }
 
             is AlbumsResult -> {
@@ -665,7 +668,7 @@ fun PlaylistFullWidthItems(
                         )
                     }
                     Text(
-                        text = "$firstSubtitle ${if (secondSubtitle.isNotEmpty()) " • $secondSubtitle" else ""}",
+                        text = "$firstSubtitle${if (secondSubtitle.isNotEmpty()) " • $secondSubtitle" else ""}",
                         style = typo().bodySmall,
                         maxLines = 1,
                         color = subtitleColor,
