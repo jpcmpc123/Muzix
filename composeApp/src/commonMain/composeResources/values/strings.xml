@@ -1304,4 +1304,7 @@
     <string name="history_this_month">This month</string>
     <string name="history_older">Older</string>
     <string name="no_history">No listening history yet</string>
+    <string name="library_sort_recent_activity">Recent activity</string>
+    <string name="library_view_as_grid">Grid view</string>
+    <string name="library_view_as_list">List view</string>
 </resources>

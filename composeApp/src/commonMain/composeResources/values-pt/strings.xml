@@ -1282,4 +1282,7 @@
     <string name="history_this_month">Este mês</string>
     <string name="history_older">Mais antigos</string>
     <string name="no_history">Nenhum histórico ainda</string>
+    <string name="library_sort_recent_activity">Atividade recente</string>
+    <string name="library_view_as_grid">Exibir em grade</string>
+    <string name="library_view_as_list">Exibir em lista</string>
 </resources>

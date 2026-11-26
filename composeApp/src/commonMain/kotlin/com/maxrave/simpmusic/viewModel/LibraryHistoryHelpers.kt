@@ -149,3 +149,17 @@ internal fun groupRecentlyAddedByDate(
         if (entries.isNullOrEmpty()) null else HistorySection(bucket, entries)
     }
 }
+
+/** How Your library draws the YouTube playlists: one row each, or two covers per row. */
+enum class LibraryLayoutMode(
+    val storedValue: String,
+) {
+    LIST("list"),
+    GRID("grid"),
+    ;
+
+    fun toggled(): LibraryLayoutMode = if (this == LIST) GRID else LIST
+}
+
+/** The saved layout, falling back to the list for anything missing, unknown or corrupt. */
+internal fun parseLibraryLayoutMode(raw: String?): LibraryLayoutMode = LibraryLayoutMode.entries.firstOrNull { it.storedValue == raw } ?: LibraryLayoutMode.LIST

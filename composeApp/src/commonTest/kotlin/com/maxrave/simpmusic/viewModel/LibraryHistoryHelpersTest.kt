@@ -91,6 +91,17 @@ class LibraryHistoryHelpersTest {
         assertEquals(listOf(olderSong), sections[4].items)
     }
 
+    @Test
+    fun parseLibraryLayoutModeFallsBackToListAndToggles() {
+        assertEquals(LibraryLayoutMode.GRID, parseLibraryLayoutMode("grid"))
+        assertEquals(LibraryLayoutMode.LIST, parseLibraryLayoutMode("list"))
+        assertEquals(LibraryLayoutMode.LIST, parseLibraryLayoutMode(null))
+        assertEquals(LibraryLayoutMode.LIST, parseLibraryLayoutMode("???"))
+        assertEquals(LibraryLayoutMode.GRID, LibraryLayoutMode.LIST.toggled())
+        assertEquals(LibraryLayoutMode.LIST, LibraryLayoutMode.GRID.toggled())
+        assertEquals(LibraryLayoutMode.GRID, parseLibraryLayoutMode(LibraryLayoutMode.GRID.storedValue))
+    }
+
     private fun song(
         id: String,
         inLibrary: LocalDateTime,

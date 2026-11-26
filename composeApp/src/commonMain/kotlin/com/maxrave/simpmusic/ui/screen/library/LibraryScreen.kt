@@ -57,6 +57,7 @@ import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import com.maxrave.common.LibraryChipType
 import com.maxrave.domain.data.entities.PlaylistEntity
+import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
 import com.maxrave.domain.data.model.taste.TasteProfile
 import com.maxrave.domain.utils.LocalResource
 import com.maxrave.simpmusic.Platform
@@ -74,6 +75,11 @@ import com.maxrave.simpmusic.ui.component.Chip
 import com.maxrave.simpmusic.ui.component.CreateLocalPlaylistSheet
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.GridLibraryPlaylist
+import com.maxrave.simpmusic.ui.component.LibraryPlaylistGridItem
+import com.maxrave.simpmusic.ui.component.LibraryPlaylistGridRow
+import com.maxrave.simpmusic.ui.component.LibraryPlaylistsToolbar
+import com.maxrave.simpmusic.ui.component.LibrarySortOptions
+import com.maxrave.simpmusic.ui.component.LibrarySortSheet
 import com.maxrave.simpmusic.ui.component.LibraryTilingBox
 import com.maxrave.simpmusic.ui.component.ListenTogetherIconButton
 import com.maxrave.simpmusic.ui.component.PlaylistFullWidthItems
@@ -91,6 +97,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.theme.LocalLiquidGlassEnabled
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.utils.primeCollectionArtworkNavigation
+import com.maxrave.simpmusic.viewModel.LibraryLayoutMode
 import com.maxrave.simpmusic.viewModel.LibraryViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.TasteUiState
@@ -112,12 +119,14 @@ import simpmusic.composeapp.generated.resources.no_favorite_playlists
 import simpmusic.composeapp.generated.resources.no_favorite_podcasts
 import simpmusic.composeapp.generated.resources.no_playlists_added
 import simpmusic.composeapp.generated.resources.no_playlists_downloaded
+import simpmusic.composeapp.generated.resources.playlist
 import simpmusic.composeapp.generated.resources.simpmusic_charts
 import simpmusic.composeapp.generated.resources.wrapped
 import simpmusic.composeapp.generated.resources.your_library
 import simpmusic.composeapp.generated.resources.your_playlists
 import simpmusic.composeapp.generated.resources.your_youtube_playlists
 import simpmusic.composeapp.generated.resources.youtube_liked_music
+import com.maxrave.simpmusic.utils.THUMB_CARD_PX
 import com.maxrave.simpmusic.utils.THUMB_SMALL_PX
 import com.maxrave.simpmusic.utils.enqueueArtworkPrefetch
 import com.maxrave.simpmusic.utils.enqueueTrackArtworkPrefetch
@@ -146,11 +155,12 @@ fun LibraryScreen(
     val downloadedPlaylist by viewModel.downloadedPlaylist.collectAsStateWithLifecycle()
     val favoritePodcasts by viewModel.favoritePodcasts.collectAsStateWithLifecycle()
     val chartPlaylists by viewModel.chartPlaylists.collectAsStateWithLifecycle()
+    val layoutMode by viewModel.libraryLayoutMode.collectAsStateWithLifecycle()
     val libraryOverview by viewModel.libraryOverview.collectAsStateWithLifecycle()
     val cachedPreview by viewModel.cachedPreview.collectAsStateWithLifecycle()
     // The player cache is no table to observe, so the Cached card is read again each time the
     // screen is shown — coming back from the list after removing a song included.
-    if (getPlatform() == Platform.Android) {
+    if (SHOW_LIBRARY_TILING_BOX && getPlatform() == Platform.Android) {
         LaunchedEffect(Unit) { viewModel.refreshCachedPreview() }
     }
 
@@ -165,6 +175,7 @@ fun LibraryScreen(
         mutableStateOf(0.dp)
     }
     var showAddSheet by remember { mutableStateOf(false) }
+    var showSortSheet by remember { mutableStateOf(false) }
 
     val chipRowState = rememberScrollState()
     val currentFilter by viewModel.currentScreen.collectAsStateWithLifecycle()
@@ -251,8 +262,23 @@ fun LibraryScreen(
                         deduplicateYouTubePlaylistsWithoutLiked(youTubePlaylist.data ?: emptyList())
                     }
                 val platformContext = LocalPlatformContext.current
-                LaunchedEffect(loggedIn, visibleYouTubePlaylists) {
+                LaunchedEffect(loggedIn, visibleYouTubePlaylists, layoutMode) {
                     if (loggedIn) {
+                        if (layoutMode == LibraryLayoutMode.GRID) {
+                            // The grid draws bigger covers than the rows do.
+                            enqueueArtworkPrefetch(
+                                platformContext = platformContext,
+                                rawUrl = YOUTUBE_LIKED_MUSIC_THUMBNAIL_URL,
+                                targetPx = THUMB_CARD_PX,
+                            )
+                            visibleYouTubePlaylists.take(12).forEach {
+                                enqueueArtworkPrefetch(
+                                    platformContext = platformContext,
+                                    rawUrl = it.thumbnails.lastOrNull()?.url,
+                                    targetPx = THUMB_CARD_PX,
+                                )
+                            }
+                        }
                         enqueueArtworkPrefetch(
                             platformContext = platformContext,
                             rawUrl = YOUTUBE_LIKED_MUSIC_THUMBNAIL_URL,
@@ -271,7 +297,7 @@ fun LibraryScreen(
                     modifier = Modifier.fillMaxSize(),
                     state = pullToRefreshState,
                     onRefresh = {
-                        if (getPlatform() == Platform.Android) {
+                        if (SHOW_LIBRARY_TILING_BOX && getPlatform() == Platform.Android) {
                             viewModel.refreshCachedPreview()
                         }
                         if (loggedIn) {
@@ -328,8 +354,11 @@ fun LibraryScreen(
                                 ),
                             state = state,
                         ) {
-                            item {
-                                LibraryTilingBox(navController, libraryOverview, cachedPreview)
+                            // Hidden for now, kept so the cards can come back: flip SHOW_LIBRARY_TILING_BOX.
+                            if (SHOW_LIBRARY_TILING_BOX) {
+                                item {
+                                    LibraryTilingBox(navController, libraryOverview, cachedPreview)
+                                }
                             }
 
                             // The reading is drawn from playback_event, so the card follows the same
@@ -350,83 +379,101 @@ fun LibraryScreen(
                             }
 
                             if (loggedIn) {
-                                item(key = "youtube_playlists_header", contentType = "library_section_header") {
-                                    Row(
-                                        modifier =
-                                            Modifier
-                                                .fillMaxWidth()
-                                                .padding(top = 12.dp, bottom = 4.dp, start = 16.dp, end = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Text(
-                                            text = stringResource(Res.string.your_youtube_playlists),
-                                            style = typo().headlineMedium,
-                                            color = MaterialTheme.colorScheme.onBackground,
-                                            maxLines = 1,
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                        RippleIconButton(
-                                            imageVector = SimpIcons.Refresh,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(36.dp),
-                                        ) {
-                                            viewModel.getYouTubePlaylist()
-                                        }
-                                    }
-                                }
-
-                                item(key = "yt_liked_music_pinned", contentType = "youtube_playlist_row") {
-                                    PlaylistFullWidthItems(
-                                        data = likedPlaylist,
-                                        thumbSize = 56.dp,
-                                        compactStartPadding = true,
-                                        onClickListener = {
-                                            primeCollectionArtworkNavigation(
-                                                platformContext = platformContext,
-                                                collectionId = likedPlaylist.id,
-                                                rawThumbUrl = likedPlaylist.thumbnails,
-                                            )
-                                            navController.navigate(PlaylistDestination(likedPlaylist.id))
-                                        },
+                                // Replaces the old "Your YouTube Playlists" header: sort order and
+                                // list/grid switch. Refreshing stays on pull-to-refresh above.
+                                item(key = "youtube_playlists_toolbar", contentType = "library_playlists_toolbar") {
+                                    LibraryPlaylistsToolbar(
+                                        sortLabel = LibrarySortOptions[0].label,
+                                        layoutMode = layoutMode,
+                                        onSortClick = { showSortSheet = true },
+                                        onLayoutToggle = { viewModel.setLibraryLayoutMode(layoutMode.toggled()) },
                                     )
                                 }
 
-                                if (youTubePlaylist is LocalResource.Loading && visibleYouTubePlaylists.isEmpty()) {
-                                    item(key = "yt_playlists_loading") {
-                                        Box(
-                                            modifier =
-                                                Modifier
-                                                    .fillMaxWidth()
-                                                    .height(96.dp),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            CenterLoadingBox(Modifier.size(32.dp))
+                                if (layoutMode == LibraryLayoutMode.GRID) {
+                                    // Two covers per line; Liked Music is the first cell, then the playlists.
+                                    val gridCells: List<PlaylistsResult?> = listOf<PlaylistsResult?>(null) + visibleYouTubePlaylists
+                                    itemsIndexed(
+                                        items = gridCells.chunked(2),
+                                        key = { index, row -> "ytgrid_${row.first()?.browseId ?: "liked"}_$index" },
+                                        contentType = { _, _ -> "youtube_playlist_grid_row" },
+                                    ) { _, row ->
+                                        LibraryPlaylistGridRow(
+                                            left = {
+                                                YouTubePlaylistGridCell(row[0], likedPlaylist, navController)
+                                            },
+                                            right = {
+                                                if (row.size > 1) YouTubePlaylistGridCell(row[1], likedPlaylist, navController)
+                                            },
+                                        )
+                                    }
+                                    if (youTubePlaylist is LocalResource.Loading && visibleYouTubePlaylists.isEmpty()) {
+                                        item(key = "yt_playlists_loading") {
+                                            Box(
+                                                modifier =
+                                                    Modifier
+                                                        .fillMaxWidth()
+                                                        .height(96.dp),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                CenterLoadingBox(Modifier.size(32.dp))
+                                            }
                                         }
                                     }
                                 } else {
-                                    itemsIndexed(
-                                        items = visibleYouTubePlaylists,
-                                        key = { index, item -> "ytpl_${item.browseId}_$index" },
-                                        contentType = { _, _ -> "youtube_playlist_row" },
-                                    ) { _, playlist ->
+                                    item(key = "yt_liked_music_pinned", contentType = "youtube_playlist_row") {
                                         PlaylistFullWidthItems(
-                                            data = playlist,
+                                            data = likedPlaylist,
                                             thumbSize = 56.dp,
                                             compactStartPadding = true,
                                             onClickListener = {
                                                 primeCollectionArtworkNavigation(
                                                     platformContext = platformContext,
-                                                    collectionId = playlist.browseId,
-                                                    rawThumbUrl = playlist.thumbnails.lastOrNull()?.url,
+                                                    collectionId = likedPlaylist.id,
+                                                    rawThumbUrl = likedPlaylist.thumbnails,
                                                 )
-                                                navController.navigate(
-                                                    PlaylistDestination(
-                                                        playlistId = playlist.browseId,
-                                                        isYourYouTubePlaylist = true,
-                                                    ),
-                                                )
+                                                navController.navigate(PlaylistDestination(likedPlaylist.id))
                                             },
                                         )
+                                    }
+
+                                    if (youTubePlaylist is LocalResource.Loading && visibleYouTubePlaylists.isEmpty()) {
+                                        item(key = "yt_playlists_loading") {
+                                            Box(
+                                                modifier =
+                                                    Modifier
+                                                        .fillMaxWidth()
+                                                        .height(96.dp),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                CenterLoadingBox(Modifier.size(32.dp))
+                                            }
+                                        }
+                                    } else {
+                                        itemsIndexed(
+                                            items = visibleYouTubePlaylists,
+                                            key = { index, item -> "ytpl_${item.browseId}_$index" },
+                                            contentType = { _, _ -> "youtube_playlist_row" },
+                                        ) { _, playlist ->
+                                            PlaylistFullWidthItems(
+                                                data = playlist,
+                                                thumbSize = 56.dp,
+                                                compactStartPadding = true,
+                                                onClickListener = {
+                                                    primeCollectionArtworkNavigation(
+                                                        platformContext = platformContext,
+                                                        collectionId = playlist.browseId,
+                                                        rawThumbUrl = playlist.thumbnails.lastOrNull()?.url,
+                                                    )
+                                                    navController.navigate(
+                                                        PlaylistDestination(
+                                                            playlistId = playlist.browseId,
+                                                            isYourYouTubePlaylist = true,
+                                                        ),
+                                                    )
+                                                },
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -524,6 +571,9 @@ fun LibraryScreen(
     }
     sharingTaste?.let { profile ->
         ShareTasteSheet(profile = profile, onDismiss = { sharingTaste = null })
+    }
+    if (showSortSheet) {
+        LibrarySortSheet(onDismiss = { showSortSheet = false })
     }
     if (showAddSheet) {
         CreateLocalPlaylistSheet(
@@ -636,3 +686,57 @@ fun LibraryScreen(
  * 48dp icon buttons) + 16 = 822dp — so this must follow if that row changes.
  */
 internal val YOUR_LIBRARY_MAX_WIDTH = 842.dp
+
+/**
+ * Whether the Favorite / Followed / Most played / Downloaded / Cached cards ([LibraryTilingBox])
+ * show at the top of Your library. Off for now; set to true to bring them back.
+ */
+internal const val SHOW_LIBRARY_TILING_BOX = false
+
+/** One cell of the grid layout: [playlist], or Liked Music when it is null. */
+@Composable
+private fun YouTubePlaylistGridCell(
+    playlist: PlaylistsResult?,
+    likedPlaylist: PlaylistEntity,
+    navController: NavController,
+) {
+    val platformContext = LocalPlatformContext.current
+    val playlistLabel = stringResource(Res.string.playlist)
+    if (playlist == null) {
+        LibraryPlaylistGridItem(
+            title = likedPlaylist.title,
+            subtitle = "$playlistLabel • ${likedPlaylist.author.orEmpty()}",
+            thumbnailUrl = likedPlaylist.thumbnails,
+            pinned = true,
+            onClick = {
+                primeCollectionArtworkNavigation(
+                    platformContext = platformContext,
+                    collectionId = likedPlaylist.id,
+                    rawThumbUrl = likedPlaylist.thumbnails,
+                )
+                navController.navigate(PlaylistDestination(likedPlaylist.id))
+            },
+        )
+    } else {
+        val thumb = playlist.thumbnails.lastOrNull()?.url.orEmpty()
+        LibraryPlaylistGridItem(
+            title = playlist.title,
+            subtitle = (listOf(playlistLabel) + listOf(playlist.author, playlist.itemCount).filter { it.isNotBlank() }).joinToString(" • "),
+            thumbnailUrl = thumb,
+            pinned = false,
+            onClick = {
+                primeCollectionArtworkNavigation(
+                    platformContext = platformContext,
+                    collectionId = playlist.browseId,
+                    rawThumbUrl = thumb,
+                )
+                navController.navigate(
+                    PlaylistDestination(
+                        playlistId = playlist.browseId,
+                        isYourYouTubePlaylist = true,
+                    ),
+                )
+            },
+        )
+    }
+}

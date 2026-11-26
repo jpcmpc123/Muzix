@@ -90,6 +90,11 @@ class LibraryViewModel(
     private val _isRefreshingYouTubePlaylists: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val isRefreshingYouTubePlaylists: StateFlow<Boolean> get() = _isRefreshingYouTubePlaylists.asStateFlow()
 
+    private val _libraryLayoutMode: MutableStateFlow<LibraryLayoutMode> = MutableStateFlow(LibraryLayoutMode.LIST)
+
+    /** Rows or a two-column grid for the YouTube playlists in Your library; remembered across launches. */
+    val libraryLayoutMode: StateFlow<LibraryLayoutMode> get() = _libraryLayoutMode.asStateFlow()
+
     private var youTubePlaylistJob: Job? = null
     private var syncedYouTubeCookieHash: Int? = null
     private var lastAppliedCookieHash: Int? = null
@@ -156,6 +161,17 @@ class LibraryViewModel(
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val localTrackingEnabled = dataStoreManager.localTrackingEnabled.mapLatest { it == DataStoreManager.TRUE }
+
+    init {
+        viewModelScope.launch {
+            _libraryLayoutMode.value = parseLibraryLayoutMode(dataStoreManager.getString(LIBRARY_LAYOUT_MODE_KEY).first())
+        }
+    }
+
+    fun setLibraryLayoutMode(mode: LibraryLayoutMode) {
+        _libraryLayoutMode.value = mode
+        viewModelScope.launch { dataStoreManager.putString(LIBRARY_LAYOUT_MODE_KEY, mode.storedValue) }
+    }
 
     init {
         viewModelScope.launch {
@@ -501,5 +517,6 @@ class LibraryViewModel(
         /** How far back the Wrapped tab offers recaps, counting the current month as the first. */
         private const val MONTHS_OF_RECAP = 12
         private const val YT_PLAYLISTS_CACHE_KEY = "yt_library_playlists_cache_v1"
+        private const val LIBRARY_LAYOUT_MODE_KEY = "library_yt_playlist_layout_v1"
     }
 }
