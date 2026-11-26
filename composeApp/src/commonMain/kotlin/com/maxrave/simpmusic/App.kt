@@ -566,13 +566,19 @@ fun App(
     }
     val isTablet = windowSize.isWidthAtLeastBreakpoint(WIDTH_DP_MEDIUM_LOWER_BOUND)
     val isTabletLandscape = isTablet && currentOrientation() == Orientation.LANDSCAPE
+    val isPowerSaveMode = com.maxrave.simpmusic.expect.ui.rememberIsPowerSaveMode()
+    val effectiveLiquidGlass =
+        com.maxrave.simpmusic.expect.ui.isLiquidGlassSupported() &&
+            !isPowerSaveMode &&
+            isLiquidGlassEnabled == TRUE
 
     AppTheme(
         themeMode = themeMode,
         themeColorSource = themeColorSource,
         customThemeColor = parseThemeColorHex(customThemeColorHex),
-        // The setting governs Desktop too, the same as Android: off, every glass surface draws flat.
-        liquidGlassEnabled = isLiquidGlassEnabled == TRUE,
+        // The setting governs Desktop too, the same as Android: off, unsupported (< Android 13),
+        // or in Battery Saver mode, every glass surface draws flat.
+        liquidGlassEnabled = effectiveLiquidGlass,
         pureBlack = pureBlackTheme,
     ) {
         if (!isOfficialBuild) {
@@ -631,10 +637,10 @@ fun App(
                     ) {
                         // On Android both materials go through the folding bar, which draws the mini
                         // player itself. Desktop keeps the always-open flat bar under its own one.
-                        val useFoldingBar = getPlatform() == Platform.Android || isLiquidGlassEnabled == TRUE
+                        val useFoldingBar = getPlatform() == Platform.Android || effectiveLiquidGlass
                         Column {
                             AnimatedVisibility(
-                                isShowMiniPlayer && !useFoldingBar && isLiquidGlassEnabled == DataStoreManager.FALSE,
+                                isShowMiniPlayer && !useFoldingBar && !effectiveLiquidGlass,
                                 enter = fadeIn() + slideInHorizontally(),
                                 exit = fadeOut(),
                             ) {
@@ -669,7 +675,7 @@ fun App(
                                     isScrolledToTop = isScrolledToTop,
                                     showAnalyticsTab = showAnalyticsTab,
                                     showMixForYouTab = showMixForYouTab,
-                                    liquidGlass = isLiquidGlassEnabled == TRUE,
+                                    liquidGlass = effectiveLiquidGlass,
                                 ) { klass ->
                                     viewModel.reloadDestination(klass)
                                 }
@@ -690,13 +696,7 @@ fun App(
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .then(
-                            if (isLiquidGlassEnabled == TRUE && !isTablet) {
-                                Modifier.layerBackdrop(backdrop)
-                            } else {
-                                Modifier
-                            },
-                        ),
+                        .layerBackdrop(backdrop, enabled = effectiveLiquidGlass && !isTablet),
                 ) {
                     val tabletMiniPlayer: @Composable (Modifier) -> Unit = { modifier ->
                         androidx.compose.animation.AnimatedVisibility(
@@ -709,7 +709,7 @@ fun App(
                                 if (getPlatform() == Platform.Android) {
                                     Modifier
                                         // Glass keeps its 52dp card; the flat one is 56dp.
-                                        .height(if (isLiquidGlassEnabled == TRUE) 56.dp else 60.dp)
+                                        .height(if (effectiveLiquidGlass) 56.dp else 60.dp)
                                         .fillMaxWidth(0.8f)
                                         .padding(
                                             horizontal = 12.dp,
@@ -765,14 +765,9 @@ fun App(
                             Row(
                                 Modifier
                                     .fillMaxSize()
-                                    .then(
-                                        // The Desktop capsule player's glass refracts this. Off, the capsule
-                                        // draws flat and nothing reads the recording, so skip it.
-                                        if (isLiquidGlassEnabled == TRUE && isDesktopShell && isTablet && !isInFullscreen) {
-                                            Modifier.layerBackdrop(backdrop)
-                                        } else {
-                                            Modifier
-                                        },
+                                    .layerBackdrop(
+                                        backdrop,
+                                        enabled = effectiveLiquidGlass && isDesktopShell && isTablet && !isInFullscreen,
                                     ),
                             ) {
                                 if (isTablet && !isInFullscreen) {
@@ -819,19 +814,14 @@ fun App(
                                     Box(
                                         Modifier
                                             .fillMaxSize()
-                                            .then(
-                                                // Tablets record the capsule's source here; Desktop records it on
-                                                // the Row above, which takes in the sidebar as well.
-                                                if (isLiquidGlassEnabled == TRUE && !isDesktopShell && isTablet && !isInFullscreen) {
-                                                    Modifier.layerBackdrop(backdrop)
-                                                } else {
-                                                    Modifier
-                                                },
+                                            .layerBackdrop(
+                                                backdrop,
+                                                enabled = effectiveLiquidGlass && !isDesktopShell && isTablet && !isInFullscreen,
                                             ),
                                     ) {
                                         CompositionLocalProvider(
                                             LocalAppDialogOpen provides appDialogOpen,
-                                            LocalGlassEffectsEnabled provides (isDesktopShell || isLiquidGlassEnabled == TRUE),
+                                            LocalGlassEffectsEnabled provides (isDesktopShell || effectiveLiquidGlass),
                                             LocalNowPlayingOpen provides isShowNowPlaylistScreen,
                                             LocalUserStarted provides userStarted,
                                         ) {

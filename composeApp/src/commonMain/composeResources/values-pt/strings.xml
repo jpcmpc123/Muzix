@@ -596,7 +596,7 @@
     <string name="kill_service_on_exit">Encerrar serviço ao sair</string>
     <string name="kill_service_on_exit_description">Parar o player de música em segundo plano ao sair do app</string>
     <string name="desktop_player">Player para desktop</string>
-    <string name="crossfade">Crossfade (BETA)</string>
+    <string name="crossfade">Crossfade</string>
     <string name="crossfade_description">Transição suave entre músicas, diminuindo o volume da faixa atual enquanto aumenta o da próxima.</string>
     <string name="crossfade_enabled">Ativado (%1$ds)</string>
     <string name="crossfade_disabled">Desativado</string>
@@ -649,8 +649,8 @@
     <string name="list_all_cookies_of_this_page">Listar todos os cookies desta página</string>
     <string name="copied_to_clipboard">Copiado para a área de transferência</string>
     <string name="update_channel">Canal De Atualizações</string>
-    <string name="enable_liquid_glass_effect">Ativar Liquid Glass (BETA)</string>
-    <string name="enable_liquid_glass_effect_description">Ativar o efeito de vidro líquido do iOS em alguma posição (Android 13+)</string>
+    <string name="enable_liquid_glass_effect">Ativar Liquid Glass</string>
+    <string name="enable_liquid_glass_effect_description">Ativa o efeito de vidro líquido na barra inferior, mini player, chips e botões flutuantes (Android 13+)</string>
     <string name="your_library">Sua biblioteca</string>
     <string name="play_explicit_content">Reproduzir conteúdo explícito</string>
     <string name="play_explicit_content_description">Ative para reproduzir conteúdo explícito</string>

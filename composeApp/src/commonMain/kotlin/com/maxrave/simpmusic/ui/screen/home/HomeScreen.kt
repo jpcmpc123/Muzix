@@ -136,7 +136,7 @@ import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.extension.mouseDragScroll
 import com.maxrave.simpmusic.extension.rgbFactor
 import com.maxrave.simpmusic.extension.ultraThinBarStyle
-import com.maxrave.simpmusic.extension.ultraThinBarBlur
+import com.maxrave.simpmusic.extension.ultraThinBackdropBarBlur
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.BlogPromoDialog
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
@@ -462,10 +462,8 @@ fun HomeScreen(
     val atTop by remember {
         derivedStateOf { scrollState.firstVisibleItemIndex == 0 && scrollState.firstVisibleItemScrollOffset == 0 }
     }
-    val hazeState =
-        rememberHazeState()
-    // The floating chip row refracts the page scrolling under it, so the page is the glass source and
-    // the row its sibling (nesting the row inside the source is the RuntimeShader feedback loop).
+    // The floating chip row and frosted top bar both sample this single screen backdrop,
+    // avoiding a separate full-screen Haze offscreen recording pass per frame.
     val chipBackdrop = rememberBackdrop(MaterialTheme.colorScheme.background)
 
     LaunchedEffect(scrollState) {
@@ -757,9 +755,10 @@ fun HomeScreen(
     Box {
         PullToRefreshBox(
             modifier =
-                Modifier
-                    .then(if (LocalLiquidGlassEnabled.current) Modifier.layerBackdrop(chipBackdrop) else Modifier)
-                    .glassHazeSource(hazeState),
+                Modifier.layerBackdrop(
+                    chipBackdrop,
+                    enabled = com.maxrave.simpmusic.ui.component.LocalGlassEffectsEnabled.current,
+                ),
             state = pullToRefreshState,
             onRefresh = onRefresh,
             isRefreshing = isRefreshing,
@@ -1017,7 +1016,7 @@ fun HomeScreen(
                 Modifier
                     .matchParentSize()
                     .graphicsLayer { alpha = barBgAlpha }
-                    .ultraThinBarBlur(hazeState),
+                    .ultraThinBackdropBarBlur(chipBackdrop),
             )
             Column {
                 Spacer(

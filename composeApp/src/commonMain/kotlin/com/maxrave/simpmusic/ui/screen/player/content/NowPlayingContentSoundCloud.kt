@@ -343,12 +343,13 @@ private fun NowPlayingSoundCloudLayout(
     // the blur over it and the glass that samples it.
     val surface = colors.surface
     val scrim = colors.scrim
+    val glassBackdropModifier = Modifier.layerBackdrop(backdrop, enabled = glassOn)
     val artworkModifier =
-        remember(glassOn, backdrop, pausedBlur, surface, scrim, lowerBlockHeight) {
+        remember(glassBackdropModifier, pausedBlur, surface, scrim, lowerBlockHeight) {
             Modifier
                 // The glass source while glass is on: the artwork as it is shown, dim and scrim
                 // included. The glass buttons are its siblings, never inside it.
-                .then(if (glassOn) Modifier.layerBackdrop(backdrop) else Modifier)
+                .then(glassBackdropModifier)
                 .then(pausedBlur)
                 // Drawn after the artwork's own content, so it covers a video surface too, which
                 // takes no Compose effect: the paused dim, then from the card's bottom up to the line

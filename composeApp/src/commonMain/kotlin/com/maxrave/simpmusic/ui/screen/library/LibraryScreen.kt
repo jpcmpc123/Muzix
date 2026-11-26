@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -71,7 +73,7 @@ import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.extension.copy
 import com.maxrave.simpmusic.extension.glassHazeSource
 import com.maxrave.simpmusic.extension.isScrollingUp
-import com.maxrave.simpmusic.extension.ultraThinBarBlur
+import com.maxrave.simpmusic.extension.ultraThinBackdropBarBlur
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.Chip
@@ -176,7 +178,6 @@ fun LibraryScreen(
     // out of composition behind it.
     var sharingTaste by remember { mutableStateOf<TasteProfile?>(null) }
     val accountThumbnail by viewModel.accountThumbnail.collectAsStateWithLifecycle()
-    val hazeState = rememberHazeState()
 
     var topAppBarHeight by remember {
         mutableStateOf(0.dp)
@@ -185,7 +186,7 @@ fun LibraryScreen(
     var showSortSheet by remember { mutableStateOf(false) }
     var isFabExpanded by remember { mutableStateOf(true) }
 
-    val chipRowState = rememberScrollState()
+    val chipRowState = rememberLazyListState()
     val currentFilter by viewModel.currentScreen.collectAsStateWithLifecycle()
     // A chip asked for by a deep link (simpmusic://library?tab=…), applied once and cleared.
     val libraryTabRequest by sharedViewModel.libraryTabRequest.collectAsStateWithLifecycle()
@@ -247,11 +248,15 @@ fun LibraryScreen(
         }
     }
 
-    // The floating chip row refracts the page scrolling under it, so the page is the glass source and
-    // the row its sibling (nesting the row inside the source is the RuntimeShader feedback loop).
+    // The floating chip row and frosted top bar both sample this single screen backdrop,
+    // avoiding a separate full-screen Haze offscreen recording pass per frame.
     val chipBackdrop = rememberBackdrop(MaterialTheme.colorScheme.background)
     Crossfade(
-        modifier = Modifier.then(if (LocalLiquidGlassEnabled.current) Modifier.layerBackdrop(chipBackdrop) else Modifier).glassHazeSource(hazeState),
+        modifier =
+            Modifier.layerBackdrop(
+                chipBackdrop,
+                enabled = com.maxrave.simpmusic.ui.component.LocalGlassEffectsEnabled.current,
+            ),
         targetState = currentFilter,
     ) { filter ->
         when (filter) {
@@ -650,7 +655,7 @@ fun LibraryScreen(
     Column(
         Modifier
             .background(Color.Transparent)
-            .ultraThinBarBlur(hazeState).onGloballyPositioned { coordinates ->
+            .ultraThinBackdropBarBlur(chipBackdrop).onGloballyPositioned { coordinates ->
                 topAppBarHeight = with(density) { coordinates.size.height.toDp() }
             },
     ) {
@@ -700,26 +705,27 @@ fun LibraryScreen(
                 ListenTogetherIconButton { navController.navigate(ListenTogetherDestination) }
             },
         )
-        Row(
+        val visibleChipTypes =
+            remember(localTrackingEnabled) {
+                LibraryChipType.entries.filter { type ->
+                    type != LibraryChipType.YOUTUBE_MIX_FOR_YOU &&
+                        type != LibraryChipType.YOUTUBE_MUSIC_PLAYLIST &&
+                        (type != LibraryChipType.WRAPPED || localTrackingEnabled)
+                }
+            }
+        LazyRow(
+            state = chipRowState,
             modifier =
                 Modifier
-                    .horizontalScroll(chipRowState)
-                    .padding(horizontal = 15.dp)
                     .padding(bottom = 8.dp)
                     .background(Color.Transparent),
+            contentPadding = PaddingValues(horizontal = 15.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            LibraryChipType.entries.forEach { type ->
-                // Your YouTube Playlists now lives in YOUR_LIBRARY, and Mix for you has its own tab.
-                if (type == LibraryChipType.YOUTUBE_MIX_FOR_YOU ||
-                    type == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST
-                ) {
-                    return@forEach
-                }
-                // Nothing to recap without the plays — gated consistently with Analytics.
-                if (type == LibraryChipType.WRAPPED && !localTrackingEnabled) {
-                    return@forEach
-                }
+            items(
+                items = visibleChipTypes,
+                key = { it.name },
+            ) { type ->
                 Chip(
                     isAnimated = false,
                     isSelected = type == currentFilter,

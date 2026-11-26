@@ -42,14 +42,12 @@ import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.colorControls
 import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.maxrave.simpmusic.expect.ui.PlatformBackdrop
 import com.maxrave.simpmusic.ui.theme.LocalIsDarkTheme
 import com.maxrave.simpmusic.ui.theme.LocalLiquidGlassEnabled
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import kotlin.math.sign
 
 /**
  * Applies the SimpMusic liquid-glass effect to any element.
@@ -104,9 +102,9 @@ fun Modifier.liquidGlass(
 
 /**
  * Overload of [liquidGlass] for surfaces that sample their own background luminance
- * (e.g. the MiniPlayer and the bottom bar capsule): the caller owns the [layer] the
- * glass records into and drives [luminance], so the glass keeps adapting to
- * the content behind it — unlike the [liquidGlass] above, which uses a fixed
+ * (e.g. the MiniPlayer and the bottom bar capsule): the caller owns the [layer] (or passes
+ * null when sharing luminance with a sibling surface) and drives [luminance], so the glass keeps
+ * adapting to the content behind it — unlike the [liquidGlass] above, which uses a fixed
  * mid-luminance.
  *
  * [blurScale], [minScrim] and [maxScrim] forward to [drawInteractiveGlass]; their
@@ -116,14 +114,20 @@ fun Modifier.liquidGlass(
 @Composable
 fun Modifier.liquidGlass(
     backdrop: PlatformBackdrop,
-    layer: GraphicsLayer,
+    layer: GraphicsLayer?,
     luminance: State<Float>,
     shape: Shape = CircleShape,
     interactive: Boolean = true,
     blurScale: Float = 1f,
     minScrim: Float = 0.12f,
     maxScrim: Float = 0.5f,
+    shouldCaptureLayer: () -> Boolean = { true },
 ): Modifier {
+    if (!LocalLiquidGlassEnabled.current) {
+        return this
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.8f))
+    }
     val isDark = LocalIsDarkTheme.current
     val interaction = rememberGlassInteraction()
     return this.drawInteractiveGlass(
@@ -139,6 +143,7 @@ fun Modifier.liquidGlass(
         blurScale = blurScale,
         minScrim = minScrim,
         maxScrim = maxScrim,
+        shouldCaptureLayer = shouldCaptureLayer,
     )
 }
 
@@ -238,13 +243,13 @@ fun rememberGlassInteraction(): GlassInteraction {
 }
 
 /**
- * Draws the liquid-glass effect with the same look as the legacy
- * `drawBackdropCustomShape`, plus an optional press response driven by
+ * Draws the liquid-glass effect plus an optional press response driven by
  * [interaction]: the surface scales up a touch, the refraction/blur deepen and a
  * radial glow follows the pointer. Pass `interaction = null` for a static surface.
  *
  * [luminance] is read during drawing, so adapting the tint does not recompose the surface.
- * [layer] is only needed for surfaces that sample their background.
+ * [layer] is only needed for surfaces that sample their background, and [shouldCaptureLayer]
+ * gates `layer.record { drawBackdrop() }` so it executes only on requested sample frames.
  *
  * [blurScale] multiplies the luminance-driven blur radius and [minScrim]/[maxScrim]
  * are the ends of the darkening ramp. The defaults are the values this surface has
@@ -264,6 +269,7 @@ fun Modifier.drawInteractiveGlass(
     blurScale: Float = 1f,
     minScrim: Float = 0.12f,
     maxScrim: Float = 0.5f,
+    shouldCaptureLayer: () -> Boolean = { true },
 ): Modifier =
     this
         .drawBackdrop(
@@ -276,25 +282,23 @@ fun Modifier.drawInteractiveGlass(
             // a uniform rim all the way round.
             highlight = { highlight },
             effects = {
-                val l = (luminance() * 2f - 1f).let { sign(it) * it * it }
                 val press = interaction?.pressProgress ?: 0f
-                vibrancy()
+                // Single fused ColorMatrix pass (replaces separate vibrancy() + colorControls()
+                // RenderEffects with equivalent vibrant frosted calibration).
                 colorControls(
-                    // Neutral brightness/contrast: the old curve brightened + washed the glass out
-                    // to white on bright backgrounds ("đục trắng"). Darkening is done in onDrawSurface.
-                    brightness = 0.05f,
-                    contrast = 1f,
-                    saturation = 1.5f,
+                    brightness = 0.07f,
+                    contrast = 1.03f,
+                    saturation = 1.75f,
                 )
-                blur(
-                    (
-                        if (l > 0f) {
-                            lerp(8f.dp.toPx(), 16f.dp.toPx(), l)
-                        } else {
-                            lerp(8f.dp.toPx(), 2f.dp.toPx(), -l)
-                        }
-                    ) * blurScale + 2f.dp.toPx() * press,
-                )
+                val blurDp =
+                    quantizedGlassBlurDp(
+                        luminance = luminance(),
+                        blurScale = blurScale,
+                        extraDp = 2f * press,
+                        maxDp = 24f,
+                        stepDp = 1f,
+                    )
+                blur(blurDp.dp.toPx())
                 // refractionHeight stays below the stadium inradius (minDimension / 2) so the
                 // top and bottom refraction never meet at the medial axis — that meeting point on
                 // a wide pill is what produced the dark horizontal seam. depthEffect is off to
@@ -303,7 +307,9 @@ fun Modifier.drawInteractiveGlass(
             },
             onDrawBackdrop = { drawBackdrop ->
                 drawBackdrop()
-                layer?.record { drawBackdrop() }
+                if (layer != null && shouldCaptureLayer()) {
+                    layer.record { drawBackdrop() }
+                }
             },
             onDrawSurface = {
                 // Stay "đục đen": darken more as the background brightens so the glass never washes

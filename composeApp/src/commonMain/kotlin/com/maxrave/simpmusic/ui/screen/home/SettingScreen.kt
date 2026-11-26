@@ -1022,12 +1022,14 @@ fun SettingScreen(
                             onClick = { showColorPickerDialog = true },
                         )
                     }
-                    SettingItem(
-                        title = stringResource(Res.string.enable_liquid_glass_effect),
-                        subtitle = stringResource(Res.string.enable_liquid_glass_effect_description),
-                        smallSubtitle = true,
-                        switch = (enableLiquidGlass to { viewModel.setEnableLiquidGlass(it) }),
-                    )
+                    if (com.maxrave.simpmusic.expect.ui.isLiquidGlassSupported()) {
+                        SettingItem(
+                            title = stringResource(Res.string.enable_liquid_glass_effect),
+                            subtitle = stringResource(Res.string.enable_liquid_glass_effect_description),
+                            smallSubtitle = true,
+                            switch = (enableLiquidGlass to { viewModel.setEnableLiquidGlass(it) }),
+                        )
+                    }
                 }
             }
         }

@@ -55,7 +55,6 @@ import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.colorControls
 import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
@@ -71,7 +70,6 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.abs
 import kotlin.math.roundToInt
-import kotlin.math.sign
 
 private val CapsuleShape = RoundedCornerShape(percent = 50)
 private val TabWidth = 96.dp
@@ -109,6 +107,7 @@ fun LiquidGlassTabBar(
     luminance: State<Float>,
     modifier: Modifier = Modifier,
     availableWidth: Dp = Dp.Unspecified,
+    shouldCaptureLayer: () -> Boolean = { true },
     onTabSelected: (Int) -> Unit,
     collapsedContent: (@Composable () -> Unit)? = null,
 ) {
@@ -199,7 +198,17 @@ fun LiquidGlassTabBar(
         // bar and the mini player read as one material (drawInteractiveGlass, no white veil).
         // barInteraction makes the whole capsule respond to a press (scale + touch glow) like iOS;
         // it's observe-only, so tab taps and the blob drag keep working.
-        Box(Modifier.matchParentSize().drawInteractiveGlass(isDark, backdrop, layer, { luminance.value }, CapsuleShape, barInteraction))
+        Box(
+            Modifier.matchParentSize().drawInteractiveGlass(
+                isDark = isDark,
+                backdrop = backdrop,
+                layer = layer,
+                luminance = { luminance.value },
+                shape = CapsuleShape,
+                interaction = barInteraction,
+                shouldCaptureLayer = shouldCaptureLayer,
+            ),
+        )
 
         // The bar may be handed any width from the folded circle up to its full width, and the glass
         // above follows it. The blob and the tabs keep their full-width layout and are clipped to
@@ -226,29 +235,38 @@ fun LiquidGlassTabBar(
                             backdrop = backdrop,
                             shape = { CapsuleShape },
                             effects = {
-                                // Luminance only drives the blur here (frosted pill); brightness/contrast stay
-                                // neutral and the "đục đen" darkening is applied in onDrawSurface.
-                                val l = (luminance.value * 2f - 1f).let { sign(it) * it * it }
                                 val progress = dampedDrag.pressProgress
-                                vibrancy()
+                                // Single fused ColorMatrix pass matching the capsule glass calibration.
                                 colorControls(
-                                    brightness = 0.05f,
-                                    contrast = 1f,
-                                    saturation = 1.5f,
+                                    brightness = 0.07f,
+                                    contrast = 1.03f,
+                                    saturation = 1.75f,
                                 )
-                                blur(
-                                    // Stronger than the bar's blur so the active pill reads as a clearly
-                                    // frosted surface (the previous amount was too weak / too close to the bar).
-                                    (if (l > 0f) lerp(8f.dp.toPx(), 16f.dp.toPx(), l) else lerp(8f.dp.toPx(), 2f.dp.toPx(), -l)) +
-                                        20f.dp.toPx(),
-                                )
-                                lens(10f.dp.toPx() * progress, 14f.dp.toPx() * progress, chromaticAberration = true)
+                                // Stronger than the bar's blur so the active pill reads as a clearly
+                                // frosted surface, quantized and capped <= 24dp to stay in Android's
+                                // fast Gaussian blur tier without rebuilding RenderEffects every frame.
+                                val blobBlurDp =
+                                    quantizedGlassBlurDp(
+                                        luminance = luminance.value,
+                                        extraDp = 12f,
+                                        maxDp = 24f,
+                                        stepDp = 1f,
+                                    )
+                                blur(blobBlurDp.dp.toPx())
+                                // Only run chromatic-aberration AGSL lens shader while actually pressed/dragged.
+                                if (progress > 0.001f) {
+                                    lens(10f.dp.toPx() * progress, 14f.dp.toPx() * progress, chromaticAberration = true)
+                                }
                             },
                             highlight = { Highlight.Default.copy(alpha = 0.6f) },
                             shadow = { Shadow(radius = 4f.dp, alpha = 0.4f) },
                             innerShadow = {
                                 val progress = dampedDrag.pressProgress
-                                InnerShadow(radius = 8f.dp * progress, alpha = progress)
+                                if (progress > 0.001f) {
+                                    InnerShadow(radius = 8f.dp * progress, alpha = progress)
+                                } else {
+                                    null
+                                }
                             },
                             layerBlock = {
                                 scaleX = dampedDrag.scaleX

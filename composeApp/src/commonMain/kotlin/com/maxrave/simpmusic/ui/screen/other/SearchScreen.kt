@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -114,7 +115,7 @@ import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.ultraThinBarStyle
-import com.maxrave.simpmusic.extension.ultraThinBarBlur
+import com.maxrave.simpmusic.extension.ultraThinBackdropBarBlur
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
@@ -249,9 +250,8 @@ fun SearchScreen(
     val isMobilePortrait = getPlatform() == Platform.Android && screenInfo.wDP < screenInfo.hDP
     val moodGridColumns = if (isMobilePortrait) 2 else 4
 
-    val hazeState = rememberHazeState()
-    // The floating chip row refracts the page scrolling under it, so the page is the glass source and
-    // the row its sibling (nesting the row inside the source is the RuntimeShader feedback loop).
+    // The floating chip row and frosted search bar both sample this single screen backdrop,
+    // avoiding a separate full-screen Haze offscreen recording pass per frame.
     val chipBackdrop = rememberBackdrop(MaterialTheme.colorScheme.background)
     val suggestionsState = rememberLazyListState()
     val historyState = rememberLazyListState()
@@ -322,7 +322,7 @@ fun SearchScreen(
         }
     }
     val currentVideoId by searchViewModel.nowPlayingVideoId.collectAsStateWithLifecycle()
-    val chipRowState = rememberScrollState()
+    val chipRowState = rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
 
     val onMoreClick: (SongEntity) -> Unit = { song ->
@@ -526,7 +526,13 @@ fun SearchScreen(
         // equal to the bar's measured height to keep its first item clear of it.
         Crossfade(
             targetState = searchUIType,
-            modifier = Modifier.fillMaxSize().then(if (LocalLiquidGlassEnabled.current) Modifier.layerBackdrop(chipBackdrop) else Modifier).glassHazeSource(hazeState),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .layerBackdrop(
+                        chipBackdrop,
+                        enabled = com.maxrave.simpmusic.ui.component.LocalGlassEffectsEnabled.current,
+                    ),
         ) {
             when (it) {
                 SearchUIType.SEARCH_SUGGESTIONS -> {
@@ -1280,7 +1286,7 @@ fun SearchScreen(
                     modifier =
                         Modifier
                             .fillMaxSize()
-                            .ultraThinBarBlur(hazeState),
+                            .ultraThinBackdropBarBlur(chipBackdrop),
                 )
             }
             Column(
@@ -1455,16 +1461,17 @@ fun SearchScreen(
                 // results branch. That way searchBarHeight covers them too, results scroll
                 // underneath the whole thing, and the glass has something to blur.
                 AnimatedVisibility(visible = searchUIType == SearchUIType.SEARCH_RESULTS) {
-                    Row(
-                        modifier =
-                            Modifier
-                                .horizontalScroll(chipRowState)
-                                .padding(top = 10.dp)
-                                .padding(horizontal = 12.dp),
+                    LazyRow(
+                        state = chipRowState,
+                        modifier = Modifier.padding(top = 10.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        SearchType.entries.forEach { id ->
+                        items(
+                            items = SearchType.entries,
+                            key = { it.name },
+                        ) { id ->
                             val isSelected = id == searchScreenState.searchType
-                            Spacer(modifier = Modifier.width(4.dp))
                             Chip(
                                 isAnimated = uiState is SearchScreenUIState.Loading,
                                 isSelected = isSelected,
@@ -1473,7 +1480,6 @@ fun SearchScreen(
                             ) {
                                 searchViewModel.setSearchType(id)
                             }
-                            Spacer(modifier = Modifier.width(4.dp))
                         }
                     }
                 }

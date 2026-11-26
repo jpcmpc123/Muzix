@@ -82,8 +82,9 @@ actual fun LiquidGlassAppBottomNavigationBar(
 ) {
     val layer = rememberGraphicsLayer()
     val searchFabInteraction = rememberGlassInteraction()
-    // Only the glass reads what is behind it.
-    val luminance = rememberGlassLuminance(layer, enabled = liquidGlass)
+    // Single on-demand luminance sampler shared by the capsule, search FAB, and MiniPlayer.
+    val luminanceState = rememberGlassLuminanceState(layer, enabled = liquidGlass)
+    val luminance = luminanceState.luminance
 
     val nowPlayingData by viewModel.nowPlayingState.collectAsStateWithLifecycle()
     // MiniPlayer visibility: derived, never stored.
@@ -279,6 +280,7 @@ actual fun LiquidGlassAppBottomNavigationBar(
                             layer = layer,
                             luminance = luminance,
                             availableWidth = capsuleBudget,
+                            shouldCaptureLayer = luminanceState::shouldRecordFrame,
                             onTabSelected = { position -> selectTab(barTabs[position].ordinal) },
                             collapsedContent = collapsedCircle,
                         )
@@ -356,6 +358,7 @@ actual fun LiquidGlassAppBottomNavigationBar(
                     .layoutId("miniPlayer"),
                 backdrop = backdrop,
                 isVisible = isShowMiniPlayer,
+                sharedLuminance = luminance,
                 onClick = {
                     onOpenNowPlaying()
                 },

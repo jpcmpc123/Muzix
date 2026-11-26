@@ -66,6 +66,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
@@ -79,9 +80,12 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.kmpalette.palette.graphics.Palette
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
 import com.maxrave.domain.data.model.ui.ScreenSizeInfo
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.ui.PlatformBackdrop
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.theme.LocalAppColors
 import com.maxrave.simpmusic.ui.component.LocalGlassEffectsEnabled
@@ -865,6 +869,32 @@ fun Modifier.ultraThinBarBlur(hazeState: HazeState): Modifier {
     val surface = MaterialTheme.colorScheme.surface
     return if (LocalGlassEffectsEnabled.current) {
         hazeBlur(HazeInput.Sources(hazeState), ultraThinBarStyle())
+    } else {
+        background(surface)
+    }
+}
+
+/**
+ * Frosted top bar backed directly by an existing [com.maxrave.simpmusic.expect.ui.PlatformBackdrop]
+ * (such as `chipBackdrop` on Home, Library, and Search), eliminating a separate full-screen
+ * `Haze` offscreen recording pass per frame while keeping the exact ultra-thin frosted top bar look.
+ */
+@Composable
+fun Modifier.ultraThinBackdropBarBlur(backdrop: PlatformBackdrop): Modifier {
+    val surface = MaterialTheme.colorScheme.surface
+    return if (LocalGlassEffectsEnabled.current) {
+        this.drawBackdrop(
+            backdrop = backdrop,
+            shape = { RectangleShape },
+            highlight = { null },
+            shadow = { null },
+            effects = {
+                blur(20f.dp.toPx())
+            },
+            onDrawSurface = {
+                drawRect(surface.copy(alpha = 0.68f))
+            },
+        )
     } else {
         background(surface)
     }

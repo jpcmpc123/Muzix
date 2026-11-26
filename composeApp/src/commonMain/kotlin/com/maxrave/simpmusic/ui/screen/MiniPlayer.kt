@@ -171,19 +171,30 @@ fun MiniPlayer(
     isVisible: Boolean = true,
     /** Lets the queue's song sheets open artist and album pages; the Desktop capsule's queue needs it. */
     navController: NavController? = null,
+    /** Optional shared luminance sampled by the sibling Android bottom bar so MiniPlayer avoids a second GPU readback. */
+    sharedLuminance: androidx.compose.runtime.State<Float>? = null,
 ) {
-    val isLiquidGlassEnabled by sharedViewModel.getEnableLiquidGlass().collectAsStateWithLifecycle(DataStoreManager.FALSE)
     val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
     // The Desktop capsule's quality line between its timestamps — see toAudioQualityLabel.
     val formatState by sharedViewModel.format.collectAsStateWithLifecycle(initialValue = null)
 
     val layer = rememberGraphicsLayer()
 
-    // Glass needs both the luminance sampling loop that drives it and the theme-following text
-    // colour; without the loop the glass sits at luminance 0, a 2dp blur and a 0.12 darken, which
-    // reads as a smear. The setting governs the Android card and the Desktop capsule alike.
-    val useGlassSurface = isLiquidGlassEnabled == DataStoreManager.TRUE
-    val luminance = rememberGlassLuminance(layer, enabled = useGlassSurface && isVisible)
+    // Respects Android 13+ check, battery saver mode, and user preference uniformly via AppTheme.
+    val useGlassSurface = com.maxrave.simpmusic.ui.theme.LocalLiquidGlassEnabled.current
+    val ownLuminanceState =
+        if (sharedLuminance == null) {
+            com.maxrave.simpmusic.ui.component.rememberGlassLuminanceState(
+                source = layer,
+                enabled = useGlassSurface && isVisible,
+            )
+        } else {
+            null
+        }
+    val luminance = sharedLuminance ?: ownLuminanceState!!.luminance
+    val captureLayer = if (sharedLuminance == null) layer else null
+    val shouldCaptureLayer: () -> Boolean =
+        if (ownLuminanceState != null) ownLuminanceState::shouldRecordFrame else ({ false })
 
     val isDarkTheme = LocalIsDarkTheme.current
     val textColor by animateColorAsState(
@@ -271,14 +282,14 @@ fun MiniPlayer(
         val miniPlayerShape = CircleShape
         // Without glass the card follows the theme, not the playing artwork.
         val cardColor =
-            if (isLiquidGlassEnabled == DataStoreManager.TRUE) {
+            if (useGlassSurface) {
                 Color.Transparent
             } else {
                 // Same opaque surface as the bottom bar capsule, so the two floating surfaces read as one set.
                 MaterialTheme.colorScheme.surfaceContainer
             }
         // The flat (default) card: round artwork and controls sitting in filled circles. Glass keeps its own look.
-        val isFlat = isLiquidGlassEnabled != DataStoreManager.TRUE
+        val isFlat = !useGlassSurface
         Card(
             shape = miniPlayerShape,
             colors =
@@ -289,8 +300,14 @@ fun MiniPlayer(
             modifier =
                 modifier
                     .then(
-                        if (isLiquidGlassEnabled == DataStoreManager.TRUE) {
-                            Modifier.liquidGlass(backdrop, layer, luminance, RoundedCornerShape(16.dp))
+                        if (useGlassSurface) {
+                            Modifier.liquidGlass(
+                                backdrop = backdrop,
+                                layer = captureLayer,
+                                luminance = luminance,
+                                shape = miniPlayerShape,
+                                shouldCaptureLayer = shouldCaptureLayer,
+                            )
                         } else {
                             Modifier
                         },
@@ -621,7 +638,14 @@ fun MiniPlayer(
             modifier
                 .then(
                     if (useGlassSurface) {
-                        Modifier.liquidGlass(backdrop, layer, luminance, capsuleShape, blurScale = 1.2f)
+                        Modifier.liquidGlass(
+                            backdrop = backdrop,
+                            layer = captureLayer,
+                            luminance = luminance,
+                            shape = capsuleShape,
+                            blurScale = 1.2f,
+                            shouldCaptureLayer = shouldCaptureLayer,
+                        )
                     } else {
                         Modifier.background(MaterialTheme.colorScheme.surfaceContainer, capsuleShape)
                     },
