@@ -242,31 +242,6 @@ fun LocalPlaylistScreen(
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    val aiPainter = rememberVectorPainter(SimpIcons.TipsAndUpdates)
-    val limit = 1.5f
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val progressAnimated by transition.animateFloat(
-        initialValue = -limit,
-        targetValue = limit,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(5000, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-        label = "shimmer",
-    )
-    val infiniteTransition = rememberInfiniteTransition(label = "rotation")
-    val angle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(5000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
-        label = "rotation",
-    )
-
     val lazyState = rememberLazyListState()
     val firstItemVisible by remember {
         derivedStateOf {
@@ -365,11 +340,8 @@ fun LocalPlaylistScreen(
     LaunchedEffect(key1 = shouldShowSuggestions, key2 = uiState.ytPlaylistId, key3 = uiState.syncState) {
         val ytId = uiState.ytPlaylistId
         if (!ytId.isNullOrEmpty() && uiState.syncState == LocalPlaylistEntity.YouTubeSyncState.Synced) {
-            if (shouldShowSuggestions && suggestedTracks.isEmpty()) {
-                viewModel.getSuggestions(uiState.id)
-            }
-            if (relatedPlaylists.isEmpty()) {
-                viewModel.loadYouTubeExtras(ytId)
+            if (relatedPlaylists.isEmpty() || (shouldShowSuggestions && suggestedTracks.isEmpty())) {
+                viewModel.loadYouTubeExtras(ytId, includeSuggestions = shouldShowSuggestions)
             }
         }
     }
@@ -792,45 +764,11 @@ fun LocalPlaylistScreen(
                                     ) {
                                         // AI Suggest — only when synced with YouTube
                                         if (shouldShowSuggestButton) {
-                                            IconButton(
+                                            AnimatedSuggestIconButton(
                                                 onClick = {
                                                     shouldShowSuggestions = !shouldShowSuggestions
                                                 },
-                                            ) {
-                                                Box(
-                                                    modifier =
-                                                        Modifier
-                                                            .size(24.dp)
-                                                            .graphicsLayer {
-                                                                compositingStrategy = CompositingStrategy.Offscreen
-                                                            }.drawWithContent {
-                                                                val width = size.width
-                                                                val height = size.height
-                                                                val offsetDraw = width * progressAnimated
-                                                                val brush =
-                                                                    Brush.linearGradient(
-                                                                        colors =
-                                                                            listOf(
-                                                                                Color(0xFF4C82EF),
-                                                                                Color(0xFFD96570),
-                                                                            ),
-                                                                        start = Offset(offsetDraw, 0f),
-                                                                        end =
-                                                                            Offset(
-                                                                                offsetDraw + width,
-                                                                                height,
-                                                                            ),
-                                                                    )
-                                                                with(aiPainter) {
-                                                                    draw(size = Size(width, height))
-                                                                }
-                                                                drawRect(
-                                                                    brush = brush,
-                                                                    blendMode = BlendMode.SrcIn,
-                                                                )
-                                                            },
-                                                )
-                                            }
+                                            )
                                         }
                                         IconButton(
                                             onClick = { showSearchBar = true },
@@ -1144,45 +1082,11 @@ fun LocalPlaylistScreen(
                                 ) {
                                     // AI Suggest — only when synced with YouTube
                                     if (shouldShowSuggestButton) {
-                                        IconButton(
+                                        AnimatedSuggestIconButton(
                                             onClick = {
                                                 shouldShowSuggestions = !shouldShowSuggestions
                                             },
-                                        ) {
-                                            Box(
-                                                modifier =
-                                                    Modifier
-                                                        .size(24.dp)
-                                                        .graphicsLayer {
-                                                            compositingStrategy = CompositingStrategy.Offscreen
-                                                        }.drawWithContent {
-                                                            val width = size.width
-                                                            val height = size.height
-                                                            val offsetDraw = width * progressAnimated
-                                                            val brush =
-                                                                Brush.linearGradient(
-                                                                    colors =
-                                                                        listOf(
-                                                                            Color(0xFF4C82EF),
-                                                                            Color(0xFFD96570),
-                                                                        ),
-                                                                    start = Offset(offsetDraw, 0f),
-                                                                    end =
-                                                                        Offset(
-                                                                            offsetDraw + width,
-                                                                            height,
-                                                                        ),
-                                                                )
-                                                            with(aiPainter) {
-                                                                draw(size = Size(width, height))
-                                                            }
-                                                            drawRect(
-                                                                brush = brush,
-                                                                blendMode = BlendMode.SrcIn,
-                                                            )
-                                                        },
-                                            )
-                                        }
+                                        )
                                     }
                                     IconButton(
                                         onClick = { showSearchBar = true },
@@ -1432,11 +1336,11 @@ fun LocalPlaylistScreen(
                 }
             }
         }
-        item(key = "local_add_a_song_row") {
+        item(key = "local_add_a_song_row", contentType = "add_a_song_row") {
             AddSongToPlaylistRow(onClick = { showAddSongSheet = true })
         }
         if (trackPagingItems.itemCount == 0 && uiState.loadState != LocalPlaylistState.PlaylistLoadState.Loading) {
-            item(key = "local_playlist_no_tracks_yet") {
+            item(key = "local_playlist_no_tracks_yet", contentType = "empty_hint") {
                 Text(
                     text = stringResource(Res.string.playlist_no_tracks_yet),
                     style = typo().bodyMedium,
@@ -1449,9 +1353,11 @@ fun LocalPlaylistScreen(
                 )
             }
         }
-        items(count = trackPagingItems.itemCount, key = { index ->
-            trackPagingItems[index]?.second?.id ?: "item_$index"
-        }) { index ->
+        items(
+            count = trackPagingItems.itemCount,
+            key = { index -> trackPagingItems.peek(index)?.second?.id ?: "item_$index" },
+            contentType = { "local_track_row" },
+        ) { index ->
             val item = trackPagingItems[index]?.first
             if (item != null) {
                 val content = @Composable { mod: Modifier ->
@@ -1463,10 +1369,7 @@ fun LocalPlaylistScreen(
                         localSongOverride = item,
                         hasLocalSongOverride = true,
                         onMoreClickListener = { onItemMoreClick(it) },
-                        onClickListener = {
-                            Logger.w("PlaylistScreen", "index: $index")
-                            onPlaylistItemClick(it)
-                        },
+                        onClickListener = { onPlaylistItemClick(it) },
                         onAddToQueue = {
                             sharedViewModel.addListToQueue(
                                 arrayListOf(item.toTrack()),
@@ -1503,7 +1406,7 @@ fun LocalPlaylistScreen(
             }
         }
         if (shouldShowSuggestButton && shouldShowSuggestions && (suggestionsLoading || suggestedTracks.isNotEmpty() || suggestionsReloadParams != null)) {
-            item(key = "local_playlist_suggestions_section") {
+            item(key = "local_playlist_suggestions_section", contentType = "playlist_suggestions") {
                 PlaylistSuggestionsSection(
                     suggestions = suggestedTracks,
                     isLoading = suggestionsLoading,
@@ -1518,7 +1421,7 @@ fun LocalPlaylistScreen(
             }
         }
         if (relatedPlaylists.isNotEmpty()) {
-            item(key = "local_related_playlists_section") {
+            item(key = "local_related_playlists_section", contentType = "related_playlists") {
                 val platformContext = LocalPlatformContext.current
                 RelatedPlaylistsSection(
                     relatedPlaylists = relatedPlaylists,
@@ -1538,7 +1441,7 @@ fun LocalPlaylistScreen(
                 )
             }
         }
-        item {
+        item(contentType = "end_of_page") {
             EndOfPage()
         }
     }
@@ -1879,5 +1782,52 @@ fun LocalPlaylistScreen(
     }
             }
         }
+    }
+}
+
+@Composable
+private fun AnimatedSuggestIconButton(onClick: () -> Unit) {
+    val aiPainter = rememberVectorPainter(SimpIcons.TipsAndUpdates)
+    val transition = rememberInfiniteTransition(label = "suggest_shimmer")
+    val progressAnimated by transition.animateFloat(
+        initialValue = -1.5f,
+        targetValue = 1.5f,
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(5000, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+        label = "suggest_shimmer_progress",
+    )
+    IconButton(onClick = onClick) {
+        Box(
+            modifier =
+                Modifier
+                    .size(24.dp)
+                    .graphicsLayer {
+                        compositingStrategy = CompositingStrategy.Offscreen
+                    }.drawWithContent {
+                        val width = size.width
+                        val height = size.height
+                        val offsetDraw = width * progressAnimated
+                        val brush =
+                            Brush.linearGradient(
+                                colors =
+                                    listOf(
+                                        Color(0xFF4C82EF),
+                                        Color(0xFFD96570),
+                                    ),
+                                start = Offset(offsetDraw, 0f),
+                                end = Offset(offsetDraw + width, height),
+                            )
+                        with(aiPainter) {
+                            draw(size = Size(width, height))
+                        }
+                        drawRect(
+                            brush = brush,
+                            blendMode = BlendMode.SrcIn,
+                        )
+                    },
+        )
     }
 }

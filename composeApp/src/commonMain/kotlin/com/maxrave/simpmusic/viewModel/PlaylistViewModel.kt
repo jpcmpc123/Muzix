@@ -8,9 +8,11 @@ import com.maxrave.common.Config
 import com.maxrave.domain.data.entities.DownloadState.STATE_DOWNLOADED
 import com.maxrave.domain.data.entities.DownloadState.STATE_DOWNLOADING
 import com.maxrave.domain.data.entities.PlaylistEntity
+import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.browse.playlist.Author
 import com.maxrave.domain.data.model.browse.playlist.PlaylistBrowse
+import com.maxrave.domain.data.model.browse.playlist.PlaylistExtras
 import com.maxrave.domain.data.model.browse.playlist.PlaylistState
 import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
 import com.maxrave.domain.extension.now
@@ -106,6 +108,9 @@ class PlaylistViewModel(
     private val _addingSuggestionIds = MutableStateFlow<Set<String>>(emptySet())
     val addingSuggestionIds: StateFlow<Set<String>> = _addingSuggestionIds.asStateFlow()
 
+    private val _localSongsById = MutableStateFlow<Map<String, SongEntity>>(emptyMap())
+    val localSongsById: StateFlow<Map<String, SongEntity>> = _localSongsById.asStateFlow()
+
     private var collectDownloadedJob: Job? = null
     private var _downloadedList = MutableStateFlow<List<String>>(emptyList())
     val downloadedList: StateFlow<List<String>> = _downloadedList
@@ -116,9 +121,10 @@ class PlaylistViewModel(
     private var loadDataJob: Job? = null
     private var continuationBgJob: Job? = null
     private var extrasJob: Job? = null
+    private var localSongsLookupJob: Job? = null
 
     private companion object {
-        const val MAX_BG_CONTINUATION_PAGES = 40
+        const val MAX_BG_CONTINUATION_PAGES = 2
     }
 
     init {
@@ -146,7 +152,7 @@ class PlaylistViewModel(
                                             }
                                             downloadUtils.downloads.collectLatest { downloads ->
                                                 var count = 0
-                                                tracks.forEachIndexed { index, track ->
+                                                tracks.forEachIndexed { _, track ->
                                                     val trackDownloadState = downloads[track.videoId]?.first?.state
                                                     val videoDownloadState =
                                                         downloads[track.videoId]?.second?.state ?: DownloadHandler.State.STATE_COMPLETED
@@ -205,6 +211,8 @@ class PlaylistViewModel(
         continuationBgJob = null
         extrasJob?.cancel()
         extrasJob = null
+        localSongsLookupJob?.cancel()
+        localSongsLookupJob = null
         playlistEntityJob?.cancel()
         playlistEntityJob = null
         checkDownloadedPlaylist?.cancel()
@@ -218,9 +226,35 @@ class PlaylistViewModel(
         _suggestionsLoading.value = false
         _relatedPlaylists.value = emptyList()
         _addingSuggestionIds.value = emptySet()
+        _localSongsById.value = emptyMap()
         _playlistEntity.value = null
         _downloadedList.value = emptyList()
         _listColors.value = emptyList()
+    }
+
+    private fun refreshLocalSongsIncremental(tracksToCheck: List<Track>) {
+        if (tracksToCheck.isEmpty()) return
+        val existing = _localSongsById.value
+        val missingIds =
+            tracksToCheck
+                .asSequence()
+                .map { it.videoId }
+                .filter { it.isNotBlank() && it !in existing }
+                .distinct()
+                .toList()
+        if (missingIds.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val fetched = songRepository.getSongsByListVideoId(missingIds).firstOrNull().orEmpty()
+            if (fetched.isEmpty()) return@launch
+            _localSongsById.update { current ->
+                val next = HashMap<String, SongEntity>(current.size + fetched.size)
+                next.putAll(current)
+                for (song in fetched) {
+                    next[song.videoId] = song
+                }
+                next
+            }
+        }
     }
 
     fun getData(id: String) {
@@ -239,11 +273,12 @@ class PlaylistViewModel(
                             val data = res.data
                             when (res) {
                                 is Resource.Success if (data != null) -> {
-                                    Logger.d(tag, "Radio data: $data")
+                                    Logger.d(tag, "Radio data: ${data.first.tracks.size} tracks")
                                     _tracks.value = data.first.tracks
                                     _continuation.value = data.second
                                     _tracksListState.value =
                                         if (data.second.isNullOrEmpty()) ListState.PAGINATION_EXHAUST else ListState.IDLE
+                                    refreshLocalSongsIncremental(data.first.tracks)
                                     _uiState.value =
                                         Success(
                                             data =
@@ -279,7 +314,6 @@ class PlaylistViewModel(
                             val data = res.data
                             when (res) {
                                 is Resource.Success if (data != null) -> {
-                                    Logger.d(tag, "Playlist data: $data")
                                     log("Playlist endpoint: ${data.first.shuffleEndpoint}")
                                     val initialTracks = data.first.tracks
                                     val nextCont = data.second
@@ -294,7 +328,8 @@ class PlaylistViewModel(
                                     _tracks.value = initialTracks
                                     _continuation.value = nextCont
                                     _tracksListState.value =
-                                        if (nextCont.isNullOrEmpty()) ListState.PAGINATION_EXHAUST else ListState.PAGINATING
+                                        if (nextCont.isNullOrEmpty()) ListState.PAGINATION_EXHAUST else ListState.IDLE
+                                    refreshLocalSongsIncremental(initialTracks)
                                     _uiState.value =
                                         Success(
                                             data =
@@ -322,7 +357,11 @@ class PlaylistViewModel(
                                     if (!nextCont.isNullOrEmpty()) {
                                         preloadRemainingContinuationInBackground(data.first.id, nextCont)
                                     }
-                                    loadPlaylistExtras(data.first.id)
+                                    loadPlaylistExtras(
+                                        playlistId = data.first.id,
+                                        extrasContinuation = data.first.extrasContinuation,
+                                        initialExtras = data.first.initialExtras,
+                                    )
                                 }
 
                                 else -> {
@@ -349,14 +388,13 @@ class PlaylistViewModel(
                     playlistId = id,
                     inLibrary = now(),
                 )
-                launch {
-                    tracksToPersist.forEach { track ->
-                        songRepository
-                            .insertSong(
-                                track.toSongEntity().copy(
-                                    inLibrary = Config.REMOVED_SONG_DATE_TIME,
-                                ),
-                            ).firstOrNull()
+                if (tracksToPersist.isNotEmpty()) {
+                    launch {
+                        songRepository.insertSongs(
+                            tracksToPersist.map {
+                                it.toSongEntity().copy(inLibrary = Config.REMOVED_SONG_DATE_TIME)
+                            },
+                        )
                     }
                 }
                 playlistRepository.getPlaylist(id).collectLatest { playlist ->
@@ -374,7 +412,7 @@ class PlaylistViewModel(
         continuationBgJob?.cancel()
         continuationBgJob =
             viewModelScope.launch {
-                // Yield initial mobile bandwidth so header hero artwork completes cleanly first.
+                // Yield initial mobile bandwidth so header hero artwork and extras complete cleanly first.
                 delay(600L)
                 val seenTokens = HashSet<String>()
                 var nextCont: String? = initialContinuation
@@ -394,22 +432,28 @@ class PlaylistViewModel(
                         break
                     }
                     _tracks.update { existing -> existing + moreTracks }
+                    refreshLocalSongsIncremental(moreTracks)
                     nextCont = res.second
                     _continuation.value = nextCont
                     pagesLoaded++
                     launch(Dispatchers.IO) {
-                        moreTracks.forEach { track ->
-                            songRepository
-                                .insertSong(
-                                    track.toSongEntity().copy(
-                                        inLibrary = Config.REMOVED_SONG_DATE_TIME,
-                                    ),
-                                ).firstOrNull()
-                        }
+                        songRepository.insertSongs(
+                            moreTracks.map {
+                                it.toSongEntity().copy(inLibrary = Config.REMOVED_SONG_DATE_TIME)
+                            },
+                        )
+                    }
+                    if (!nextCont.isNullOrEmpty() && pagesLoaded < MAX_BG_CONTINUATION_PAGES) {
+                        delay(250L)
                     }
                 }
-                _continuation.value = null
-                _tracksListState.value = ListState.PAGINATION_EXHAUST
+                if (nextCont.isNullOrEmpty()) {
+                    _continuation.value = null
+                    _tracksListState.value = ListState.PAGINATION_EXHAUST
+                } else {
+                    _continuation.value = nextCont
+                    _tracksListState.value = ListState.IDLE
+                }
             }
     }
 
@@ -430,10 +474,16 @@ class PlaylistViewModel(
                         fromPlaylist = true,
                     ).collectLatest { res ->
                         val addedTracks = res.first ?: emptyList()
-                        _tracks.update {
-                            val newList = it.toMutableList()
-                            newList.addAll(addedTracks)
-                            newList
+                        if (addedTracks.isNotEmpty()) {
+                            _tracks.update { existing -> existing + addedTracks }
+                            refreshLocalSongsIncremental(addedTracks)
+                            launch(Dispatchers.IO) {
+                                songRepository.insertSongs(
+                                    addedTracks.map {
+                                        it.toSongEntity().copy(inLibrary = Config.REMOVED_SONG_DATE_TIME)
+                                    },
+                                )
+                            }
                         }
                         if (res.second.isNullOrEmpty()) {
                             _continuation.value = null
@@ -441,20 +491,6 @@ class PlaylistViewModel(
                         } else {
                             _continuation.value = res.second
                             _tracksListState.value = ListState.IDLE
-                        }
-                        if (addedTracks.isNotEmpty()) {
-                            launch(Dispatchers.IO) {
-                                addedTracks.forEach { track ->
-                                    songRepository
-                                        .insertSong(
-                                            track
-                                                .toSongEntity()
-                                                .copy(
-                                                    inLibrary = Config.REMOVED_SONG_DATE_TIME,
-                                                ),
-                                        ).singleOrNull()
-                                }
-                            }
                         }
                     }
             }
@@ -473,17 +509,19 @@ class PlaylistViewModel(
                         playlistRepository.getPlaylist(id).firstOrNull()
                     }
                 if (playlistEntity != null) {
+                    val cachedSongsMap: Map<String, SongEntity>
                     val cachedSongs =
                         withContext(Dispatchers.IO) {
                             playlistEntity.tracks?.let { trackIds ->
                                 songRepository
                                     .getSongsByListVideoId(trackIds)
                                     .singleOrNull()
-                                    ?.map { it.toTrack() }
                             } ?: emptyList()
                         }
+                    cachedSongsMap = cachedSongs.associateBy { it.videoId }
                     _playlistEntity.value = playlistEntity
-                    _tracks.value = cachedSongs
+                    _localSongsById.value = cachedSongsMap
+                    _tracks.value = cachedSongs.map { it.toTrack() }
                     _continuation.value = null
                     _tracksListState.value = ListState.PAGINATION_EXHAUST
                     _uiState.value =
@@ -518,7 +556,7 @@ class PlaylistViewModel(
                                         .getSongsByListVideoId(
                                             playlistEntity.tracks ?: emptyList(),
                                         ).firstOrNull()
-                                Logger.d(tag, "List song: $listSong")
+                                Logger.d(tag, "List song: ${listSong?.size ?: 0}")
                                 if (!listSong.isNullOrEmpty() && listSong.size == playlistEntity.tracks?.size &&
                                     listSong.all {
                                         it.downloadState == STATE_DOWNLOADED
@@ -560,8 +598,9 @@ class PlaylistViewModel(
             is PlaylistUIEvent.ItemClick -> {
                 val videoId = event.videoId
                 val loadedList = tracks.value
-                val clickedSong = loadedList.firstOrNull { it.videoId == videoId } ?: return
-                val index = loadedList.indexOf(clickedSong)
+                val index = loadedList.indexOfFirst { it.videoId == videoId }
+                if (index < 0) return
+                val clickedSong = loadedList[index]
                 setQueueData(
                     QueueData.Data(
                         listTracks = loadedList.toCollection(arrayListOf<Track>()),
@@ -708,33 +747,67 @@ class PlaylistViewModel(
     }
 
     fun getFullTracks(callback: (List<Track>) -> Unit) {
+        continuationBgJob?.cancel()
         viewModelScope.launch {
             if (tracksListState.value == ListState.PAGINATION_EXHAUST) {
+                val currentTracks = tracks.value
                 _playlistEntity.value
                     ?.copy(
-                        tracks = tracks.value.toListVideoId(),
-                        trackCount = tracks.value.size,
+                        tracks = currentTracks.toListVideoId(),
+                        trackCount = currentTracks.size,
                     )?.let {
                         playlistRepository.insertAndReplacePlaylist(it)
                     }
-                callback(tracks.value)
-            } else {
-                val id = uiState.value.data?.id ?: return@launch
-                tracksListState.collectLatest { state ->
-                    if (state == ListState.PAGINATION_EXHAUST) {
-                        _playlistEntity.value
-                            ?.copy(
-                                tracks = tracks.value.toListVideoId(),
-                                trackCount = tracks.value.size,
-                            )?.let {
-                                playlistRepository.insertAndReplacePlaylist(it)
-                            }
-                        callback(tracks.value)
-                    } else if (state != ListState.PAGINATING) {
-                        getContinuationTrack(id, continuation.value)
+                callback(currentTracks)
+                return@launch
+            }
+            val id = uiState.value.data?.id ?: return@launch
+            val seenTokens = HashSet<String>()
+            while (tracksListState.value != ListState.PAGINATION_EXHAUST) {
+                val cont = continuation.value
+                if (cont.isNullOrEmpty() || !seenTokens.add(cont)) {
+                    _continuation.value = null
+                    _tracksListState.value = ListState.PAGINATION_EXHAUST
+                    break
+                }
+                _tracksListState.value = ListState.PAGINATING
+                val res =
+                    songRepository
+                        .getContinueTrack(
+                            id,
+                            cont,
+                            fromPlaylist = true,
+                        ).firstOrNull()
+                val addedTracks = res?.first.orEmpty()
+                if (addedTracks.isNotEmpty()) {
+                    _tracks.update { existing -> existing + addedTracks }
+                    refreshLocalSongsIncremental(addedTracks)
+                    launch(Dispatchers.IO) {
+                        songRepository.insertSongs(
+                            addedTracks.map {
+                                it.toSongEntity().copy(inLibrary = Config.REMOVED_SONG_DATE_TIME)
+                            },
+                        )
                     }
                 }
+                val nextCont = res?.second
+                if (res == null || nextCont.isNullOrEmpty()) {
+                    _continuation.value = null
+                    _tracksListState.value = ListState.PAGINATION_EXHAUST
+                    break
+                } else {
+                    _continuation.value = nextCont
+                }
             }
+            val finalTracks = tracks.value
+            _playlistEntity.value
+                ?.copy(
+                    tracks = finalTracks.toListVideoId(),
+                    trackCount = finalTracks.size,
+                )?.let {
+                    playlistRepository.insertAndReplacePlaylist(it)
+                }
+            callback(finalTracks)
         }
     }
 
@@ -800,24 +873,35 @@ class PlaylistViewModel(
         }
     }
 
-    private fun loadPlaylistExtras(playlistId: String) {
+    private fun loadPlaylistExtras(
+        playlistId: String,
+        extrasContinuation: String? = null,
+        initialExtras: PlaylistExtras? = null,
+    ) {
         val bareId = playlistId.removePrefix("VL")
         extrasJob?.cancel()
         extrasJob =
             viewModelScope.launch {
-                delay(400L)
+                if (extrasContinuation == null && initialExtras == null) {
+                    delay(150L)
+                }
                 _suggestionsLoading.value = true
                 try {
-                    playlistRepository.getPlaylistExtras(bareId).collectLatest { res ->
-                        if (res is Resource.Success && res.data != null) {
-                            val extras = res.data!!
-                            if (bareId != "LM") {
-                                _suggestionsReloadParams.value = extras.reloadParams
-                                _suggestedTracks.value = extras.suggestions
+                    playlistRepository
+                        .getPlaylistExtras(
+                            playlistId = bareId,
+                            initialContinuation = extrasContinuation,
+                            initialExtras = initialExtras,
+                        ).collectLatest { res ->
+                            if (res is Resource.Success && res.data != null) {
+                                val extras = res.data!!
+                                if (bareId != "LM") {
+                                    _suggestionsReloadParams.value = extras.reloadParams
+                                    _suggestedTracks.value = extras.suggestions
+                                }
+                                _relatedPlaylists.value = extras.relatedPlaylists
                             }
-                            _relatedPlaylists.value = extras.relatedPlaylists
                         }
-                    }
                 } finally {
                     _suggestionsLoading.value = false
                 }
@@ -862,6 +946,7 @@ class PlaylistViewModel(
                 Success(data.copy(trackCount = maxOf(data.trackCount + 1, _tracks.value.size)))
             }
             launchSongPersist(track)
+            refreshLocalSongsIncremental(listOf(track))
             makeToast(getString(Res.string.added_to_playlist))
         }
         return added

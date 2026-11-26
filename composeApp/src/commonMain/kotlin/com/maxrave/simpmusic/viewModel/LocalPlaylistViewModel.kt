@@ -745,30 +745,42 @@ class LocalPlaylistViewModel(
         }
     }
 
-    fun loadYouTubeExtras(ytPlaylistId: String) {
+    fun loadYouTubeExtras(
+        ytPlaylistId: String,
+        includeSuggestions: Boolean = true,
+    ) {
         val bareId = ytPlaylistId.removePrefix("VL")
         extrasJob?.cancel()
+        val needsSuggestions = includeSuggestions && _uiState.value.suggestions == null
+        if (!needsSuggestions && _relatedPlaylists.value.isNotEmpty()) return
         extrasJob =
             viewModelScope.launch {
-                playlistRepository.getPlaylistExtras(bareId).collectLatest { res ->
-                    if (res is Resource.Success && res.data != null) {
-                        val extras = res.data!!
-                        _relatedPlaylists.value = extras.relatedPlaylists
-                        if (_uiState.value.suggestions == null &&
-                            !extras.reloadParams.isNullOrEmpty() &&
-                            extras.suggestions.isNotEmpty()
-                        ) {
-                            _uiState.update {
-                                it.copy(
-                                    suggestions =
-                                        LocalPlaylistState.SuggestionSongs(
-                                            reloadParams = extras.reloadParams!!,
-                                            songs = extras.suggestions,
-                                        ),
-                                )
+                if (needsSuggestions) loading.value = true
+                try {
+                    playlistRepository.getPlaylistExtras(bareId).collectLatest { res ->
+                        if (res is Resource.Success && res.data != null) {
+                            val extras = res.data!!
+                            _relatedPlaylists.value = extras.relatedPlaylists
+                            if (includeSuggestions &&
+                                _uiState.value.suggestions == null &&
+                                !extras.reloadParams.isNullOrEmpty() &&
+                                extras.suggestions.isNotEmpty()
+                            ) {
+                                val resolvedReloadParams = extras.reloadParams ?: return@collectLatest
+                                _uiState.update {
+                                    it.copy(
+                                        suggestions =
+                                            LocalPlaylistState.SuggestionSongs(
+                                                reloadParams = resolvedReloadParams,
+                                                songs = extras.suggestions,
+                                            ),
+                                    )
+                                }
                             }
                         }
                     }
+                } finally {
+                    if (needsSuggestions) loading.value = false
                 }
             }
     }

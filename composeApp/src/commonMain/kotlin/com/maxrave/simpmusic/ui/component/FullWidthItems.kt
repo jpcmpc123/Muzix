@@ -53,6 +53,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -142,23 +143,24 @@ fun SongFullWidthItems(
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
     val maxOffset = 360f
     val coroutineScope = rememberCoroutineScope()
-    val density = LocalDensity.current
-    val songRepository: SongRepository = koinInject<SongRepository>()
     // Screens that render many rows pass the stored row in (one batch query per screen);
     // only a row without a provider falls back to its own per-row query.
     val lookupVideoId = songEntity?.videoId ?: track?.videoId ?: ""
-    val queriedSong by remember(lookupVideoId, hasLocalSongOverride) {
+    val queriedSong by
         if (hasLocalSongOverride) {
-            flowOf(null)
+            remember { mutableStateOf<SongEntity?>(null) }
         } else {
-            songRepository.getSongAsFlow(lookupVideoId)
+            val songRepository: SongRepository = koinInject<SongRepository>()
+            remember(lookupVideoId) {
+                songRepository.getSongAsFlow(lookupVideoId)
+            }.collectAsStateWithLifecycle(initialValue = null)
         }
-    }.collectAsStateWithLifecycle(initialValue = null)
     val storedSong = if (hasLocalSongOverride) localSongOverride else queriedSong
     val downloadState = storedSong?.downloadState ?: DownloadState.STATE_NOT_DOWNLOADED
     // The list's own model says what its source said; the stored row adds what playback learned
     // since, which is the only way a queue row is marked — the queue response shows no LIVE chip.
     val isLive = track?.isLive == true || songEntity?.isLive == true || storedSong?.isLive == true
+    val canSwipeToQueue = !isPlaying && onAddToQueue != null && !selectionMode
     val offsetX = remember { Animatable(initialValue = 0f) }
 
     Box(
@@ -167,28 +169,23 @@ fun SongFullWidthItems(
     ) {
         if (offsetX.value > 0f) {
             Box(Modifier.matchParentSize()) {
-                Crossfade(
-                    offsetX.value >= maxOffset / 2,
-                    modifier = Modifier.matchParentSize(),
-                ) { shouldShowAddToQueue ->
-                    if (shouldShowAddToQueue) {
-                        // Where Add to queue is blocked the swipe plays the song next instead
-                        // (SharedViewModel.addListToQueue), so the icon shows what will happen.
-                        val playsNext = rememberAddToQueueBlock() != null
-                        Box(
-                            modifier =
-                                Modifier
-                                    .fillMaxSize()
-                                    .padding(start = 15.dp),
-                            contentAlignment = Alignment.CenterStart,
-                        ) {
-                            Icon(
-                                tint = contentColor,
-                                imageVector = if (playsNext) SimpIcons.SkipNext else SimpIcons.QueueMusic,
-                                contentDescription =
-                                    stringResource(if (playsNext) Res.string.play_next else Res.string.add_to_queue),
-                            )
-                        }
+                if (offsetX.value >= maxOffset / 2) {
+                    // Where Add to queue is blocked the swipe plays the song next instead
+                    // (SharedViewModel.addListToQueue), so the icon shows what will happen.
+                    val playsNext = rememberAddToQueueBlock() != null
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(start = 15.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        Icon(
+                            tint = contentColor,
+                            imageVector = if (playsNext) SimpIcons.SkipNext else SimpIcons.QueueMusic,
+                            contentDescription =
+                                stringResource(if (playsNext) Res.string.play_next else Res.string.add_to_queue),
+                        )
                     }
                 }
             }
@@ -197,7 +194,13 @@ fun SongFullWidthItems(
         Box(
             modifier =
                 modifier
-                    .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                    .then(
+                        if (canSwipeToQueue) {
+                            Modifier.offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                        } else {
+                            Modifier
+                        },
+                    )
                     .background(
                         if (isSelected) seed.copy(alpha = 0.18f) else Color.Transparent,
                     ).combinedClickable(
@@ -215,34 +218,36 @@ fun SongFullWidthItems(
                                 null
                             },
                     )
-                    // Keyed on selectionMode so the swipe detector is torn down when selection
-                    // starts — keyed on Unit it would keep running with the stale flag captured.
-                    .pointerInput(selectionMode) {
-                        if (!isPlaying && onAddToQueue != null && !selectionMode) {
-                            detectHorizontalDragGestures(
-                                onHorizontalDrag = { change, dragAmount ->
-                                    if (offsetX.value + dragAmount > 0) {
-                                        change.consume()
-                                        coroutineScope.launch {
-                                            offsetX.snapTo(
-                                                (offsetX.value + dragAmount).coerceAtMost(maxOffset),
+                    .then(
+                        if (canSwipeToQueue) {
+                            Modifier.pointerInput(selectionMode, isPlaying, onAddToQueue != null) {
+                                detectHorizontalDragGestures(
+                                    onHorizontalDrag = { change, dragAmount ->
+                                        if (offsetX.value + dragAmount > 0) {
+                                            change.consume()
+                                            coroutineScope.launch {
+                                                offsetX.snapTo(
+                                                    (offsetX.value + dragAmount).coerceAtMost(maxOffset),
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        if (offsetX.value == maxOffset) {
+                                            onAddToQueue?.invoke(
+                                                track?.videoId ?: songEntity?.videoId ?: "",
                                             )
                                         }
-                                    }
-                                },
-                                onDragEnd = {
-                                    if (offsetX.value == maxOffset) {
-                                        onAddToQueue(
-                                            track?.videoId ?: songEntity?.videoId ?: "",
-                                        )
-                                    }
-                                    coroutineScope.launch {
-                                        offsetX.animateTo(0f)
-                                    }
-                                },
-                            )
-                        }
-                    },
+                                        coroutineScope.launch {
+                                            offsetX.animateTo(0f)
+                                        }
+                                    },
+                                )
+                            }
+                        } else {
+                            Modifier
+                        },
+                    ),
         ) {
             Row(
                 Modifier
@@ -251,11 +256,7 @@ fun SongFullWidthItems(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Spacer(modifier = Modifier.width(8.dp))
-                AnimatedVisibility(
-                    visible = selectionMode,
-                    enter = fadeIn() + expandHorizontally(),
-                    exit = fadeOut() + shrinkHorizontally(),
-                ) {
+                if (selectionMode) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier =
@@ -286,45 +287,52 @@ fun SongFullWidthItems(
                     modifier = Modifier.size(48.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Crossfade(isPlaying) {
-                        if (it) {
-                            AudioPlayingIndicator(
-                                isAnimating = isPlaybackActive,
-                                modifier = Modifier.fillMaxSize(),
+                    if (isPlaying) {
+                        AudioPlayingIndicator(
+                            isAnimating = isPlaybackActive,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else if (index == null) {
+                        val rawThumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
+                        val imageRequest =
+                            rememberOptimizedImageRequest(
+                                rawUrl = rawThumb,
+                                targetPx = THUMB_SMALL_PX,
+                                crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
                             )
-                        } else if (index == null) {
-                            val rawThumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
-                            val imageRequest =
-                                rememberOptimizedImageRequest(
-                                    rawUrl = rawThumb,
-                                    targetPx = THUMB_SMALL_PX,
-                                    crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
-                                )
-                            val holderPainter = rememberHolderPainter()
-                            AsyncImage(
-                                model = imageRequest,
-                                transform =
-                                    com.maxrave.simpmusic.utils.rememberRamFirstTransform(
-                                        fallbackPlaceholder = holderPainter,
-                                        error = holderPainter,
-                                    ),
-                                contentDescription = null,
-                                contentScale = ContentScale.FillWidth,
-                                modifier =
-                                    Modifier
-                                        .fillMaxSize()
-                                        .clip(ArtworkShape),
-                            )
-                        } else {
-                            Text(
-                                text = (index + 1).toString(),
-                                color = contentColor,
-                                style = typo().titleMedium,
-                                modifier = Modifier.align(Alignment.Center),
-                            )
-                        }
+                        val holderPainter = rememberHolderPainter()
+                        AsyncImage(
+                            model = imageRequest,
+                            transform =
+                                com.maxrave.simpmusic.utils.rememberRamFirstTransform(
+                                    fallbackPlaceholder = holderPainter,
+                                    error = holderPainter,
+                                ),
+                            contentDescription = null,
+                            contentScale = ContentScale.FillWidth,
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .clip(ArtworkShape),
+                        )
+                    } else {
+                        Text(
+                            text = (index + 1).toString(),
+                            color = contentColor,
+                            style = typo().titleMedium,
+                            modifier = Modifier.align(Alignment.Center),
+                        )
                     }
                 }
+                val isDownloaded = (songEntity != null || track != null) && downloadState == DownloadState.STATE_DOWNLOADED
+                val isExplicit = songEntity?.isExplicit ?: (track?.isExplicit ?: false)
+                val artistText =
+                    remember(track?.artists, songEntity?.artistName) {
+                        (
+                            track?.artists?.toListName()?.connectArtists()
+                                ?: songEntity?.artistName?.connectArtists()
+                        ) ?: ""
+                    }
                 Column(
                     Modifier
                         .weight(1f)
@@ -336,65 +344,60 @@ fun SongFullWidthItems(
                         text = track?.title ?: songEntity?.title ?: "",
                         style = typo().titleSmall,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         color = contentColor,
                         modifier =
                             Modifier
                                 .fillMaxWidth()
                                 .wrapContentHeight(align = Alignment.CenterVertically)
-                                .basicMarquee(
-                                    iterations = Int.MAX_VALUE,
-                                    initialDelayMillis = 2000,
+                                .then(
+                                    if (isPlaying) {
+                                        Modifier.basicMarquee(
+                                            iterations = Int.MAX_VALUE,
+                                            initialDelayMillis = 2000,
+                                        )
+                                    } else {
+                                        Modifier
+                                    },
                                 ),
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        AnimatedVisibility(
-                            visible =
-                                if (songEntity != null || track != null) {
-                                    downloadState == DownloadState.STATE_DOWNLOADED
-                                } else {
-                                    false
-                                },
-                        ) {
-                            Row {
-                                Icon(
-                                    imageVector = SimpIcons.DownloadForOffline,
-                                    tint = contentColor,
-                                    contentDescription = "",
-                                    modifier = Modifier.size(16.dp).padding(2.dp),
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                            }
+                        if (isDownloaded) {
+                            Icon(
+                                imageVector = SimpIcons.DownloadForOffline,
+                                tint = contentColor,
+                                contentDescription = "",
+                                modifier = Modifier.size(16.dp).padding(2.dp),
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
                         }
-                        AnimatedVisibility(
-                            visible =
-                                songEntity?.isExplicit
-                                    ?: (track?.isExplicit ?: false),
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                ExplicitBadge(
-                                    modifier = Modifier.size(20.dp).padding(1.dp),
-                                )
-                                Spacer(modifier = Modifier.width(5.dp))
-                            }
+                        if (isExplicit) {
+                            ExplicitBadge(
+                                modifier = Modifier.size(20.dp).padding(1.dp),
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
                         }
                         // Ahead of the artist, as on Home's cards.
                         if (isLive) LiveBadge(modifier = Modifier.padding(end = 6.dp))
                         Text(
-                            text =
-                                (
-                                    track?.artists?.toListName()?.connectArtists()
-                                        ?: songEntity?.artistName?.connectArtists()
-                                ) ?: "",
+                            text = artistText,
                             style = typo().bodySmall,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             color = subtitleColor,
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
                                     .wrapContentHeight(align = Alignment.CenterVertically)
-                                    .basicMarquee(
-                                        iterations = Int.MAX_VALUE,
-                                        initialDelayMillis = 2000,
+                                    .then(
+                                        if (isPlaying) {
+                                            Modifier.basicMarquee(
+                                                iterations = Int.MAX_VALUE,
+                                                initialDelayMillis = 2000,
+                                            )
+                                        } else {
+                                            Modifier
+                                        },
                                     ),
                         )
                     }
@@ -409,11 +412,7 @@ fun SongFullWidthItems(
                         if (itemVideoId.isNotBlank()) onMoreClickListener.invoke(itemVideoId)
                     }
                 }
-                AnimatedVisibility(
-                    shouldShowDragHandle,
-                    enter = fadeIn() + expandHorizontally(),
-                    exit = fadeOut() + shrinkHorizontally(),
-                ) {
+                if (shouldShowDragHandle) {
                     Icon(
                         SimpIcons.DragHandle,
                         contentDescription = null,
@@ -437,13 +436,15 @@ fun SuggestItems(
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
+    val artistText =
+        remember(track.artists) {
+            track.artists?.toListName()?.connectArtists() ?: ""
+        }
     Box(
         modifier =
             Modifier
                 .clickable {
-                    if (onClickListener != null) {
-                        onClickListener()
-                    }
+                    onClickListener?.invoke()
                 },
     ) {
         Row(
@@ -453,32 +454,30 @@ fun SuggestItems(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(modifier = Modifier.size(40.dp)) {
-                Crossfade(isPlaying) {
-                    if (it) {
-                        AudioPlayingIndicator(
-                            isAnimating = isPlaybackActive,
-                            modifier = Modifier.fillMaxSize(),
+                if (isPlaying) {
+                    AudioPlayingIndicator(
+                        isAnimating = isPlaybackActive,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    val imageRequest =
+                        rememberOptimizedImageRequest(
+                            rawUrl = track.thumbnails?.lastOrNull()?.url,
+                            targetPx = THUMB_SMALL_PX,
+                            crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
                         )
-                    } else {
-                        val imageRequest =
-                            rememberOptimizedImageRequest(
-                                rawUrl = track.thumbnails?.lastOrNull()?.url,
-                                targetPx = THUMB_SMALL_PX,
-                                crossfadeMs = IMAGE_CROSSFADE_FAST_MS,
-                            )
-                        AsyncImage(
-                            model = imageRequest,
-                            placeholder = rememberHolderPainter(),
-                            error = rememberHolderPainter(),
-                            contentDescription = null,
-                            contentScale = ContentScale.FillWidth,
-                            modifier =
-                                Modifier
-                                    .wrapContentHeight()
-                                    .fillMaxWidth()
-                                    .clip(ArtworkShape),
-                        )
-                    }
+                    AsyncImage(
+                        model = imageRequest,
+                        placeholder = rememberHolderPainter(),
+                        error = rememberHolderPainter(),
+                        contentDescription = null,
+                        contentScale = ContentScale.FillWidth,
+                        modifier =
+                            Modifier
+                                .wrapContentHeight()
+                                .fillMaxWidth()
+                                .clip(ArtworkShape),
+                    )
                 }
             }
             Column(
@@ -491,33 +490,44 @@ fun SuggestItems(
                     text = track.title,
                     style = typo().titleSmall,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     color = contentColor,
                     modifier =
                         Modifier
                             .fillMaxWidth()
                             .wrapContentHeight(align = Alignment.CenterVertically)
-                            .basicMarquee(
-                                iterations = Int.MAX_VALUE,
-                                initialDelayMillis = 2000,
+                            .then(
+                                if (isPlaying) {
+                                    Modifier.basicMarquee(
+                                        iterations = Int.MAX_VALUE,
+                                        initialDelayMillis = 2000,
+                                    )
+                                } else {
+                                    Modifier
+                                },
                             ),
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (track.isLive) LiveBadge(modifier = Modifier.padding(end = 6.dp))
                     Text(
-                        text =
-                            (
-                                track.artists?.toListName()?.connectArtists()
-                            ) ?: "",
+                        text = artistText,
                         style = typo().bodySmall,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         color = subtitleColor,
                         modifier =
                             Modifier
                                 .fillMaxWidth()
                                 .wrapContentHeight(align = Alignment.CenterVertically)
-                                .basicMarquee(
-                                    iterations = Int.MAX_VALUE,
-                                    initialDelayMillis = 2000,
+                                .then(
+                                    if (isPlaying) {
+                                        Modifier.basicMarquee(
+                                            iterations = Int.MAX_VALUE,
+                                            initialDelayMillis = 2000,
+                                        )
+                                    } else {
+                                        Modifier
+                                    },
                                 ),
                     )
                 }

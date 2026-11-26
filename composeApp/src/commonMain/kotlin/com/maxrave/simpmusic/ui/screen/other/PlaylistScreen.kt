@@ -38,6 +38,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -154,7 +155,6 @@ import dev.chrisbanes.haze.blur.hazeBlur
 import com.maxrave.simpmusic.extension.glassHazeSource
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -162,7 +162,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
-import com.maxrave.domain.repository.SongRepository
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
@@ -195,7 +194,6 @@ fun PlaylistScreen(
     val tag = "PlaylistScreen"
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val songRepository: SongRepository = koinInject()
     val continuation by viewModel.continuation.collectAsStateWithLifecycle()
     val listColors by viewModel.listColors.collectAsStateWithLifecycle()
     val downloadState by viewModel.downloadState.collectAsStateWithLifecycle()
@@ -207,6 +205,7 @@ fun PlaylistScreen(
     val suggestionsLoading by viewModel.suggestionsLoading.collectAsStateWithLifecycle()
     val relatedPlaylists by viewModel.relatedPlaylists.collectAsStateWithLifecycle()
     val addingSuggestionIds by viewModel.addingSuggestionIds.collectAsStateWithLifecycle()
+    val localSongById by viewModel.localSongsById.collectAsStateWithLifecycle()
 
     var showSearchBar by rememberSaveable { mutableStateOf(false) }
     var searchBarHeightPx by remember { mutableStateOf(0) }
@@ -243,26 +242,13 @@ fun PlaylistScreen(
     // reordered around it; a repeated track gets an occurrence suffix, never its index.
     val filteredTrackKeys =
         remember(filteredTrack) {
-            val seen = mutableMapOf<String, Int>()
+            val seen = HashMap<String, Int>(filteredTrack.size)
             filteredTrack.map { track ->
                 val occurrence = seen.getOrDefault(track.videoId, 0)
                 seen[track.videoId] = occurrence + 1
                 if (occurrence == 0) track.videoId else "${track.videoId}#$occurrence"
             }
         }
-
-    // One batch query for the stored rows of every track on this screen; rows used to
-    // run one Room flow each just to learn their download state and live flag.
-    val playlistTrackIds = remember(tracks) { tracks.map { it.videoId }.distinct() }
-    val localSongs by remember(playlistTrackIds) {
-        if (playlistTrackIds.isEmpty()) flowOf(emptyList()) else songRepository.getSongsByListVideoId(playlistTrackIds)
-    }.collectAsStateWithLifecycle(initialValue = emptyList())
-    val localSongById = remember(localSongs) { localSongs.associateBy { it.videoId } }
-
-    LaunchedEffect(uiState) {
-        Logger.d(tag, "uiState hash: ${uiState.hashCode()}")
-        Logger.d(tag, "uiState data: ${uiState.data}")
-    }
 
     LaunchedEffect(showSearchBar) {
         if (showSearchBar) {
@@ -279,14 +265,11 @@ fun PlaylistScreen(
                         lazyState.layoutInfo.visibleItemsInfo
                             .lastOrNull()
                             ?.index ?: -9
-                    ) >= (lazyState.layoutInfo.totalItemsCount - 6)
+                    ) >= (lazyState.layoutInfo.totalItemsCount - 25)
             }
         }
 
-    LaunchedEffect(key1 = shouldStartPaginate.value) {
-        Logger.d(tag, "shouldStartPaginate: ${shouldStartPaginate.value}")
-        Logger.d(tag, "tracksListState: $tracksListState")
-        Logger.d(tag, "Continuation: $continuation")
+    LaunchedEffect(key1 = shouldStartPaginate.value, key2 = tracksListState) {
         if (shouldStartPaginate.value && tracksListState == ListState.IDLE) {
             viewModel.getContinuationTrack(
                 id,
@@ -319,22 +302,41 @@ fun PlaylistScreen(
         mutableStateOf(false)
     }
 
-    val onPlaylistItemClick: (videoId: String) -> Unit = { videoId ->
-        viewModel.onUIEvent(
-            PlaylistUIEvent.ItemClick(
-                videoId = videoId,
-            ),
-        )
-    }
-    val onItemMoreClick: (videoId: String) -> Unit = { videoId ->
-        currentItem = tracks.firstOrNull { it.videoId == videoId }
-        if (currentItem != null) {
-            itemBottomSheetShow = true
+    val trackById =
+        remember(tracks) {
+            tracks.associateBy { it.videoId }
         }
-    }
-    val onPlaylistMoreClick: () -> Unit = {
-        playlistBottomSheetShow = true
-    }
+    val onPlaylistItemClick: (videoId: String) -> Unit =
+        remember(viewModel) {
+            { videoId ->
+                viewModel.onUIEvent(
+                    PlaylistUIEvent.ItemClick(
+                        videoId = videoId,
+                    ),
+                )
+            }
+        }
+    val onItemMoreClick: (videoId: String) -> Unit =
+        remember(trackById) {
+            { videoId ->
+                currentItem = trackById[videoId]
+                if (currentItem != null) {
+                    itemBottomSheetShow = true
+                }
+            }
+        }
+    val onAddToQueueItem: (videoId: String) -> Unit =
+        remember(trackById, sharedViewModel) {
+            { videoId ->
+                trackById[videoId]?.let { track ->
+                    sharedViewModel.addListToQueue(arrayListOf(track))
+                }
+            }
+        }
+    val onPlaylistMoreClick: () -> Unit =
+        remember {
+            { playlistBottomSheetShow = true }
+        }
 
     LaunchedEffect(key1 = id) {
         if (id != uiState.data?.id) {
@@ -375,11 +377,11 @@ fun PlaylistScreen(
         }
     }
 
-    LaunchedEffect(heroVisualReady, uiState, tracks, platformContext) {
+    LaunchedEffect(heroVisualReady, uiState, tracks.isNotEmpty(), platformContext) {
         if (!heroVisualReady || uiState !is PlaylistUIState.Success || tracks.isEmpty()) return@LaunchedEffect
         com.maxrave.simpmusic.utils.enqueueTrackArtworkPrefetch(
             platformContext = platformContext,
-            rawUrls = tracks.map { it.thumbnails?.lastOrNull()?.url },
+            rawUrls = tracks.take(8).map { it.thumbnails?.lastOrNull()?.url },
         )
     }
 
@@ -477,12 +479,9 @@ fun PlaylistScreen(
     Crossfade(
         targetState = effectiveUiState,
     ) { state ->
-        Logger.w(tag, "State hash: ${state.hashCode()}")
         when (state) {
             is PlaylistUIState.Success -> {
-                val data = state.data
-                Logger.d(tag, "data: $data")
-                if (data == null) return@Crossfade
+                val data = state.data ?: return@Crossfade
                 val hazeState =
                     rememberHazeState()
                 LazyColumn(
@@ -1224,11 +1223,11 @@ fun PlaylistScreen(
                     }
                     val isEditablePlaylist = isYourYouTubePlaylist && !data.isRadio && data.id.removePrefix("VL") != "LM"
                     if (!showSearchBar && isEditablePlaylist) {
-                        item(key = "add_a_song_row") {
+                        item(key = "add_a_song_row", contentType = "add_a_song_row") {
                             AddSongToPlaylistRow(onClick = { showAddSongSheet = true })
                         }
                         if (filteredTrack.isEmpty() && tracksListState == ListState.PAGINATION_EXHAUST) {
-                            item(key = "playlist_no_tracks_yet") {
+                            item(key = "playlist_no_tracks_yet", contentType = "empty_hint") {
                                 Text(
                                     text = stringResource(Res.string.playlist_no_tracks_yet),
                                     style = typo().bodyMedium,
@@ -1242,10 +1241,14 @@ fun PlaylistScreen(
                             }
                         }
                     }
-                    items(count = filteredTrack.size, key = { index ->
-                        val item = filteredTrack.getOrNull(index)
-                        filteredTrackKeys.getOrNull(index) ?: "item_$index"
-                    }) { index ->
+                    val onLongClickItem: ((String) -> Unit)? =
+                        if (selectionState.isActive) null else { videoId -> selectionState.start(videoId) }
+                    val onSelectToggleItem: (String) -> Unit = { videoId -> selectionState.toggle(videoId) }
+                    items(
+                        count = filteredTrack.size,
+                        key = { index -> filteredTrackKeys.getOrNull(index) ?: "item_$index" },
+                        contentType = { "track_row" },
+                    ) { index ->
                         val item = filteredTrack.getOrNull(index)
                         if (item != null) {
                             Column {
@@ -1255,20 +1258,13 @@ fun PlaylistScreen(
                                     track = item,
                                     localSongOverride = localSongById[item.videoId],
                                     hasLocalSongOverride = true,
-                                    onMoreClickListener = { onItemMoreClick(it) },
-                                    onClickListener = {
-                                        Logger.w("PlaylistScreen", "index: $index")
-                                        onPlaylistItemClick(it)
-                                    },
-                                    onAddToQueue = {
-                                        sharedViewModel.addListToQueue(
-                                            arrayListOf(item),
-                                        )
-                                    },
+                                    onMoreClickListener = onItemMoreClick,
+                                    onClickListener = onPlaylistItemClick,
+                                    onAddToQueue = onAddToQueueItem,
                                     selectionMode = selectionState.isActive,
                                     isSelected = selectionState.isSelected(item.videoId),
-                                    onLongClick = { selectionState.start(it) },
-                                    onSelectToggle = { selectionState.toggle(it) },
+                                    onLongClick = onLongClickItem,
+                                    onSelectToggle = onSelectToggleItem,
                                     modifier = Modifier,
                                 )
                                 if (index < filteredTrack.size - 1) {
@@ -1282,8 +1278,25 @@ fun PlaylistScreen(
                         }
                     }
                     if (!showSearchBar || query.isEmpty()) {
+                        if (tracksListState == ListState.PAGINATING && filteredTrack.isNotEmpty()) {
+                            item(key = "tracks_loading_more", contentType = "tracks_loading_more") {
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 12.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(
+                                        strokeWidth = 2.dp,
+                                        color = Color.White,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
+                        }
                         if (isEditablePlaylist && (suggestionsLoading || suggestedTracks.isNotEmpty() || suggestionsReloadParams != null)) {
-                            item(key = "playlist_suggestions_section") {
+                            item(key = "playlist_suggestions_section", contentType = "playlist_suggestions") {
                                 PlaylistSuggestionsSection(
                                     suggestions = suggestedTracks,
                                     isLoading = suggestionsLoading,
@@ -1298,7 +1311,7 @@ fun PlaylistScreen(
                             }
                         }
                         if (relatedPlaylists.isNotEmpty()) {
-                            item(key = "related_playlists_section") {
+                            item(key = "related_playlists_section", contentType = "related_playlists") {
                                 val platformContext = LocalPlatformContext.current
                                 RelatedPlaylistsSection(
                                     relatedPlaylists = relatedPlaylists,
@@ -1321,7 +1334,7 @@ fun PlaylistScreen(
                     }
                     when (tracksListState) {
                         ListState.ERROR -> {
-                            item {
+                            item(contentType = "tracks_error") {
                                 Box(
                                     modifier =
                                         Modifier
@@ -1335,13 +1348,13 @@ fun PlaylistScreen(
                                     )
                                 }
                             }
-                            item {
+                            item(contentType = "end_of_page") {
                                 EndOfPage()
                             }
                         }
 
                         else -> {
-                            item {
+                            item(contentType = "end_of_page") {
                                 EndOfPage()
                             }
                         }
@@ -1475,7 +1488,7 @@ fun PlaylistScreen(
                 }
                 if (showAddSongSheet) {
                     AddSongToPlaylistSheet(
-                        existingVideoIds = playlistTrackIds.toSet(),
+                        existingVideoIds = trackById.keys,
                         onAddTrack = { track -> viewModel.addTrackToPlaylist(track) },
                         onDismiss = { showAddSongSheet = false },
                     )
