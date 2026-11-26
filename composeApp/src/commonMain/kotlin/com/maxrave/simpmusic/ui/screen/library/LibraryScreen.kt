@@ -248,9 +248,11 @@ fun LibraryScreen(
         }
     }
 
-    // The floating chip row and frosted top bar both sample this single screen backdrop,
-    // avoiding a separate full-screen Haze offscreen recording pass per frame.
-    val chipBackdrop = rememberBackdrop(MaterialTheme.colorScheme.background)
+    // Share the root phone backdrop directly so Library is recorded ONCE per frame for top bar,
+    // chips, MiniPlayer, and bottom bar (zero nested full-screen offscreen layers).
+    val chipBackdrop =
+        com.maxrave.simpmusic.expect.ui.LocalRootBackdrop.current
+            ?: rememberBackdrop(MaterialTheme.colorScheme.background)
     Crossfade(
         modifier =
             Modifier.layerBackdrop(

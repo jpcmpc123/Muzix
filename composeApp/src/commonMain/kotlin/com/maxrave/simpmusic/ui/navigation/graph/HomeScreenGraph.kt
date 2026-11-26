@@ -18,6 +18,7 @@ import com.maxrave.simpmusic.ui.screen.home.MoodScreen
 import com.maxrave.simpmusic.ui.screen.home.NotificationScreen
 import com.maxrave.simpmusic.ui.screen.home.SettingScreen
 import com.maxrave.simpmusic.ui.screen.other.AppLogScreen
+import com.maxrave.simpmusic.expect.ui.RootBackdropSurface
 import com.maxrave.simpmusic.ui.screen.other.CreditScreen
 
 fun NavGraphBuilder.homeScreenGraph(
@@ -25,45 +26,59 @@ fun NavGraphBuilder.homeScreenGraph(
     navController: NavController,
 ) {
     composable<CreditDestination> {
-        CreditScreen(
-            paddingValues = innerPadding,
-            navController = navController,
-        )
+        RootBackdropSurface {
+            CreditScreen(
+                paddingValues = innerPadding,
+                navController = navController,
+            )
+        }
     }
     composable<AppLogDestination> {
-        AppLogScreen(
-            paddingValues = innerPadding,
-            navController = navController,
-        )
+        RootBackdropSurface {
+            AppLogScreen(
+                paddingValues = innerPadding,
+                navController = navController,
+            )
+        }
     }
     composable<MoodDestination> { entry ->
         val params = entry.toRoute<MoodDestination>().params
-        MoodScreen(
-            navController = navController,
-            params = params,
-        )
+        RootBackdropSurface {
+            MoodScreen(
+                navController = navController,
+                params = params,
+            )
+        }
     }
     composable<ListenTogetherDestination> {
-        ListenTogetherScreen(
-            navController = navController,
-            innerPadding = innerPadding,
-        )
+        RootBackdropSurface {
+            ListenTogetherScreen(
+                navController = navController,
+                innerPadding = innerPadding,
+            )
+        }
     }
     composable<ListenTogetherSettingsDestination> {
-        ListenTogetherSettingsScreen(
-            navController = navController,
-            innerPadding = innerPadding,
-        )
+        RootBackdropSurface {
+            ListenTogetherSettingsScreen(
+                navController = navController,
+                innerPadding = innerPadding,
+            )
+        }
     }
     composable<NotificationDestination> {
-        NotificationScreen(
-            navController = navController,
-        )
+        RootBackdropSurface {
+            NotificationScreen(
+                navController = navController,
+            )
+        }
     }
     composable<SettingsDestination> {
-        SettingScreen(
-            navController = navController,
-            innerPadding = innerPadding,
-        )
+        RootBackdropSurface {
+            SettingScreen(
+                navController = navController,
+                innerPadding = innerPadding,
+            )
+        }
     }
 }

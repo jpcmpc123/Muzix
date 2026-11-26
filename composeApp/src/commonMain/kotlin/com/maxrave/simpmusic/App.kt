@@ -693,11 +693,10 @@ fun App(
                 }
             },
             content = { innerPadding ->
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .layerBackdrop(backdrop, enabled = effectiveLiquidGlass && !isTablet),
-                ) {
+                // On phones, each route records into [LocalRootBackdrop] directly (Home, Library,
+                // and Search record their scrolling content once and share it with both their top
+                // bar/chips and the root bottom bar/MiniPlayer — avoiding nested full-screen layers).
+                Box(Modifier.fillMaxSize()) {
                     val tabletMiniPlayer: @Composable (Modifier) -> Unit = { modifier ->
                         androidx.compose.animation.AnimatedVisibility(
                             visible = isShowMiniPlayer && isTablet && !isInFullscreen,
@@ -824,6 +823,7 @@ fun App(
                                             LocalGlassEffectsEnabled provides (isDesktopShell || effectiveLiquidGlass),
                                             LocalNowPlayingOpen provides isShowNowPlaylistScreen,
                                             LocalUserStarted provides userStarted,
+                                            com.maxrave.simpmusic.expect.ui.LocalRootBackdrop provides (if (!isTablet) backdrop else null),
                                         ) {
                                             AppNavigationGraph(
                                                 innerPadding = innerPadding,

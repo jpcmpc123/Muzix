@@ -77,22 +77,26 @@ fun AppNavigationGraph(
         }
         // Only reachable as a tab while signed in to YouTube
         composable<MixForYouDestination> {
-            MixForYouScreen(
-                innerPadding = innerPadding,
-                navController = navController,
-                onScrolling = onScrolling,
-            )
+            com.maxrave.simpmusic.expect.ui.RootBackdropSurface {
+                MixForYouScreen(
+                    innerPadding = innerPadding,
+                    navController = navController,
+                    onScrolling = onScrolling,
+                )
+            }
         }
         // Only reachable as a tab while local tracking is enabled.
         // ForceDarkContent for the same reason as album/playlist/artist: the page background comes
         // from the artwork via toImmersiveBackground(), which always lands dark, so the light
         // theme's dark-on-light text and icons would be unreadable on it.
         composable<AnalyticsDestination> {
-            ForceDarkContent {
-                AnalyticsScreen(
-                    navController = navController,
-                    innerPadding = innerPadding,
-                )
+            com.maxrave.simpmusic.expect.ui.RootBackdropSurface {
+                ForceDarkContent {
+                    AnalyticsScreen(
+                        navController = navController,
+                        innerPadding = innerPadding,
+                    )
+                }
             }
         }
         // Reached only from the Analytics screen's entry banner, so it inherits that screen's
@@ -100,15 +104,17 @@ fun AppNavigationGraph(
         // is drawn on its own near-black ground whatever the user's theme is, because it is an
         // event and because every card is also a share image that has to survive leaving the app.
         composable<WrappedDestination> {
-            ForceDarkContent {
-                WrappedScreen(
-                    navController = navController,
-                    hideNavBar = hideNavBar,
-                    // Deliberately not the fullscreen player's `showNavBar(true)` + open sheet:
-                    // leaving the reel goes back to Analytics, and raising the Now Playing sheet
-                    // over it would be a screen the user never asked for.
-                    showNavBar = { showNavBar(false) },
-                )
+            com.maxrave.simpmusic.expect.ui.RootBackdropSurface {
+                ForceDarkContent {
+                    WrappedScreen(
+                        navController = navController,
+                        hideNavBar = hideNavBar,
+                        // Deliberately not the fullscreen player's `showNavBar(true)` + open sheet:
+                        // leaving the reel goes back to Analytics, and raising the Now Playing sheet
+                        // over it would be a screen the user never asked for.
+                        showNavBar = { showNavBar(false) },
+                    )
+                }
             }
         }
         composable<FullscreenDestination> {

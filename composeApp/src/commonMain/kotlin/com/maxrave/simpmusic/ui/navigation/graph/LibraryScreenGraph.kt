@@ -9,6 +9,7 @@ import androidx.navigation.toRoute
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDynamicPlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryHistoryDestination
 import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistScreen
+import com.maxrave.simpmusic.expect.ui.RootBackdropSurface
 import com.maxrave.simpmusic.ui.screen.library.LibraryHistoryScreen
 
 @ExperimentalMaterial3Api
@@ -18,16 +19,20 @@ fun NavGraphBuilder.libraryScreenGraph(
 ) {
     composable<LibraryDynamicPlaylistDestination> { entry ->
         val data = entry.toRoute<LibraryDynamicPlaylistDestination>()
-        LibraryDynamicPlaylistScreen(
-            innerPadding = innerPadding,
-            navController = navController,
-            type = data.type,
-        )
+        RootBackdropSurface {
+            LibraryDynamicPlaylistScreen(
+                innerPadding = innerPadding,
+                navController = navController,
+                type = data.type,
+            )
+        }
     }
     composable<LibraryHistoryDestination> {
-        LibraryHistoryScreen(
-            innerPadding = innerPadding,
-            navController = navController,
-        )
+        RootBackdropSurface {
+            LibraryHistoryScreen(
+                innerPadding = innerPadding,
+                navController = navController,
+            )
+        }
     }
 }

@@ -889,10 +889,10 @@ fun Modifier.ultraThinBackdropBarBlur(backdrop: PlatformBackdrop): Modifier {
             highlight = { null },
             shadow = { null },
             effects = {
-                blur(20f.dp.toPx())
+                blur(12f.dp.toPx())
             },
             onDrawSurface = {
-                drawRect(surface.copy(alpha = 0.68f))
+                drawRect(surface.copy(alpha = 0.72f))
             },
         )
     } else {

@@ -462,9 +462,11 @@ fun HomeScreen(
     val atTop by remember {
         derivedStateOf { scrollState.firstVisibleItemIndex == 0 && scrollState.firstVisibleItemScrollOffset == 0 }
     }
-    // The floating chip row and frosted top bar both sample this single screen backdrop,
-    // avoiding a separate full-screen Haze offscreen recording pass per frame.
-    val chipBackdrop = rememberBackdrop(MaterialTheme.colorScheme.background)
+    // Share the root phone backdrop directly so the scrolling LazyColumn is recorded ONCE per frame
+    // for the top bar, chips, MiniPlayer, and bottom bar (zero nested full-screen offscreen layers).
+    val chipBackdrop =
+        com.maxrave.simpmusic.expect.ui.LocalRootBackdrop.current
+            ?: rememberBackdrop(MaterialTheme.colorScheme.background)
 
     LaunchedEffect(scrollState) {
         snapshotFlow { scrollState.firstVisibleItemIndex <= 1 || isScrollingUpState.value }
@@ -1009,15 +1011,16 @@ fun HomeScreen(
                         topAppBarHeightPx = coordinates.size.height
                     },
         ) {
-            // Always composed: the alpha is read inside the graphicsLayer block, so the fade
-            // animates in the layer phase instead of recomposing this whole header every frame.
-            // At the top the layer's alpha is 0, which draws exactly what the old `> 0f` gate did.
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .graphicsLayer { alpha = barBgAlpha }
-                    .ultraThinBackdropBarBlur(chipBackdrop),
-            )
+            // Skip drawing the blurred backdrop while completely transparent at the top of Home
+            // so the GPU never runs a full-width Gaussian blur on an invisible bar.
+            if (barBgAlpha > 0.01f) {
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .graphicsLayer { alpha = barBgAlpha }
+                        .ultraThinBackdropBarBlur(chipBackdrop),
+                )
+            }
             Column {
                 Spacer(
                     modifier =

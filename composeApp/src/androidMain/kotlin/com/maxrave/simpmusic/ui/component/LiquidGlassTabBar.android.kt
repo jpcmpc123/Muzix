@@ -4,6 +4,8 @@ import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.MutatorMutex
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
@@ -222,51 +226,42 @@ fun LiquidGlassTabBar(
                 contentAlignment = Alignment.CenterStart,
             ) {
                 // 2) Frosted blob selection indicator — slides behind the icons.
-                Box(
-                    Modifier
-                        .graphicsLayer {
-                            // Per-tab slot start, no inset: the pill is exactly one tab wide, so any bias
-                            // here shifts it off its own tab (it used to be inset 4dp to match a pill that
-                            // was 8dp narrower than the slot).
-                            translationX =
-                                (if (isLtr) dampedDrag.value else (tabsCount - 1) - dampedDrag.value) * tabWidthPx +
-                                BarInset.toPx()
-                        }.drawBackdrop(
+                // At rest (99.9% of scrolling), the capsule underneath already blurs and refracts
+                // the live content, so drawing the active pill as a lightweight frosted surface
+                // over the blurred capsule avoids a heavy 2nd drawBackdrop + Gaussian blur FBO
+                // every frame. Touching or dragging immediately engages the live magnifying lens
+                // with chromatic aberration.
+                val isBlobInteractive by remember(dampedDrag) {
+                    derivedStateOf { dampedDrag.pressProgress > 0.001f }
+                }
+                val blobModifier =
+                    if (isBlobInteractive) {
+                        Modifier.drawBackdrop(
                             backdrop = backdrop,
                             shape = { CapsuleShape },
+                            highlight = { null },
+                            shadow = { null },
                             effects = {
                                 val progress = dampedDrag.pressProgress
-                                // Single fused ColorMatrix pass matching the capsule glass calibration.
+                                // Blur FIRST so BlurKt keeps padding = 0f and avoids extra FBO.
+                                val blobBlurDp =
+                                    quantizedGlassBlurDp(
+                                        luminance = luminance.value,
+                                        extraDp = 6f,
+                                        maxDp = 16f,
+                                        stepDp = 1f,
+                                    )
+                                blur(blobBlurDp.dp.toPx())
                                 colorControls(
                                     brightness = 0.07f,
                                     contrast = 1.03f,
                                     saturation = 1.75f,
                                 )
-                                // Stronger than the bar's blur so the active pill reads as a clearly
-                                // frosted surface, quantized and capped <= 24dp to stay in Android's
-                                // fast Gaussian blur tier without rebuilding RenderEffects every frame.
-                                val blobBlurDp =
-                                    quantizedGlassBlurDp(
-                                        luminance = luminance.value,
-                                        extraDp = 12f,
-                                        maxDp = 24f,
-                                        stepDp = 1f,
-                                    )
-                                blur(blobBlurDp.dp.toPx())
-                                // Only run chromatic-aberration AGSL lens shader while actually pressed/dragged.
-                                if (progress > 0.001f) {
-                                    lens(10f.dp.toPx() * progress, 14f.dp.toPx() * progress, chromaticAberration = true)
-                                }
+                                lens(10f.dp.toPx() * progress, 14f.dp.toPx() * progress, chromaticAberration = true)
                             },
-                            highlight = { Highlight.Default.copy(alpha = 0.6f) },
-                            shadow = { Shadow(radius = 4f.dp, alpha = 0.4f) },
                             innerShadow = {
                                 val progress = dampedDrag.pressProgress
-                                if (progress > 0.001f) {
-                                    InnerShadow(radius = 8f.dp * progress, alpha = progress)
-                                } else {
-                                    null
-                                }
+                                InnerShadow(radius = 8f.dp * progress, alpha = progress)
                             },
                             layerBlock = {
                                 scaleX = dampedDrag.scaleX
@@ -276,15 +271,62 @@ fun LiquidGlassTabBar(
                                 scaleY *= 1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
                             },
                             onDrawSurface = {
-                                // Active pill sits a touch above the bar. Dark theme: "đục đen" (black veil that
-                                // scales with the backdrop). Light theme: only a faint grey so the pill stays
-                                // clearly lighter than a heavy slab — the highlight/shadow do the separating.
                                 val lumNorm = ((luminance.value - 0.3f) / 0.5f).coerceIn(0f, 1f)
                                 val darken =
                                     if (isDark) lerp(0.22f, 0.55f, lumNorm) else lerp(0.06f, 0.14f, lumNorm)
                                 drawRect(Color.Black.copy(alpha = darken))
                             },
-                        ).width(tabWidth)
+                        )
+                    } else {
+                        val pillFill =
+                            if (isDark) {
+                                Brush.verticalGradient(
+                                    colors =
+                                        listOf(
+                                            Color.White.copy(alpha = 0.16f),
+                                            Color.White.copy(alpha = 0.09f),
+                                        ),
+                                )
+                            } else {
+                                Brush.verticalGradient(
+                                    colors =
+                                        listOf(
+                                            Color.White.copy(alpha = 0.55f),
+                                            Color.Black.copy(alpha = 0.06f),
+                                        ),
+                                )
+                            }
+                        val rimBrush =
+                            Brush.linearGradient(
+                                colors =
+                                    listOf(
+                                        Color.White.copy(alpha = if (isDark) 0.34f else 0.7f),
+                                        Color.White.copy(alpha = if (isDark) 0.10f else 0.2f),
+                                        Color.White.copy(alpha = if (isDark) 0.24f else 0.5f),
+                                    ),
+                            )
+                        Modifier
+                            .graphicsLayer {
+                                scaleX = dampedDrag.scaleX
+                                scaleY = dampedDrag.scaleY
+                                val velocity = dampedDrag.velocity / 10f
+                                scaleX /= 1f - (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
+                                scaleY *= 1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+                            }.clip(CapsuleShape)
+                            .background(brush = pillFill, shape = CapsuleShape)
+                            .border(width = 0.75.dp, brush = rimBrush, shape = CapsuleShape)
+                    }
+                Box(
+                    Modifier
+                        .graphicsLayer {
+                            // Per-tab slot start, no inset: the pill is exactly one tab wide, so any bias
+                            // here shifts it off its own tab (it used to be inset 4dp to match a pill that
+                            // was 8dp narrower than the slot).
+                            translationX =
+                                (if (isLtr) dampedDrag.value else (tabsCount - 1) - dampedDrag.value) * tabWidthPx +
+                                BarInset.toPx()
+                        }.then(blobModifier)
+                        .width(tabWidth)
                         .height(BlobHeight),
                 )
 

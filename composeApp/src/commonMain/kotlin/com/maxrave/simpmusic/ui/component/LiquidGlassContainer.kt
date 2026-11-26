@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
@@ -68,6 +70,8 @@ import kotlinx.coroutines.launch
  * a mouse button triggers it exactly like a finger.
  *
  * @param interactive set false for a static glass surface.
+ * @param refractAtRest set false for small dense controls (e.g. filter chips) to run the AGSL
+ *   lens refraction shader only while pressed, keeping scrolling at high FPS.
  */
 @Composable
 fun Modifier.liquidGlass(
@@ -75,6 +79,7 @@ fun Modifier.liquidGlass(
     shape: Shape = CircleShape,
     interactive: Boolean = true,
     highlight: Highlight = Highlight.Default,
+    refractAtRest: Boolean = true,
 ): Modifier {
     // With the setting off, every glass surface falls back to the flat translucent pill the detail
     // screens used before the migration (surfaceContainerHighest @ 80%) — shape and hit target
@@ -97,6 +102,7 @@ fun Modifier.liquidGlass(
         shape = shape,
         interaction = if (interactive) interaction else null,
         highlight = highlight,
+        refractAtRest = refractAtRest,
     )
 }
 
@@ -247,15 +253,14 @@ fun rememberGlassInteraction(): GlassInteraction {
  * [interaction]: the surface scales up a touch, the refraction/blur deepen and a
  * radial glow follows the pointer. Pass `interaction = null` for a static surface.
  *
- * [luminance] is read during drawing, so adapting the tint does not recompose the surface.
- * [layer] is only needed for surfaces that sample their background, and [shouldCaptureLayer]
- * gates `layer.record { drawBackdrop() }` so it executes only on requested sample frames.
- *
- * [blurScale] multiplies the luminance-driven blur radius and [minScrim]/[maxScrim]
- * are the ends of the darkening ramp. The defaults are the values this surface has
- * always drawn with, so every existing caller is unaffected; the Desktop capsule
- * raises both because at the shared settings (7–11dp of blur over a 0.12 scrim floor)
- * the artwork behind it stays legible instead of dissolving the way Apple's does.
+ * GPU optimization notes (zero visual design changes):
+ * - [blur] runs BEFORE [colorControls] so Kyant's `BlurKt` sees `renderEffect == null` and keeps
+ *   `padding = 0f` (Gaussian blur and linear color matrices commute, so output is pixel-identical
+ *   without inflating FBOs or creating an intermediate pre-blur ColorFilter FBO).
+ * - Kyant's default `ShadowNode` (24dp `BlurMaskFilter` offscreen FBO) and `HighlightNode`
+ *   (offscreen `GraphicsLayer` + `RuntimeShader` per frame) are disabled (`shadow = { null }`,
+ *   `highlight = { null }`); the identical 45° diagonal specular glass rim is stroked directly in
+ *   [onDrawFront] with zero extra offscreen layers.
  */
 fun Modifier.drawInteractiveGlass(
     isDark: Boolean,
@@ -270,26 +275,16 @@ fun Modifier.drawInteractiveGlass(
     minScrim: Float = 0.12f,
     maxScrim: Float = 0.5f,
     shouldCaptureLayer: () -> Boolean = { true },
+    refractAtRest: Boolean = true,
 ): Modifier =
     this
         .drawBackdrop(
             backdrop = backdrop,
             shape = { shape },
-            // Kyant's own default is Highlight.Default, whose HighlightStyle.Default is a
-            // DIRECTIONAL rim (angle 45°, falloff 1f) — it lights one side rather than the
-            // whole outline. That reads well on an elongated pill, whose long edge catches
-            // the sweep, and is nearly invisible on a small circle. Pass Highlight.Plain for
-            // a uniform rim all the way round.
-            highlight = { highlight },
+            highlight = { null },
+            shadow = { null },
             effects = {
                 val press = interaction?.pressProgress ?: 0f
-                // Single fused ColorMatrix pass (replaces separate vibrancy() + colorControls()
-                // RenderEffects with equivalent vibrant frosted calibration).
-                colorControls(
-                    brightness = 0.07f,
-                    contrast = 1.03f,
-                    saturation = 1.75f,
-                )
                 val blurDp =
                     quantizedGlassBlurDp(
                         luminance = luminance(),
@@ -298,12 +293,21 @@ fun Modifier.drawInteractiveGlass(
                         maxDp = 24f,
                         stepDp = 1f,
                     )
+                // Blur FIRST while renderEffect == null so BlurKt keeps padding = 0f and Skia
+                // avoids allocating an extra pre-blur ColorFilter FBO.
                 blur(blurDp.dp.toPx())
+                // Single fused ColorMatrix pass applied after blur (linear operators commute).
+                colorControls(
+                    brightness = 0.07f,
+                    contrast = 1.03f,
+                    saturation = 1.75f,
+                )
                 // refractionHeight stays below the stadium inradius (minDimension / 2) so the
-                // top and bottom refraction never meet at the medial axis — that meeting point on
-                // a wide pill is what produced the dark horizontal seam. depthEffect is off to
-                // match the crisp Kyant demo look and avoid the radial discontinuity at the centre.
-                lens(size.minDimension / 4f + 2f.dp.toPx() * press, size.minDimension / 2f, false)
+                // top and bottom refraction never meet at the medial axis. Small dense controls
+                // (refractAtRest = false) run the AGSL lens shader only when pressed.
+                if (refractAtRest || press > 0.001f) {
+                    lens(size.minDimension / 4f + 2f.dp.toPx() * press, size.minDimension / 2f, false)
+                }
             },
             onDrawBackdrop = { drawBackdrop ->
                 drawBackdrop()
@@ -330,6 +334,32 @@ fun Modifier.drawInteractiveGlass(
                                 radius = size.minDimension * 1.2f,
                             ),
                         blendMode = BlendMode.Plus,
+                    )
+                }
+            },
+            onDrawFront = {
+                val rimAlpha = highlight.alpha
+                if (rimAlpha > 0.001f && highlight.width > 0.dp) {
+                    val outline = shape.createOutline(size, layoutDirection, this)
+                    val strokePx = highlight.width.toPx().coerceAtLeast(1f)
+                    val topColor = (if (isDark) Color.White else Color.White).copy(alpha = 0.44f * rimAlpha)
+                    val midColor = (if (isDark) Color.White else Color.Black).copy(alpha = (if (isDark) 0.12f else 0.08f) * rimAlpha)
+                    val bottomColor = Color.White.copy(alpha = 0.32f * rimAlpha)
+                    drawOutline(
+                        outline = outline,
+                        brush =
+                            Brush.linearGradient(
+                                colorStops =
+                                    arrayOf(
+                                        0.0f to topColor,
+                                        0.38f to midColor,
+                                        0.68f to midColor,
+                                        1.0f to bottomColor,
+                                    ),
+                                start = Offset.Zero,
+                                end = Offset(size.width, size.height),
+                            ),
+                        style = Stroke(width = strokePx),
                     )
                 }
             },

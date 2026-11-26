@@ -250,9 +250,11 @@ fun SearchScreen(
     val isMobilePortrait = getPlatform() == Platform.Android && screenInfo.wDP < screenInfo.hDP
     val moodGridColumns = if (isMobilePortrait) 2 else 4
 
-    // The floating chip row and frosted search bar both sample this single screen backdrop,
-    // avoiding a separate full-screen Haze offscreen recording pass per frame.
-    val chipBackdrop = rememberBackdrop(MaterialTheme.colorScheme.background)
+    // Share the root phone backdrop directly so Search is recorded ONCE per frame for search bar,
+    // chips, MiniPlayer, and bottom bar (zero nested full-screen offscreen layers).
+    val chipBackdrop =
+        com.maxrave.simpmusic.expect.ui.LocalRootBackdrop.current
+            ?: rememberBackdrop(MaterialTheme.colorScheme.background)
     val suggestionsState = rememberLazyListState()
     val historyState = rememberLazyListState()
     val moodGridState = rememberLazyGridState()

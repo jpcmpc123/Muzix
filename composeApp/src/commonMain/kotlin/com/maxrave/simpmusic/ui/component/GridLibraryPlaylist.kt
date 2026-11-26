@@ -123,7 +123,6 @@ internal inline fun <reified T> GridLibraryPlaylist(
     noinline createNewPlaylist: (() -> Unit)? = null,
     noinline onReload: () -> Unit,
 ) {
-    Logger.w("GridLibraryPlaylist", "Generic Type: ${T::class.simpleName}")
     val isScrollingUpState = state.isScrollingUp()
 
     LaunchedEffect(state) {

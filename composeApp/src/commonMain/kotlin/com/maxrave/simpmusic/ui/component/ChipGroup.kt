@@ -61,7 +61,12 @@ fun Chip(
             selected = isSelected,
             // The 1dp uniform rim every small glass control here carries: the default rim lights one
             // side only, which on a chip this small does not show at all.
-            modifier = if (glassBackdrop != null) Modifier.liquidGlass(glassBackdrop, highlight = Highlight(width = 1.dp)) else Modifier,
+            modifier =
+                if (glassBackdrop != null) {
+                    Modifier.liquidGlass(glassBackdrop, highlight = Highlight(width = 1.dp), refractAtRest = false)
+                } else {
+                    Modifier
+                },
             // outlineVariant, per M3's Aug 2024 chip update: a softer stroke than outline.
             // Glass draws its own rim, so the outline goes.
             borderColor = if (glassBackdrop != null) Color.Transparent else MaterialTheme.colorScheme.outlineVariant,
@@ -130,6 +135,7 @@ fun ExpandableChip(
                                 glassBackdrop,
                                 interactive = !active,
                                 highlight = Highlight(width = 1.dp, alpha = rim),
+                                refractAtRest = false,
                             )
                         } else {
                             Modifier.clip(CircleShape)
