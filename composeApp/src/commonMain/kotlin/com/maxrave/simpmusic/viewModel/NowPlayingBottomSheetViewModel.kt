@@ -208,7 +208,6 @@ class NowPlayingBottomSheetViewModel(
         getSongAsFlow =
             viewModelScope.launch {
                 songRepository.getSongAsFlow(videoId).collectLatest { song ->
-                    log("getSongEntityFlow: $song", LogLevel.WARN)
                     if (song != null) {
                         _uiState.update { state ->
                             state.copy(

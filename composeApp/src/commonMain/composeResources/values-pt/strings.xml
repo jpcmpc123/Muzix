@@ -8,6 +8,8 @@
     <string name="album_length">%1$s faixas  %2$s</string>
     <string name="view_count">%1$s visualizações</string>
     <string name="clear_search_history">Limpar histórico de pesquisa</string>
+    <string name="remove_from_search_history">Remover do histórico</string>
+    <string name="see_all">Ver tudo</string>
     <string name="liked">Gostei</string>
     <string name="liked_songs">Músicas curtidas</string>
     <string name="liked_songs_by">Por %1$s</string>
