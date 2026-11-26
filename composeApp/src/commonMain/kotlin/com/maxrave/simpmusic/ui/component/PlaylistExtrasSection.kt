@@ -77,14 +77,15 @@ fun AddSongToPlaylistRow(
             modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(vertical = 6.dp, horizontal = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Spacer(Modifier.width(8.dp))
         Box(
             modifier =
                 Modifier
                     .size(48.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(ArtworkShape)
                     .background(Color.White.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center,
         ) {
@@ -95,11 +96,11 @@ fun AddSongToPlaylistRow(
                 modifier = Modifier.size(24.dp),
             )
         }
-        Spacer(Modifier.width(14.dp))
         Text(
             text = stringResource(Res.string.add_a_song),
             style = typo().titleSmall,
             color = Color.White,
+            modifier = Modifier.padding(start = 12.dp, end = 10.dp),
         )
     }
 }
