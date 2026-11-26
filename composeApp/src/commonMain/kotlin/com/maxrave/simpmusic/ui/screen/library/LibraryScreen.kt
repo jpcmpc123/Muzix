@@ -27,6 +27,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -72,7 +75,7 @@ import com.maxrave.simpmusic.extension.ultraThinBarBlur
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.Chip
-import com.maxrave.simpmusic.ui.component.CreateLocalPlaylistSheet
+import com.maxrave.simpmusic.ui.component.CreateDualPlaylistDialog
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.GridLibraryPlaylist
 import com.maxrave.simpmusic.ui.component.LibraryPlaylistGridItem
@@ -86,6 +89,7 @@ import com.maxrave.simpmusic.ui.component.PlaylistFullWidthItems
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.taste.ShareTasteSheet
 import com.maxrave.simpmusic.ui.component.taste.TasteCard
+import com.maxrave.simpmusic.ui.icon.Add
 import com.maxrave.simpmusic.ui.icon.History
 import com.maxrave.simpmusic.ui.icon.PeopleAlt
 import com.maxrave.simpmusic.ui.icon.Refresh
@@ -93,15 +97,21 @@ import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.ListenTogetherDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.SettingsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryHistoryDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.LocalPlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.theme.LocalLiquidGlassEnabled
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.utils.THUMB_CARD_PX
+import com.maxrave.simpmusic.utils.THUMB_SMALL_PX
+import com.maxrave.simpmusic.utils.enqueueArtworkPrefetch
+import com.maxrave.simpmusic.utils.enqueueTrackArtworkPrefetch
 import com.maxrave.simpmusic.utils.primeCollectionArtworkNavigation
 import com.maxrave.simpmusic.viewModel.LibraryLayoutMode
 import com.maxrave.simpmusic.viewModel.LibraryViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.TasteUiState
 import com.maxrave.simpmusic.viewModel.TasteViewModel
+import com.maxrave.simpmusic.viewModel.YOUTUBE_LIKED_MUSIC_THUMBNAIL_URL
 import com.maxrave.simpmusic.viewModel.deduplicateYouTubePlaylistsWithoutLiked
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -114,6 +124,7 @@ import simpmusic.composeapp.generated.resources.favorite_playlists
 import simpmusic.composeapp.generated.resources.favorite_podcasts
 import simpmusic.composeapp.generated.resources.library
 import simpmusic.composeapp.generated.resources.mix_for_you
+import simpmusic.composeapp.generated.resources.new_playlist
 import simpmusic.composeapp.generated.resources.no_charts_found
 import simpmusic.composeapp.generated.resources.no_favorite_playlists
 import simpmusic.composeapp.generated.resources.no_favorite_podcasts
@@ -126,11 +137,6 @@ import simpmusic.composeapp.generated.resources.your_library
 import simpmusic.composeapp.generated.resources.your_playlists
 import simpmusic.composeapp.generated.resources.your_youtube_playlists
 import simpmusic.composeapp.generated.resources.youtube_liked_music
-import com.maxrave.simpmusic.utils.THUMB_CARD_PX
-import com.maxrave.simpmusic.utils.THUMB_SMALL_PX
-import com.maxrave.simpmusic.utils.enqueueArtworkPrefetch
-import com.maxrave.simpmusic.utils.enqueueTrackArtworkPrefetch
-import com.maxrave.simpmusic.viewModel.YOUTUBE_LIKED_MUSIC_THUMBNAIL_URL
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -150,6 +156,7 @@ fun LibraryScreen(
     val monthlyRecaps by viewModel.monthlyRecaps.collectAsStateWithLifecycle()
     val youTubePlaylist by viewModel.youTubePlaylist.collectAsStateWithLifecycle()
     val isRefreshingYouTubePlaylists by viewModel.isRefreshingYouTubePlaylists.collectAsStateWithLifecycle()
+    val isCreatingPlaylist by viewModel.isCreatingPlaylist.collectAsStateWithLifecycle()
     val yourLocalPlaylist by viewModel.yourLocalPlaylist.collectAsStateWithLifecycle()
     val favoritePlaylist by viewModel.favoritePlaylist.collectAsStateWithLifecycle()
     val downloadedPlaylist by viewModel.downloadedPlaylist.collectAsStateWithLifecycle()
@@ -176,6 +183,7 @@ fun LibraryScreen(
     }
     var showAddSheet by remember { mutableStateOf(false) }
     var showSortSheet by remember { mutableStateOf(false) }
+    var isFabExpanded by remember { mutableStateOf(true) }
 
     val chipRowState = rememberScrollState()
     val currentFilter by viewModel.currentScreen.collectAsStateWithLifecycle()
@@ -254,6 +262,11 @@ fun LibraryScreen(
                     snapshotFlow { state.firstVisibleItemIndex <= 1 || isScrollingUpState.value }
                         .distinctUntilChanged()
                         .collect { onScrolling.invoke(it) }
+                }
+                LaunchedEffect(state) {
+                    snapshotFlow { state.firstVisibleItemIndex == 0 || isScrollingUpState.value }
+                        .distinctUntilChanged()
+                        .collect { isFabExpanded = it }
                 }
 
                 val pullToRefreshState = rememberPullToRefreshState()
@@ -424,7 +437,7 @@ fun LibraryScreen(
                                     item(key = "yt_liked_music_pinned", contentType = "youtube_playlist_row") {
                                         PlaylistFullWidthItems(
                                             data = likedPlaylist,
-                                            thumbSize = 56.dp,
+                                            thumbSize = 64.dp,
                                             compactStartPadding = true,
                                             onClickListener = {
                                                 primeCollectionArtworkNavigation(
@@ -457,7 +470,7 @@ fun LibraryScreen(
                                         ) { _, playlist ->
                                             PlaylistFullWidthItems(
                                                 data = playlist,
-                                                thumbSize = 56.dp,
+                                                thumbSize = 64.dp,
                                                 compactStartPadding = true,
                                                 onClickListener = {
                                                     primeCollectionArtworkNavigation(
@@ -569,6 +582,39 @@ fun LibraryScreen(
             }
         }
     }
+    if (currentFilter == LibraryChipType.YOUR_LIBRARY || currentFilter == LibraryChipType.LOCAL_PLAYLIST) {
+        val layoutDirection = LocalLayoutDirection.current
+        val endInset = innerPadding.calculateEndPadding(layoutDirection)
+        val fabBottomPadding =
+            innerPadding.calculateBottomPadding() + 12.dp +
+                if (getPlatform() == Platform.Desktop) DesktopMiniPlayerClearance else 0.dp
+        Box(modifier = Modifier.fillMaxSize()) {
+            ExtendedFloatingActionButton(
+                onClick = { showAddSheet = true },
+                expanded = if (currentFilter == LibraryChipType.YOUR_LIBRARY) isFabExpanded else true,
+                shape = CircleShape,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                elevation = FloatingActionButtonDefaults.elevation(),
+                icon = {
+                    Icon(
+                        imageVector = SimpIcons.Add,
+                        contentDescription = stringResource(Res.string.new_playlist),
+                    )
+                },
+                text = {
+                    Text(
+                        text = stringResource(Res.string.new_playlist),
+                        style = typo().labelLarge,
+                    )
+                },
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp + endInset, bottom = fabBottomPadding),
+            )
+        }
+    }
     sharingTaste?.let { profile ->
         ShareTasteSheet(profile = profile, onDismiss = { sharingTaste = null })
     }
@@ -576,9 +622,29 @@ fun LibraryScreen(
         LibrarySortSheet(onDismiss = { showSortSheet = false })
     }
     if (showAddSheet) {
-        CreateLocalPlaylistSheet(
+        CreateDualPlaylistDialog(
+            isYouTubeLoggedIn = loggedIn,
+            isCreating = isCreatingPlaylist,
             onDismiss = { showAddSheet = false },
-            onCreate = viewModel::createPlaylist,
+            onCreate = { title, privacyStatus ->
+                viewModel.createSyncedPlaylist(
+                    title = title,
+                    privacyStatus = privacyStatus,
+                ) { result ->
+                    showAddSheet = false
+                    val ytId = result.youtubePlaylistId
+                    if (ytId != null) {
+                        navController.navigate(
+                            PlaylistDestination(
+                                playlistId = ytId,
+                                isYourYouTubePlaylist = true,
+                            ),
+                        )
+                    } else {
+                        navController.navigate(LocalPlaylistDestination(id = result.localId))
+                    }
+                }
+            },
         )
     }
     Column(

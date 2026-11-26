@@ -12,6 +12,7 @@ import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.browse.playlist.Author
 import com.maxrave.domain.data.model.browse.playlist.PlaylistBrowse
 import com.maxrave.domain.data.model.browse.playlist.PlaylistState
+import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
 import com.maxrave.domain.extension.now
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.mediaservice.handler.PlaylistType
@@ -37,6 +38,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted.Companion.WhileSubscribed
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
@@ -47,6 +49,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.added_to_playlist
 import simpmusic.composeapp.generated.resources.auto_created_by_youtube_music
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.error
@@ -56,6 +59,7 @@ import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.radio_not_available
 import simpmusic.composeapp.generated.resources.shuffle
 import simpmusic.composeapp.generated.resources.shuffle_not_available
+import simpmusic.composeapp.generated.resources.suggest
 import simpmusic.composeapp.generated.resources.synced
 import simpmusic.composeapp.generated.resources.syncing
 import simpmusic.composeapp.generated.resources.view_count
@@ -87,6 +91,21 @@ class PlaylistViewModel(
     private var _tracksListState = MutableStateFlow<ListState>(ListState.IDLE)
     val tracksListState: StateFlow<ListState> = _tracksListState
 
+    private val _suggestedTracks = MutableStateFlow<List<Track>>(emptyList())
+    val suggestedTracks: StateFlow<List<Track>> = _suggestedTracks.asStateFlow()
+
+    private val _suggestionsReloadParams = MutableStateFlow<String?>(null)
+    val suggestionsReloadParams: StateFlow<String?> = _suggestionsReloadParams.asStateFlow()
+
+    private val _suggestionsLoading = MutableStateFlow(false)
+    val suggestionsLoading: StateFlow<Boolean> = _suggestionsLoading.asStateFlow()
+
+    private val _relatedPlaylists = MutableStateFlow<List<PlaylistsResult>>(emptyList())
+    val relatedPlaylists: StateFlow<List<PlaylistsResult>> = _relatedPlaylists.asStateFlow()
+
+    private val _addingSuggestionIds = MutableStateFlow<Set<String>>(emptySet())
+    val addingSuggestionIds: StateFlow<Set<String>> = _addingSuggestionIds.asStateFlow()
+
     private var collectDownloadedJob: Job? = null
     private var _downloadedList = MutableStateFlow<List<String>>(emptyList())
     val downloadedList: StateFlow<List<String>> = _downloadedList
@@ -96,6 +115,7 @@ class PlaylistViewModel(
     private var checkDownloadedPlaylist: Job? = null
     private var loadDataJob: Job? = null
     private var continuationBgJob: Job? = null
+    private var extrasJob: Job? = null
 
     private companion object {
         const val MAX_BG_CONTINUATION_PAGES = 40
@@ -183,6 +203,8 @@ class PlaylistViewModel(
         loadDataJob = null
         continuationBgJob?.cancel()
         continuationBgJob = null
+        extrasJob?.cancel()
+        extrasJob = null
         playlistEntityJob?.cancel()
         playlistEntityJob = null
         checkDownloadedPlaylist?.cancel()
@@ -191,6 +213,11 @@ class PlaylistViewModel(
         _tracks.value = emptyList()
         _continuation.value = null
         _tracksListState.value = ListState.IDLE
+        _suggestedTracks.value = emptyList()
+        _suggestionsReloadParams.value = null
+        _suggestionsLoading.value = false
+        _relatedPlaylists.value = emptyList()
+        _addingSuggestionIds.value = emptySet()
         _playlistEntity.value = null
         _downloadedList.value = emptyList()
         _listColors.value = emptyList()
@@ -295,6 +322,7 @@ class PlaylistViewModel(
                                     if (!nextCont.isNullOrEmpty()) {
                                         preloadRemainingContinuationInBackground(data.first.id, nextCont)
                                     }
+                                    loadPlaylistExtras(data.first.id)
                                 }
 
                                 else -> {
@@ -772,10 +800,122 @@ class PlaylistViewModel(
         }
     }
 
+    private fun loadPlaylistExtras(playlistId: String) {
+        val bareId = playlistId.removePrefix("VL")
+        extrasJob?.cancel()
+        extrasJob =
+            viewModelScope.launch {
+                delay(400L)
+                _suggestionsLoading.value = true
+                try {
+                    playlistRepository.getPlaylistExtras(bareId).collectLatest { res ->
+                        if (res is Resource.Success && res.data != null) {
+                            val extras = res.data!!
+                            if (bareId != "LM") {
+                                _suggestionsReloadParams.value = extras.reloadParams
+                                _suggestedTracks.value = extras.suggestions
+                            }
+                            _relatedPlaylists.value = extras.relatedPlaylists
+                        }
+                    }
+                } finally {
+                    _suggestionsLoading.value = false
+                }
+            }
+    }
+
+    fun reloadSuggestions() {
+        val reloadParams = _suggestionsReloadParams.value ?: return
+        if (_suggestionsLoading.value) return
+        viewModelScope.launch {
+            _suggestionsLoading.value = true
+            try {
+                playlistRepository.reloadPlaylistSuggestions(reloadParams).collectLatest { res ->
+                    if (res is Resource.Success && res.data != null) {
+                        val (nextParam, newTracks) = res.data!!
+                        if (nextParam != null) _suggestionsReloadParams.value = nextParam
+                        if (newTracks.isNotEmpty()) _suggestedTracks.value = newTracks
+                    } else if (res is Resource.Error) {
+                        makeToast(res.message ?: getString(Res.string.error))
+                    }
+                }
+            } finally {
+                _suggestionsLoading.value = false
+            }
+        }
+    }
+
+    suspend fun addTrackToPlaylist(track: Track): Boolean {
+        val playlistId = uiState.value.data?.id?.removePrefix("VL") ?: return false
+        var added = false
+        playlistRepository.addTrackToYouTubePlaylist(playlistId, track.videoId).collectLatest { res ->
+            when (res) {
+                is Resource.Success -> added = true
+                is Resource.Error -> makeToast(res.message ?: getString(Res.string.error))
+            }
+        }
+        if (added) {
+            _suggestedTracks.update { list -> list.filterNot { it.videoId == track.videoId } }
+            _tracks.update { list -> if (list.any { it.videoId == track.videoId }) list else list + track }
+            _uiState.update { state ->
+                val data = state.data ?: return@update state
+                Success(data.copy(trackCount = maxOf(data.trackCount + 1, _tracks.value.size)))
+            }
+            launchSongPersist(track)
+            makeToast(getString(Res.string.added_to_playlist))
+        }
+        return added
+    }
+
+    private fun launchSongPersist(track: Track) {
+        viewModelScope.launch(Dispatchers.IO) {
+            songRepository
+                .insertSong(
+                    track.toSongEntity().copy(
+                        inLibrary = Config.REMOVED_SONG_DATE_TIME,
+                    ),
+                ).firstOrNull()
+        }
+    }
+
+    fun addSuggestedTrack(track: Track) {
+        if (track.videoId in _addingSuggestionIds.value) return
+        viewModelScope.launch {
+            _addingSuggestionIds.update { it + track.videoId }
+            try {
+                addTrackToPlaylist(track)
+            } finally {
+                _addingSuggestionIds.update { it - track.videoId }
+            }
+        }
+    }
+
+    fun playSuggestedTrack(track: Track) {
+        val data = uiState.value.data ?: return
+        val list = _suggestedTracks.value.ifEmpty { listOf(track) }
+        val index = list.indexOfFirst { it.videoId == track.videoId }.coerceAtLeast(0)
+        setQueueData(
+            QueueData.Data(
+                listTracks = ArrayList(list),
+                firstPlayedTrack = track,
+                playlistId = "RDAMVM${track.videoId}",
+                playlistName = "${getString(Res.string.playlist)} \"${data.title}\" ${getString(Res.string.suggest)}",
+                playlistType = PlaylistType.RADIO,
+                continuation = null,
+            ),
+        )
+        loadMediaItem(
+            track,
+            Config.PLAYLIST_CLICK,
+            index,
+        )
+    }
+
     override fun onCleared() {
         super.onCleared()
         collectDownloadedJob?.cancel()
         playlistEntityJob?.cancel()
+        extrasJob?.cancel()
     }
 }
 

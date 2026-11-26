@@ -1307,4 +1307,20 @@
     <string name="library_sort_recent_activity">Recent activity</string>
     <string name="library_view_as_grid">Grid view</string>
     <string name="library_view_as_list">List view</string>
+    <string name="new_playlist">New playlist</string>
+    <string name="playlist_visibility">Visibility</string>
+    <string name="privacy_private">Private</string>
+    <string name="privacy_unlisted">Unlisted</string>
+    <string name="privacy_public">Public</string>
+    <string name="playlist_saved_both_hint">Saved to Muzix and YouTube Music</string>
+    <string name="playlist_saved_local_hint">Saved locally in Muzix</string>
+    <string name="playlist_created_synced">Playlist created in Muzix and YouTube Music</string>
+    <string name="playlist_created_local_sync_failed">Saved locally; YouTube sync failed</string>
+    <string name="add_a_song">Add a song</string>
+    <string name="playlist_no_tracks_yet">There are no tracks in this playlist yet</string>
+    <string name="search_songs_to_add">Search songs to add</string>
+    <string name="suggestions">Suggestions</string>
+    <string name="related_playlists">Related playlists</string>
+    <string name="refresh_suggestions">Refresh</string>
+    <string name="no_songs_found">No songs found</string>
 </resources>

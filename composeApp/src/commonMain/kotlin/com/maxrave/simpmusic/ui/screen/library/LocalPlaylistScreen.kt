@@ -132,6 +132,8 @@ import com.maxrave.simpmusic.extension.rememberPaletteColorState
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.SearchBarExit
 import com.maxrave.simpmusic.ui.component.SearchBarEnter
+import com.maxrave.simpmusic.ui.component.AddSongToPlaylistRow
+import com.maxrave.simpmusic.ui.component.AddSongToPlaylistSheet
 import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
@@ -141,6 +143,8 @@ import com.maxrave.simpmusic.ui.component.LiquidGlassIconButton
 import com.maxrave.simpmusic.ui.component.LoadingDialog
 import com.maxrave.simpmusic.ui.component.LocalPlaylistBottomSheet
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
+import com.maxrave.simpmusic.ui.component.PlaylistSuggestionsSection
+import com.maxrave.simpmusic.ui.component.RelatedPlaylistsSection
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.component.selection.SelectedSongsBottomSheet
@@ -163,10 +167,12 @@ import com.maxrave.simpmusic.ui.icon.Shuffle
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.icon.Sort
 import com.maxrave.simpmusic.ui.icon.TipsAndUpdates
+import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.theme.ArtworkShape
 import com.maxrave.simpmusic.ui.theme.LocalIsDarkTheme
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.utils.primeCollectionArtworkNavigation
 import com.maxrave.simpmusic.viewModel.LocalPlaylistState
 import com.maxrave.simpmusic.viewModel.LocalPlaylistUIEvent
 import com.maxrave.simpmusic.viewModel.LocalPlaylistViewModel
@@ -206,6 +212,7 @@ import simpmusic.composeapp.generated.resources.created_at
 import simpmusic.composeapp.generated.resources.done
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
+import simpmusic.composeapp.generated.resources.playlist_no_tracks_yet
 import simpmusic.composeapp.generated.resources.reload
 import simpmusic.composeapp.generated.resources.remove_from_playlist
 import simpmusic.composeapp.generated.resources.sort_by
@@ -270,13 +277,14 @@ fun LocalPlaylistScreen(
         initialValue = DownloadState.STATE_NOT_DOWNLOADED,
     )
     var shouldHideTopBar by rememberSaveable { mutableStateOf(false) }
-    var shouldShowSuggestions by rememberSaveable { mutableStateOf(false) }
+    var shouldShowSuggestions by rememberSaveable { mutableStateOf(true) }
 
     val selectionState = rememberSongSelectionState()
     val selectionViewModel: SongSelectionViewModel = koinViewModel()
     var showSelectionSheet by rememberSaveable { mutableStateOf(false) }
     var showSelectionAddToPlaylist by rememberSaveable { mutableStateOf(false) }
     var shouldShowSuggestButton by rememberSaveable { mutableStateOf(false) }
+    var showAddSongSheet by rememberSaveable { mutableStateOf(false) }
 
     val playingTrack by sharedViewModel.nowPlayingState
         .mapLatest {
@@ -292,7 +300,10 @@ fun LocalPlaylistScreen(
     }
 
     val suggestedTracks by viewModel.uiState.map { it.suggestions?.songs ?: emptyList() }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val suggestionsReloadParams by viewModel.uiState.map { it.suggestions?.reloadParams }.collectAsStateWithLifecycle(initialValue = null)
     val suggestionsLoading by viewModel.loading.collectAsStateWithLifecycle()
+    val relatedPlaylists by viewModel.relatedPlaylists.collectAsStateWithLifecycle()
+    val addingSuggestionIds by viewModel.addingSuggestionIds.collectAsStateWithLifecycle()
     var showSyncAlertDialog by rememberSaveable { mutableStateOf(false) }
     var showUnsyncAlertDialog by rememberSaveable { mutableStateOf(false) }
     var firstTimeGetLocalPlaylist by rememberSaveable {
@@ -351,9 +362,15 @@ fun LocalPlaylistScreen(
         playlistBottomSheetShow = true
     }
 
-    LaunchedEffect(key1 = shouldShowSuggestions) {
-        if (suggestedTracks.isEmpty() && uiState.syncState != LocalPlaylistEntity.YouTubeSyncState.NotSynced) {
-            viewModel.getSuggestions(uiState.id)
+    LaunchedEffect(key1 = shouldShowSuggestions, key2 = uiState.ytPlaylistId, key3 = uiState.syncState) {
+        val ytId = uiState.ytPlaylistId
+        if (!ytId.isNullOrEmpty() && uiState.syncState == LocalPlaylistEntity.YouTubeSyncState.Synced) {
+            if (shouldShowSuggestions && suggestedTracks.isEmpty()) {
+                viewModel.getSuggestions(uiState.id)
+            }
+            if (relatedPlaylists.isEmpty()) {
+                viewModel.loadYouTubeExtras(ytId)
+            }
         }
     }
 
@@ -1353,79 +1370,6 @@ fun LocalPlaylistScreen(
                                     style = typo().bodyMedium,
                                     modifier = Modifier.padding(vertical = 8.dp),
                                 )
-                                AnimatedVisibility(visible = shouldShowSuggestions) {
-                                    Column(
-                                        modifier = Modifier.animateContentSize(),
-                                    ) {
-                                        Spacer(modifier = Modifier.size(8.dp))
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            Text(
-                                                text =
-                                                    stringResource(
-                                                        Res.string.suggest,
-                                                    ),
-                                                color = Color.White,
-                                                modifier =
-                                                    Modifier
-                                                        .padding(vertical = 8.dp)
-                                                        .weight(1f),
-                                            )
-                                            TextButton(
-                                                onClick = { viewModel.reloadSuggestion() },
-                                                modifier =
-                                                    Modifier
-                                                        .padding(horizontal = 8.dp),
-                                            ) {
-                                                Text(
-                                                    text = stringResource(Res.string.reload),
-                                                    color = Color.White,
-                                                    modifier =
-                                                        Modifier.align(
-                                                            Alignment.CenterVertically,
-                                                        ),
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.size(8.dp))
-                                        Crossfade(targetState = suggestionsLoading) {
-                                            if (it) {
-                                                CenterLoadingBox(
-                                                    modifier =
-                                                        Modifier
-                                                            .fillMaxWidth()
-                                                            .height(200.dp)
-                                                            .align(Alignment.CenterHorizontally),
-                                                )
-                                            } else {
-                                                Column {
-                                                    suggestedTracks.forEachIndexed { index, track ->
-                                                        SuggestItems(
-                                                            forceDark = true,
-                                                            track = track,
-                                                            isPlaying = playingTrack?.videoId == track.videoId,
-                                                            onAddClickListener = {
-                                                                viewModel.addSuggestTrackToListTrack(
-                                                                    track,
-                                                                )
-                                                            },
-                                                            onClickListener = {
-                                                                viewModel.onUIEvent(LocalPlaylistUIEvent.SuggestionsItemClick(track.videoId))
-                                                            },
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.size(12.dp))
-                                        HorizontalDivider(
-                                            color = Color.Gray,
-                                            thickness = 0.5.dp,
-                                        )
-                                        Spacer(modifier = Modifier.size(8.dp))
-                                    }
-                                }
                                 Column {
                                     Row(horizontalArrangement = Arrangement.SpaceBetween) {
                                         // Match the Apple Music action buttons: flat white@12% pill, white content.
@@ -1488,6 +1432,23 @@ fun LocalPlaylistScreen(
                 }
             }
         }
+        item(key = "local_add_a_song_row") {
+            AddSongToPlaylistRow(onClick = { showAddSongSheet = true })
+        }
+        if (trackPagingItems.itemCount == 0 && uiState.loadState != LocalPlaylistState.PlaylistLoadState.Loading) {
+            item(key = "local_playlist_no_tracks_yet") {
+                Text(
+                    text = stringResource(Res.string.playlist_no_tracks_yet),
+                    style = typo().bodyMedium,
+                    color = Color(0xC4FFFFFF),
+                    textAlign = TextAlign.Center,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 20.dp),
+                )
+            }
+        }
         items(count = trackPagingItems.itemCount, key = { index ->
             trackPagingItems[index]?.second?.id ?: "item_$index"
         }) { index ->
@@ -1539,6 +1500,42 @@ fun LocalPlaylistScreen(
                         }
                     }
                 }
+            }
+        }
+        if (shouldShowSuggestButton && shouldShowSuggestions && (suggestionsLoading || suggestedTracks.isNotEmpty() || suggestionsReloadParams != null)) {
+            item(key = "local_playlist_suggestions_section") {
+                PlaylistSuggestionsSection(
+                    suggestions = suggestedTracks,
+                    isLoading = suggestionsLoading,
+                    canReload = !suggestionsReloadParams.isNullOrEmpty(),
+                    addingVideoIds = addingSuggestionIds,
+                    playingVideoId = playingTrack?.videoId,
+                    isPlaybackActive = isPlaying,
+                    onPlayTrack = { track -> viewModel.onUIEvent(LocalPlaylistUIEvent.SuggestionsItemClick(track.videoId)) },
+                    onAddTrack = { track -> viewModel.addSuggestTrackToListTrack(track) },
+                    onReload = { viewModel.reloadSuggestion() },
+                )
+            }
+        }
+        if (relatedPlaylists.isNotEmpty()) {
+            item(key = "local_related_playlists_section") {
+                val platformContext = LocalPlatformContext.current
+                RelatedPlaylistsSection(
+                    relatedPlaylists = relatedPlaylists,
+                    onPlaylistClick = { related ->
+                        primeCollectionArtworkNavigation(
+                            platformContext = platformContext,
+                            collectionId = related.browseId,
+                            rawThumbUrl = related.thumbnails.lastOrNull()?.url,
+                        )
+                        navController.navigate(
+                            PlaylistDestination(
+                                playlistId = related.browseId,
+                                isYourYouTubePlaylist = false,
+                            ),
+                        )
+                    },
+                )
             }
         }
         item {
@@ -1619,6 +1616,17 @@ fun LocalPlaylistScreen(
                 selectionState.exit()
             },
             onYTPlaylistClick = {},
+        )
+    }
+    if (showAddSongSheet) {
+        val existingIds =
+            (0 until trackPagingItems.itemCount)
+                .mapNotNull { trackPagingItems.peek(it)?.first?.videoId }
+                .toSet()
+        AddSongToPlaylistSheet(
+            existingVideoIds = existingIds,
+            onAddTrack = { track -> viewModel.addTrackFromSearch(track) },
+            onDismiss = { showAddSongSheet = false },
         )
     }
     if (itemBottomSheetShow && currentItem != null) {

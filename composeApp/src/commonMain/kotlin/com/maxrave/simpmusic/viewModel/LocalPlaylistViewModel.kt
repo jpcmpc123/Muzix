@@ -24,13 +24,17 @@ import com.maxrave.domain.data.entities.PairSongLocalPlaylist
 import com.maxrave.domain.data.entities.SetVideoIdEntity
 import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.data.model.browse.album.Track
+import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.mediaservice.handler.PlaylistType
 import com.maxrave.domain.mediaservice.handler.QueueData
 import com.maxrave.domain.repository.LocalPlaylistRepository
+import com.maxrave.domain.repository.PlaylistRepository
 import com.maxrave.domain.repository.SongRepository
 import com.maxrave.domain.utils.FilterState
+import com.maxrave.domain.utils.LocalResource
+import com.maxrave.domain.utils.Resource
 import com.maxrave.domain.utils.collectLatestResource
 import com.maxrave.domain.utils.collectResource
 import com.maxrave.domain.utils.toArrayListTrack
@@ -46,6 +50,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flatMapLatest
@@ -56,6 +61,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.singleOrNull
@@ -92,6 +98,7 @@ class LocalPlaylistViewModel(
 ) : BaseViewModel() {
     private val converter = Converters()
     private val downloadUtils: DownloadHandler by inject<DownloadHandler>()
+    private val playlistRepository: PlaylistRepository by inject<PlaylistRepository>()
 
     private var _offset: MutableStateFlow<Int> = MutableStateFlow(0)
     val offset: StateFlow<Int> = _offset
@@ -101,6 +108,14 @@ class LocalPlaylistViewModel(
     }
 
     var loading: MutableStateFlow<Boolean> = MutableStateFlow(false)
+
+    private val _relatedPlaylists = MutableStateFlow<List<PlaylistsResult>>(emptyList())
+    val relatedPlaylists: StateFlow<List<PlaylistsResult>> = _relatedPlaylists.asStateFlow()
+
+    private val _addingSuggestionIds = MutableStateFlow<Set<String>>(emptySet())
+    val addingSuggestionIds: StateFlow<Set<String>> = _addingSuggestionIds.asStateFlow()
+
+    private var extrasJob: Job? = null
 
     private val _uiState: MutableStateFlow<LocalPlaylistState> = MutableStateFlow(LocalPlaylistState.initial())
     val uiState: StateFlow<LocalPlaylistState> get() = _uiState
@@ -730,12 +745,83 @@ class LocalPlaylistViewModel(
         }
     }
 
+    fun loadYouTubeExtras(ytPlaylistId: String) {
+        val bareId = ytPlaylistId.removePrefix("VL")
+        extrasJob?.cancel()
+        extrasJob =
+            viewModelScope.launch {
+                playlistRepository.getPlaylistExtras(bareId).collectLatest { res ->
+                    if (res is Resource.Success && res.data != null) {
+                        val extras = res.data!!
+                        _relatedPlaylists.value = extras.relatedPlaylists
+                        if (_uiState.value.suggestions == null &&
+                            !extras.reloadParams.isNullOrEmpty() &&
+                            extras.suggestions.isNotEmpty()
+                        ) {
+                            _uiState.update {
+                                it.copy(
+                                    suggestions =
+                                        LocalPlaylistState.SuggestionSongs(
+                                            reloadParams = extras.reloadParams!!,
+                                            songs = extras.suggestions,
+                                        ),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+    }
+
     fun removeListSuggestion() {
+        extrasJob?.cancel()
+        _relatedPlaylists.value = emptyList()
         _uiState.update { it.copy(suggestions = null) }
     }
 
+    suspend fun addTrackFromSearch(track: Track): Boolean {
+        val id = _uiState.value.id
+        var added = false
+        var toastMsg: String? = null
+        localPlaylistRepository
+            .addTrackToLocalPlaylist(
+                id,
+                track.toSongEntity(),
+                getString(Res.string.added_to_playlist),
+                getString(Res.string.added_to_youtube_playlist),
+                getString(Res.string.can_t_add_to_youtube_playlist),
+            ).firstOrNull { it !is LocalResource.Loading<*> }
+            ?.let { res ->
+                when (res) {
+                    is LocalResource.Success -> {
+                        added = true
+                        toastMsg = res.data
+                    }
+                    is LocalResource.Error -> toastMsg = res.message
+                    else -> Unit
+                }
+            }
+        if (added) {
+            localPlaylistRepository.getPlaylistPairOfSong(id, track.videoId).lastOrNull()?.let { pair ->
+                onApplyActions(PagingActions.Insert(track.toSongEntity() to pair))
+            }
+            _uiState.update { state ->
+                state.copy(
+                    suggestions =
+                        state.suggestions?.copy(
+                            songs = state.suggestions.songs.filterNot { it.videoId == track.videoId },
+                        ),
+                )
+            }
+        }
+        toastMsg?.let { makeToast(it) }
+        return added
+    }
+
     fun addSuggestTrackToListTrack(track: Track) {
+        if (track.videoId in _addingSuggestionIds.value) return
         viewModelScope.launch {
+            _addingSuggestionIds.update { it + track.videoId }
             _uiState.update { state ->
                 state.copy(
                     suggestions =
@@ -744,28 +830,32 @@ class LocalPlaylistViewModel(
                         ),
                 )
             }
-            _uiState.value.id.let { id ->
-                localPlaylistRepository
-                    .addTrackToLocalPlaylist(
-                        id,
-                        track.toSongEntity(),
-                        getString(Res.string.added_to_playlist),
-                        getString(Res.string.added_to_youtube_playlist),
-                        getString(Res.string.can_t_add_to_youtube_playlist),
-                    ).collectLatestResource(
-                        onSuccess = {
-                            makeToast(it)
-                            viewModelScope.launch {
-                                localPlaylistRepository.getPlaylistPairOfSong(id, track.videoId).lastOrNull()?.let { pair ->
-                                    // Add to UI
-                                    onApplyActions(PagingActions.Insert(track.toSongEntity() to pair))
+            try {
+                _uiState.value.id.let { id ->
+                    localPlaylistRepository
+                        .addTrackToLocalPlaylist(
+                            id,
+                            track.toSongEntity(),
+                            getString(Res.string.added_to_playlist),
+                            getString(Res.string.added_to_youtube_playlist),
+                            getString(Res.string.can_t_add_to_youtube_playlist),
+                        ).collectLatestResource(
+                            onSuccess = {
+                                makeToast(it)
+                                viewModelScope.launch {
+                                    localPlaylistRepository.getPlaylistPairOfSong(id, track.videoId).lastOrNull()?.let { pair ->
+                                        // Add to UI
+                                        onApplyActions(PagingActions.Insert(track.toSongEntity() to pair))
+                                    }
                                 }
-                            }
-                        },
-                        onError = {
-                            makeToast(it)
-                        },
-                    )
+                            },
+                            onError = {
+                                makeToast(it)
+                            },
+                        )
+                }
+            } finally {
+                _addingSuggestionIds.update { it - track.videoId }
             }
         }
     }

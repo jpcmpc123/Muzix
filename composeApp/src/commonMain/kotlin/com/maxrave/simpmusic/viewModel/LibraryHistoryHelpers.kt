@@ -163,3 +163,11 @@ enum class LibraryLayoutMode(
 
 /** The saved layout, falling back to the list for anything missing, unknown or corrupt. */
 internal fun parseLibraryLayoutMode(raw: String?): LibraryLayoutMode = LibraryLayoutMode.entries.firstOrNull { it.storedValue == raw } ?: LibraryLayoutMode.LIST
+
+internal fun prependCreatedYouTubePlaylist(
+    existing: List<PlaylistsResult>,
+    created: PlaylistsResult,
+): List<PlaylistsResult> {
+    val cleanNewId = created.browseId.removePrefix("VL")
+    return listOf(created) + existing.filterNot { it.browseId.removePrefix("VL") == cleanNewId }
+}

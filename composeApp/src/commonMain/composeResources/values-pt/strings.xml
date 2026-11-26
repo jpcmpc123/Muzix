@@ -1285,4 +1285,20 @@
     <string name="library_sort_recent_activity">Atividade recente</string>
     <string name="library_view_as_grid">Exibir em grade</string>
     <string name="library_view_as_list">Exibir em lista</string>
+    <string name="new_playlist">Nova playlist</string>
+    <string name="playlist_visibility">Visibilidade</string>
+    <string name="privacy_private">Privada</string>
+    <string name="privacy_unlisted">Não listada</string>
+    <string name="privacy_public">Pública</string>
+    <string name="playlist_saved_both_hint">Salva no Muzix e no YouTube Music</string>
+    <string name="playlist_saved_local_hint">Salva localmente no Muzix</string>
+    <string name="playlist_created_synced">Playlist criada no Muzix e no YouTube Music</string>
+    <string name="playlist_created_local_sync_failed">Salva localmente; falha ao sincronizar com o YouTube</string>
+    <string name="add_a_song">Adicionar uma música</string>
+    <string name="playlist_no_tracks_yet">Ainda não há nenhuma faixa nesta playlist</string>
+    <string name="search_songs_to_add">Pesquisar músicas para adicionar</string>
+    <string name="suggestions">Sugestões</string>
+    <string name="related_playlists">Playlists relacionadas</string>
+    <string name="refresh_suggestions">Atualizar</string>
+    <string name="no_songs_found">Nenhuma música encontrada</string>
 </resources>

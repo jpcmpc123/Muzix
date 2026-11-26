@@ -102,6 +102,34 @@ class LibraryHistoryHelpersTest {
         assertEquals(LibraryLayoutMode.GRID, parseLibraryLayoutMode(LibraryLayoutMode.GRID.storedValue))
     }
 
+    @Test
+    fun prependCreatedYouTubePlaylistPlacesNewPlaylistFirstAndDeduplicates() {
+        val older =
+            com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult(
+                author = "Algoritmo",
+                browseId = "VLPL_NEW",
+                category = "",
+                itemCount = "0",
+                resultType = "PLAYLIST",
+                thumbnails = emptyList(),
+                title = "Old Copy",
+            )
+        val other =
+            older.copy(
+                browseId = "PL_OTHER",
+                title = "Other",
+            )
+        val created =
+            older.copy(
+                browseId = "PL_NEW",
+                title = "New Title",
+            )
+
+        val merged = prependCreatedYouTubePlaylist(listOf(other, older), created)
+        assertEquals(listOf("PL_NEW", "PL_OTHER"), merged.map { it.browseId })
+        assertEquals("New Title", merged.first().title)
+    }
+
     private fun song(
         id: String,
         inLibrary: LocalDateTime,

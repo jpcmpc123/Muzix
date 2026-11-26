@@ -107,6 +107,8 @@ import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.getStringBlocking
 import com.maxrave.simpmusic.extension.rememberPaletteColorState
+import com.maxrave.simpmusic.ui.component.AddSongToPlaylistRow
+import com.maxrave.simpmusic.ui.component.AddSongToPlaylistSheet
 import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.DescriptionView
@@ -116,6 +118,8 @@ import com.maxrave.simpmusic.ui.component.LiquidGlassIconButton
 import com.maxrave.simpmusic.ui.component.LoadingDialog
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.PlaylistBottomSheet
+import com.maxrave.simpmusic.ui.component.PlaylistSuggestionsSection
+import com.maxrave.simpmusic.ui.component.RelatedPlaylistsSection
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.component.liquidGlass
@@ -132,10 +136,12 @@ import com.maxrave.simpmusic.ui.icon.Search
 import com.maxrave.simpmusic.ui.icon.Shuffle
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.theme.ArtworkShape
 import com.maxrave.simpmusic.ui.theme.LocalIsDarkTheme
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.utils.primeCollectionArtworkNavigation
 import com.maxrave.simpmusic.viewModel.ListState
 import com.maxrave.simpmusic.viewModel.PlaylistUIEvent
 import com.maxrave.simpmusic.viewModel.PlaylistUIState
@@ -167,6 +173,7 @@ import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.no_description
 import simpmusic.composeapp.generated.resources.playlist
+import simpmusic.composeapp.generated.resources.playlist_no_tracks_yet
 import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.search
 import simpmusic.composeapp.generated.resources.unlimited
@@ -195,9 +202,15 @@ fun PlaylistScreen(
     val liked by viewModel.liked.collectAsStateWithLifecycle()
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
     val tracksListState by viewModel.tracksListState.collectAsStateWithLifecycle()
+    val suggestedTracks by viewModel.suggestedTracks.collectAsStateWithLifecycle()
+    val suggestionsReloadParams by viewModel.suggestionsReloadParams.collectAsStateWithLifecycle()
+    val suggestionsLoading by viewModel.suggestionsLoading.collectAsStateWithLifecycle()
+    val relatedPlaylists by viewModel.relatedPlaylists.collectAsStateWithLifecycle()
+    val addingSuggestionIds by viewModel.addingSuggestionIds.collectAsStateWithLifecycle()
 
     var showSearchBar by rememberSaveable { mutableStateOf(false) }
     var searchBarHeightPx by remember { mutableStateOf(0) }
+    var showAddSongSheet by rememberSaveable { mutableStateOf(false) }
 
     val lazyState = rememberLazyListState()
     val firstItemVisible by remember {
@@ -1209,6 +1222,26 @@ fun PlaylistScreen(
                             )
                         }
                     }
+                    val isEditablePlaylist = isYourYouTubePlaylist && !data.isRadio && data.id.removePrefix("VL") != "LM"
+                    if (!showSearchBar && isEditablePlaylist) {
+                        item(key = "add_a_song_row") {
+                            AddSongToPlaylistRow(onClick = { showAddSongSheet = true })
+                        }
+                        if (filteredTrack.isEmpty() && tracksListState == ListState.PAGINATION_EXHAUST) {
+                            item(key = "playlist_no_tracks_yet") {
+                                Text(
+                                    text = stringResource(Res.string.playlist_no_tracks_yet),
+                                    style = typo().bodyMedium,
+                                    color = Color(0xC4FFFFFF),
+                                    textAlign = TextAlign.Center,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 24.dp, vertical = 20.dp),
+                                )
+                            }
+                        }
+                    }
                     items(count = filteredTrack.size, key = { index ->
                         val item = filteredTrack.getOrNull(index)
                         filteredTrackKeys.getOrNull(index) ?: "item_$index"
@@ -1245,6 +1278,44 @@ fun PlaylistScreen(
                                         color = Color.White.copy(alpha = 0.12f),
                                     )
                                 }
+                            }
+                        }
+                    }
+                    if (!showSearchBar || query.isEmpty()) {
+                        if (isEditablePlaylist && (suggestionsLoading || suggestedTracks.isNotEmpty() || suggestionsReloadParams != null)) {
+                            item(key = "playlist_suggestions_section") {
+                                PlaylistSuggestionsSection(
+                                    suggestions = suggestedTracks,
+                                    isLoading = suggestionsLoading,
+                                    canReload = suggestionsReloadParams != null,
+                                    addingVideoIds = addingSuggestionIds,
+                                    playingVideoId = playingTrack?.videoId,
+                                    isPlaybackActive = isPlaying,
+                                    onPlayTrack = { track -> viewModel.playSuggestedTrack(track) },
+                                    onAddTrack = { track -> viewModel.addSuggestedTrack(track) },
+                                    onReload = { viewModel.reloadSuggestions() },
+                                )
+                            }
+                        }
+                        if (relatedPlaylists.isNotEmpty()) {
+                            item(key = "related_playlists_section") {
+                                val platformContext = LocalPlatformContext.current
+                                RelatedPlaylistsSection(
+                                    relatedPlaylists = relatedPlaylists,
+                                    onPlaylistClick = { related ->
+                                        primeCollectionArtworkNavigation(
+                                            platformContext = platformContext,
+                                            collectionId = related.browseId,
+                                            rawThumbUrl = related.thumbnails.lastOrNull()?.url,
+                                        )
+                                        navController.navigate(
+                                            PlaylistDestination(
+                                                playlistId = related.browseId,
+                                                isYourYouTubePlaylist = false,
+                                            ),
+                                        )
+                                    },
+                                )
                             }
                         }
                     }
@@ -1400,6 +1471,13 @@ fun PlaylistScreen(
                             selectionState.exit()
                         },
                         onYTPlaylistClick = {},
+                    )
+                }
+                if (showAddSongSheet) {
+                    AddSongToPlaylistSheet(
+                        existingVideoIds = playlistTrackIds.toSet(),
+                        onAddTrack = { track -> viewModel.addTrackToPlaylist(track) },
+                        onDismiss = { showAddSongSheet = false },
                     )
                 }
                 if (itemBottomSheetShow && currentItem != null) {

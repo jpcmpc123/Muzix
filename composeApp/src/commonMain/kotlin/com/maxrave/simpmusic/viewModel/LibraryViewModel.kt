@@ -7,6 +7,7 @@ import com.maxrave.domain.data.entities.AlbumEntity
 import com.maxrave.domain.data.entities.LocalPlaylistEntity
 import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.entities.SongEntity
+import com.maxrave.domain.data.model.browse.playlist.DualPlaylistCreationResult
 import com.maxrave.domain.data.model.library.LibraryCollectionPreview
 import com.maxrave.domain.data.model.library.LibraryOverview
 import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
@@ -56,6 +57,9 @@ import kotlinx.datetime.number
 import kotlinx.datetime.plus
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_local_playlist
+import simpmusic.composeapp.generated.resources.error
+import simpmusic.composeapp.generated.resources.playlist_created_local_sync_failed
+import simpmusic.composeapp.generated.resources.playlist_created_synced
 import simpmusic.composeapp.generated.resources.wrapped_recap_month
 import simpmusic.composeapp.generated.resources.wrapped_recap_month_year
 
@@ -89,6 +93,9 @@ class LibraryViewModel(
 
     private val _isRefreshingYouTubePlaylists: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val isRefreshingYouTubePlaylists: StateFlow<Boolean> get() = _isRefreshingYouTubePlaylists.asStateFlow()
+
+    private val _isCreatingPlaylist: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    val isCreatingPlaylist: StateFlow<Boolean> get() = _isCreatingPlaylist.asStateFlow()
 
     private val _libraryLayoutMode: MutableStateFlow<LibraryLayoutMode> = MutableStateFlow(LibraryLayoutMode.LIST)
 
@@ -500,6 +507,77 @@ class LibraryViewModel(
                     log("Created playlist with id: $it")
                 }
             getLocalPlaylist()
+        }
+    }
+
+    fun createSyncedPlaylist(
+        title: String,
+        privacyStatus: String,
+        onCreated: (DualPlaylistCreationResult) -> Unit,
+    ) {
+        if (_isCreatingPlaylist.value) return
+        viewModelScope.launch {
+            _isCreatingPlaylist.value = true
+            try {
+                val isLogged = dataStoreManager.loggedIn.first() == DataStoreManager.TRUE
+                val resource =
+                    localPlaylistRepository
+                        .createPlaylistSyncedWithYouTube(
+                            title = title,
+                            description = null,
+                            privacyStatus = privacyStatus,
+                            isLoggedIn = isLogged,
+                        ).firstOrNull { it !is LocalResource.Loading<*> }
+                when (resource) {
+                    is LocalResource.Success -> {
+                        val created = resource.data
+                        if (created != null) {
+                            val ytId = created.youtubePlaylistId
+                            if (ytId != null) {
+                                val optimistic =
+                                    PlaylistsResult(
+                                        author = "",
+                                        browseId = ytId,
+                                        category = "",
+                                        itemCount = "",
+                                        resultType = "PLAYLIST",
+                                        thumbnails = emptyList(),
+                                        title = title,
+                                    )
+                                val updated =
+                                    prependCreatedYouTubePlaylist(
+                                        existing = _youTubePlaylist.value.data ?: emptyList(),
+                                        created = optimistic,
+                                    )
+                                _youTubePlaylist.value = LocalResource.Success(updated)
+                                val cookieHash = dataStoreManager.cookie.first().hashCode()
+                                dataStoreManager.putString(
+                                    YT_PLAYLISTS_CACHE_KEY,
+                                    encodeYouTubePlaylistsCache(cookieHash, updated),
+                                )
+                                warmUpYouTubePlaylists(forceRefresh = true)
+                                makeToast(getString(Res.string.playlist_created_synced))
+                            } else if (isLogged) {
+                                makeToast(getString(Res.string.playlist_created_local_sync_failed))
+                            } else {
+                                makeToast(getString(Res.string.added_local_playlist))
+                            }
+                            getLocalPlaylist()
+                            onCreated(created)
+                        } else {
+                            makeToast(getString(Res.string.error))
+                        }
+                    }
+
+                    is LocalResource.Error -> {
+                        makeToast(resource.message ?: getString(Res.string.error))
+                    }
+
+                    else -> Unit
+                }
+            } finally {
+                _isCreatingPlaylist.value = false
+            }
         }
     }
 
