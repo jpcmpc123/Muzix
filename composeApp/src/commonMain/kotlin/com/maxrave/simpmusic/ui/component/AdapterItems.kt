@@ -825,6 +825,14 @@ fun HomeItemContentPlaylist(
                 if (data is Content && data.isLive) {
                     LiveBadge(modifier = Modifier.padding(end = 6.dp))
                 }
+                if (data is ResultAlbum && data.isExplicit) {
+                    ExplicitBadge(
+                        modifier =
+                            Modifier
+                                .size(16.dp)
+                                .padding(end = 4.dp),
+                    )
+                }
                 Text(
                     text =
                         when (data) {

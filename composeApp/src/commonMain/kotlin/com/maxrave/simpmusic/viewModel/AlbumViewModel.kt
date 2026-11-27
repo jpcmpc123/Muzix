@@ -87,6 +87,7 @@ class AlbumViewModel(
                                         length = data.duration ?: "",
                                         listTrack = data.tracks,
                                         otherVersion = data.otherVersion,
+                                        similarAlbums = data.similarAlbums,
                                         loadState = LocalPlaylistState.PlaylistLoadState.Success,
                                     )
                                 }
@@ -330,6 +331,7 @@ data class AlbumUIState(
     val length: String = "",
     val listTrack: List<Track> = emptyList(),
     val otherVersion: List<ResultAlbum> = emptyList(),
+    val similarAlbums: List<ResultAlbum> = emptyList(),
     val loadState: LocalPlaylistState.PlaylistLoadState = LocalPlaylistState.PlaylistLoadState.Loading,
 ) {
     companion object {

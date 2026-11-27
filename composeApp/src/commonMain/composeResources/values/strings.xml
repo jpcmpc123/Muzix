@@ -569,7 +569,7 @@
     <string name="to_download_folder">" to Download folder"</string>
     <string name="download_speed">Download speed:  %1$s </string>
     <string name="shuffle">Shuffle</string>
-    <string name="other_version">Other version</string>
+    <string name="other_version">Other versions</string>
     <string name="later">Later</string>
     <string name="give_a_star">Give a star</string>
     <string name="enjoying_simpmusic">Enjoying Muzix</string>
@@ -1315,6 +1315,8 @@
     <string name="library_view_as_grid">Grid view</string>
     <string name="library_view_as_list">List view</string>
     <string name="new_playlist">New playlist</string>
+    <string name="create_playlist_action">Create playlist</string>
+    <string name="album_recommendations_title">You might also like</string>
     <string name="playlist_visibility">Visibility</string>
     <string name="privacy_private">Private</string>
     <string name="privacy_unlisted">Unlisted</string>

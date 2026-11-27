@@ -553,7 +553,7 @@
     <string name="to_download_folder">" para a pasta Downloads"</string>
     <string name="download_speed">Velocidade de download:  %1$s </string>
     <string name="shuffle">Reproduzir aleatoriamente</string>
-    <string name="other_version">Outra versão</string>
+    <string name="other_version">Outras versões</string>
     <string name="later">Depois</string>
     <string name="give_a_star">Dê uma estrela</string>
     <string name="enjoying_simpmusic">Aproveitando o Muzix</string>
@@ -1293,6 +1293,8 @@
     <string name="library_view_as_grid">Exibir em grade</string>
     <string name="library_view_as_list">Exibir em lista</string>
     <string name="new_playlist">Nova playlist</string>
+    <string name="create_playlist_action">Criar playlist</string>
+    <string name="album_recommendations_title">Você também pode gostar</string>
     <string name="playlist_visibility">Visibilidade</string>
     <string name="privacy_private">Privada</string>
     <string name="privacy_unlisted">Não listada</string>

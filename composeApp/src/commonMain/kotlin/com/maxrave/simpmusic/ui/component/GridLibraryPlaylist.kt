@@ -2,6 +2,7 @@ package com.maxrave.simpmusic.ui.component
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.MarqueeAnimationMode
+import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -73,7 +74,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.create
+import simpmusic.composeapp.generated.resources.create_playlist_action
 import kotlin.math.roundToInt
 
 /**
@@ -216,29 +217,19 @@ internal inline fun <reified T> GridLibraryPlaylist(
                                             .fillMaxWidth()
                                             .aspectRatio(1f)
                                             .clip(RoundedCornerShape(10.dp))
-                                            .angledGradientBackground(
-                                                colors =
-                                                    listOf(
-                                                        seed,
-                                                        Color.White.copy(alpha = 0.8f),
-                                                    ),
-                                                degrees = 45f,
-                                            ),
+                                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                                         Alignment.Center,
                                     ) {
                                         Icon(
-                                            modifier = Modifier.size(84.dp),
+                                            modifier = Modifier.size(48.dp),
                                             imageVector = SimpIcons.Add,
-                                            tint = Color.White,
-                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurface,
+                                            contentDescription = stringResource(Res.string.create_playlist_action),
                                         )
                                     }
                                     Text(
-                                        text = stringResource(Res.string.create),
+                                        text = stringResource(Res.string.create_playlist_action),
                                         style = typo().titleSmall,
-                                        // Sits on the page background, not on the tile, so it has
-                                        // to follow the theme — hard-coded white vanished in light
-                                        // theme while every other tile label stayed readable.
                                         color = MaterialTheme.colorScheme.onBackground,
                                         maxLines = 1,
                                         modifier =

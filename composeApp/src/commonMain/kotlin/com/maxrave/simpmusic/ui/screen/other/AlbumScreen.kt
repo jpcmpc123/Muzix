@@ -139,6 +139,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.album
 import simpmusic.composeapp.generated.resources.album_length
+import simpmusic.composeapp.generated.resources.album_recommendations_title
 import simpmusic.composeapp.generated.resources.baseline_downloaded
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
@@ -223,14 +224,15 @@ fun AlbumScreen(
         }
     }
 
-    LaunchedEffect(heroVisualReady, uiState.loadState, uiState.listTrack, uiState.otherVersion, platformContext) {
+    LaunchedEffect(heroVisualReady, uiState.loadState, uiState.listTrack, uiState.otherVersion, uiState.similarAlbums, platformContext) {
         if (!heroVisualReady || uiState.loadState != LocalPlaylistState.PlaylistLoadState.Success) return@LaunchedEffect
-        if (uiState.listTrack.isEmpty() && uiState.otherVersion.isEmpty()) return@LaunchedEffect
+        if (uiState.listTrack.isEmpty() && uiState.otherVersion.isEmpty() && uiState.similarAlbums.isEmpty()) return@LaunchedEffect
         com.maxrave.simpmusic.utils.enqueueTrackArtworkPrefetch(
             platformContext = platformContext,
             rawUrls =
                 uiState.listTrack.map { it.thumbnails?.lastOrNull()?.url } +
-                    uiState.otherVersion.map { it.thumbnails.lastOrNull()?.url },
+                    uiState.otherVersion.map { it.thumbnails.lastOrNull()?.url } +
+                    uiState.similarAlbums.map { it.thumbnails.lastOrNull()?.url },
         )
     }
 
@@ -1078,6 +1080,43 @@ fun AlbumScreen(
                                             },
                                             data = album,
                                             thumbSize = 180.dp,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    item(contentType = "similar_albums") {
+                        AnimatedVisibility(uiState.similarAlbums.isNotEmpty()) {
+                            Column {
+                                Spacer(Modifier.height(10.dp))
+                                Text(
+                                    text = stringResource(Res.string.album_recommendations_title),
+                                    style = typo().labelMedium,
+                                    modifier =
+                                        Modifier.padding(
+                                            horizontal = 24.dp,
+                                            vertical = 8.dp,
+                                        ),
+                                )
+                                val similarAlbumsRowState = rememberLazyListState()
+                                LazyRow(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp).mouseDragScroll(similarAlbumsRowState),
+                                    state = similarAlbumsRowState,
+                                ) {
+                                    itemsIndexed(uiState.similarAlbums, key = { idx, album -> "similar_${album.browseId}_$idx" }) { _, album ->
+                                        HomeItemContentPlaylist(
+                                            forceDark = true,
+                                            onClick = {
+                                                navController.navigate(
+                                                    AlbumDestination(
+                                                        browseId = album.browseId,
+                                                    ),
+                                                )
+                                            },
+                                            data = album,
+                                            thumbSize = 148.dp,
                                         )
                                     }
                                 }

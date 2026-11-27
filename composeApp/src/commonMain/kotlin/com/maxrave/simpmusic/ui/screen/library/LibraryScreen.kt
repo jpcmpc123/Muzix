@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -29,8 +33,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -101,6 +103,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.home.SettingsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryHistoryDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.LocalPlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
+import com.maxrave.simpmusic.ui.theme.ArtworkShape
 import com.maxrave.simpmusic.ui.theme.LocalLiquidGlassEnabled
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.utils.THUMB_CARD_PX
@@ -121,12 +124,12 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.create_playlist_action
 import simpmusic.composeapp.generated.resources.downloaded_playlists
 import simpmusic.composeapp.generated.resources.favorite_playlists
 import simpmusic.composeapp.generated.resources.favorite_podcasts
 import simpmusic.composeapp.generated.resources.library
 import simpmusic.composeapp.generated.resources.mix_for_you
-import simpmusic.composeapp.generated.resources.new_playlist
 import simpmusic.composeapp.generated.resources.no_charts_found
 import simpmusic.composeapp.generated.resources.no_favorite_playlists
 import simpmusic.composeapp.generated.resources.no_favorite_podcasts
@@ -184,7 +187,6 @@ fun LibraryScreen(
     }
     var showAddSheet by remember { mutableStateOf(false) }
     var showSortSheet by remember { mutableStateOf(false) }
-    var isFabExpanded by remember { mutableStateOf(true) }
 
     val chipRowState = rememberLazyListState()
     val currentFilter by viewModel.currentScreen.collectAsStateWithLifecycle()
@@ -269,11 +271,6 @@ fun LibraryScreen(
                     snapshotFlow { state.firstVisibleItemIndex <= 1 || isScrollingUpState.value }
                         .distinctUntilChanged()
                         .collect { onScrolling.invoke(it) }
-                }
-                LaunchedEffect(state) {
-                    snapshotFlow { state.firstVisibleItemIndex == 0 || isScrollingUpState.value }
-                        .distinctUntilChanged()
-                        .collect { isFabExpanded = it }
                 }
 
                 val pullToRefreshState = rememberPullToRefreshState()
@@ -411,19 +408,41 @@ fun LibraryScreen(
                                 }
 
                                 if (layoutMode == LibraryLayoutMode.GRID) {
-                                    // Two covers per line; Liked Music is the first cell, then the playlists.
-                                    val gridCells: List<PlaylistsResult?> = listOf<PlaylistsResult?>(null) + visibleYouTubePlaylists
+                                    // Two covers per line; Create playlist first, then Liked Music, then playlists.
+                                    val gridCells: List<YourLibraryGridCell> =
+                                        listOf(YourLibraryGridCell.CreatePlaylist, YourLibraryGridCell.LikedMusic) +
+                                            visibleYouTubePlaylists.map { YourLibraryGridCell.RemotePlaylist(it) }
                                     itemsIndexed(
                                         items = gridCells.chunked(2),
-                                        key = { index, row -> "ytgrid_${row.first()?.browseId ?: "liked"}_$index" },
+                                        key = { index, row ->
+                                            val firstKey =
+                                                when (val c = row.first()) {
+                                                    YourLibraryGridCell.CreatePlaylist -> "create"
+                                                    YourLibraryGridCell.LikedMusic -> "liked"
+                                                    is YourLibraryGridCell.RemotePlaylist -> c.playlist.browseId
+                                                }
+                                            "ytgrid_${firstKey}_$index"
+                                        },
                                         contentType = { _, _ -> "youtube_playlist_grid_row" },
                                     ) { _, row ->
                                         LibraryPlaylistGridRow(
                                             left = {
-                                                YouTubePlaylistGridCell(row[0], likedPlaylist, navController)
+                                                YouTubePlaylistGridCell(
+                                                    cell = row[0],
+                                                    likedPlaylist = likedPlaylist,
+                                                    navController = navController,
+                                                    onCreatePlaylist = { showAddSheet = true },
+                                                )
                                             },
                                             right = {
-                                                if (row.size > 1) YouTubePlaylistGridCell(row[1], likedPlaylist, navController)
+                                                if (row.size > 1) {
+                                                    YouTubePlaylistGridCell(
+                                                        cell = row[1],
+                                                        likedPlaylist = likedPlaylist,
+                                                        navController = navController,
+                                                        onCreatePlaylist = { showAddSheet = true },
+                                                    )
+                                                }
                                             },
                                         )
                                     }
@@ -441,6 +460,10 @@ fun LibraryScreen(
                                         }
                                     }
                                 } else {
+                                    item(key = "yt_create_playlist_row", contentType = "create_playlist_row") {
+                                        CreatePlaylistLibraryRow(onClick = { showAddSheet = true })
+                                    }
+
                                     item(key = "yt_liked_music_pinned", contentType = "youtube_playlist_row") {
                                         PlaylistFullWidthItems(
                                             data = likedPlaylist,
@@ -495,6 +518,10 @@ fun LibraryScreen(
                                             )
                                         }
                                     }
+                                }
+                            } else {
+                                item(key = "yt_create_playlist_row", contentType = "create_playlist_row") {
+                                    CreatePlaylistLibraryRow(onClick = { showAddSheet = true })
                                 }
                             }
 
@@ -587,39 +614,6 @@ fun LibraryScreen(
                     viewModel.getMonthlyRecaps()
                 }
             }
-        }
-    }
-    if (currentFilter == LibraryChipType.YOUR_LIBRARY || currentFilter == LibraryChipType.LOCAL_PLAYLIST) {
-        val layoutDirection = LocalLayoutDirection.current
-        val endInset = innerPadding.calculateEndPadding(layoutDirection)
-        val fabBottomPadding =
-            innerPadding.calculateBottomPadding() + 12.dp +
-                if (getPlatform() == Platform.Desktop) DesktopMiniPlayerClearance else 0.dp
-        Box(modifier = Modifier.fillMaxSize()) {
-            ExtendedFloatingActionButton(
-                onClick = { showAddSheet = true },
-                expanded = if (currentFilter == LibraryChipType.YOUR_LIBRARY) isFabExpanded else true,
-                shape = CircleShape,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                elevation = FloatingActionButtonDefaults.elevation(),
-                icon = {
-                    Icon(
-                        imageVector = SimpIcons.Add,
-                        contentDescription = stringResource(Res.string.new_playlist),
-                    )
-                },
-                text = {
-                    Text(
-                        text = stringResource(Res.string.new_playlist),
-                        style = typo().labelLarge,
-                    )
-                },
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 16.dp + endInset, bottom = fabBottomPadding),
-            )
         }
     }
     sharingTaste?.let { profile ->
@@ -767,50 +761,153 @@ internal val YOUR_LIBRARY_MAX_WIDTH = 842.dp
  */
 internal const val SHOW_LIBRARY_TILING_BOX = false
 
-/** One cell of the grid layout: [playlist], or Liked Music when it is null. */
+private sealed interface YourLibraryGridCell {
+    data object CreatePlaylist : YourLibraryGridCell
+
+    data object LikedMusic : YourLibraryGridCell
+
+    data class RemotePlaylist(
+        val playlist: PlaylistsResult,
+    ) : YourLibraryGridCell
+}
+
+/**
+ * Spotify-style "+ Criar playlist" row placed directly above Liked Music in [LibraryScreen].
+ */
+@Composable
+private fun CreatePlaylistLibraryRow(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(vertical = 8.dp, horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(64.dp)
+                    .clip(ArtworkShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = SimpIcons.Add,
+                contentDescription = stringResource(Res.string.create_playlist_action),
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(28.dp),
+            )
+        }
+        Spacer(modifier = Modifier.width(14.dp))
+        Text(
+            text = stringResource(Res.string.create_playlist_action),
+            style = typo().titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+        )
+    }
+}
+
+/**
+ * Square dark tile matching [LibraryPlaylistGridItem] for creating a playlist in Grid layout.
+ */
+@Composable
+private fun CreatePlaylistGridCell(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(ArtworkShape)
+                .clickable(onClick = onClick),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(ArtworkShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = SimpIcons.Add,
+                contentDescription = stringResource(Res.string.create_playlist_action),
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(44.dp),
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = stringResource(Res.string.create_playlist_action),
+            style = typo().titleSmall,
+            maxLines = 1,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+/** One cell of the grid layout: Create Playlist, Liked Music, or a remote playlist. */
 @Composable
 private fun YouTubePlaylistGridCell(
-    playlist: PlaylistsResult?,
+    cell: YourLibraryGridCell,
     likedPlaylist: PlaylistEntity,
     navController: NavController,
+    onCreatePlaylist: () -> Unit,
 ) {
     val platformContext = LocalPlatformContext.current
     val playlistLabel = stringResource(Res.string.playlist)
-    if (playlist == null) {
-        LibraryPlaylistGridItem(
-            title = likedPlaylist.title,
-            subtitle = "$playlistLabel • ${likedPlaylist.author.orEmpty()}",
-            thumbnailUrl = likedPlaylist.thumbnails,
-            pinned = true,
-            onClick = {
-                primeCollectionArtworkNavigation(
-                    platformContext = platformContext,
-                    collectionId = likedPlaylist.id,
-                    rawThumbUrl = likedPlaylist.thumbnails,
-                )
-                navController.navigate(PlaylistDestination(likedPlaylist.id))
-            },
-        )
-    } else {
-        val thumb = playlist.thumbnails.lastOrNull()?.url.orEmpty()
-        LibraryPlaylistGridItem(
-            title = playlist.title,
-            subtitle = (listOf(playlistLabel) + listOf(playlist.author, playlist.itemCount).filter { it.isNotBlank() }).joinToString(" • "),
-            thumbnailUrl = thumb,
-            pinned = false,
-            onClick = {
-                primeCollectionArtworkNavigation(
-                    platformContext = platformContext,
-                    collectionId = playlist.browseId,
-                    rawThumbUrl = thumb,
-                )
-                navController.navigate(
-                    PlaylistDestination(
-                        playlistId = playlist.browseId,
-                        isYourYouTubePlaylist = true,
-                    ),
-                )
-            },
-        )
+    when (cell) {
+        YourLibraryGridCell.CreatePlaylist -> {
+            CreatePlaylistGridCell(onClick = onCreatePlaylist)
+        }
+
+        YourLibraryGridCell.LikedMusic -> {
+            LibraryPlaylistGridItem(
+                title = likedPlaylist.title,
+                subtitle = "$playlistLabel • ${likedPlaylist.author.orEmpty()}",
+                thumbnailUrl = likedPlaylist.thumbnails,
+                pinned = true,
+                onClick = {
+                    primeCollectionArtworkNavigation(
+                        platformContext = platformContext,
+                        collectionId = likedPlaylist.id,
+                        rawThumbUrl = likedPlaylist.thumbnails,
+                    )
+                    navController.navigate(PlaylistDestination(likedPlaylist.id))
+                },
+            )
+        }
+
+        is YourLibraryGridCell.RemotePlaylist -> {
+            val playlist = cell.playlist
+            val thumb = playlist.thumbnails.lastOrNull()?.url.orEmpty()
+            LibraryPlaylistGridItem(
+                title = playlist.title,
+                subtitle = (listOf(playlistLabel) + listOf(playlist.author, playlist.itemCount).filter { it.isNotBlank() }).joinToString(" • "),
+                thumbnailUrl = thumb,
+                pinned = false,
+                onClick = {
+                    primeCollectionArtworkNavigation(
+                        platformContext = platformContext,
+                        collectionId = playlist.browseId,
+                        rawThumbUrl = thumb,
+                    )
+                    navController.navigate(
+                        PlaylistDestination(
+                            playlistId = playlist.browseId,
+                            isYourYouTubePlaylist = true,
+                        ),
+                    )
+                },
+            )
+        }
     }
 }
