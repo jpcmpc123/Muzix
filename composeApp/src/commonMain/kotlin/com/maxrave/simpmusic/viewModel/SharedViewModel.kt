@@ -485,29 +485,43 @@ class SharedViewModel(
                         _shareSavedLyrics.value = it == TRUE
                     }
                 }
+            fun retryPendingLyricsIfNeeded() {
+                if (!_controllerState.value.isPlaying) return
+                val state = _nowPlayingState.value ?: return
+                val song = state.songEntity ?: return
+                val retryVideoId = pendingLyricsRetryVideoId ?: return
+                if (retryVideoId == song.videoId &&
+                    _nowPlayingScreenData.value.lyricsData == null &&
+                    !LiveStreamRegistry.isLive(song.videoId)
+                ) {
+                    val durationSec =
+                        (timeline.value.total / 1000L).toInt().takeIf { it > 0 }
+                            ?: song.durationSeconds
+                    lyricsRequestedFor = song.videoId
+                    pendingLyricsRetryVideoId = null
+                    startLyricsResolution(
+                        song = song,
+                        artistHint = state.mediaItem.metadata.artist,
+                        durationSec = durationSec,
+                        preferCache = false,
+                        forceRefresh = false,
+                    )
+                }
+            }
             launch {
                 mediaPlayerHandler.networkRestoredEvents.collect {
-                    val state = _nowPlayingState.value ?: return@collect
-                    val song = state.songEntity ?: return@collect
-                    val retryVideoId = pendingLyricsRetryVideoId ?: return@collect
-                    if (retryVideoId == song.videoId &&
-                        _nowPlayingScreenData.value.lyricsData == null &&
-                        !LiveStreamRegistry.isLive(song.videoId)
-                    ) {
-                        val durationSec =
-                            (timeline.value.total / 1000L).toInt().takeIf { it > 0 }
-                                ?: song.durationSeconds
-                        lyricsRequestedFor = song.videoId
-                        pendingLyricsRetryVideoId = null
-                        startLyricsResolution(
-                            song = song,
-                            artistHint = state.mediaItem.metadata.artist,
-                            durationSec = durationSec,
-                            preferCache = false,
-                            forceRefresh = false,
-                        )
-                    }
+                    retryPendingLyricsIfNeeded()
                 }
+            }
+            launch {
+                _controllerState
+                    .map { it.isPlaying }
+                    .distinctUntilChanged()
+                    .collect { isPlaying ->
+                        if (isPlaying) {
+                            retryPendingLyricsIfNeeded()
+                        }
+                    }
             }
 //            val controllerStateJob =
 //                launch {
