@@ -133,7 +133,6 @@ import simpmusic.composeapp.generated.resources.mix_for_you
 import simpmusic.composeapp.generated.resources.no_charts_found
 import simpmusic.composeapp.generated.resources.no_favorite_playlists
 import simpmusic.composeapp.generated.resources.no_favorite_podcasts
-import simpmusic.composeapp.generated.resources.no_playlists_added
 import simpmusic.composeapp.generated.resources.no_playlists_downloaded
 import simpmusic.composeapp.generated.resources.playlist
 import simpmusic.composeapp.generated.resources.simpmusic_charts
@@ -162,7 +161,6 @@ fun LibraryScreen(
     val youTubePlaylist by viewModel.youTubePlaylist.collectAsStateWithLifecycle()
     val isRefreshingYouTubePlaylists by viewModel.isRefreshingYouTubePlaylists.collectAsStateWithLifecycle()
     val isCreatingPlaylist by viewModel.isCreatingPlaylist.collectAsStateWithLifecycle()
-    val yourLocalPlaylist by viewModel.yourLocalPlaylist.collectAsStateWithLifecycle()
     val favoritePlaylist by viewModel.favoritePlaylist.collectAsStateWithLifecycle()
     val downloadedPlaylist by viewModel.downloadedPlaylist.collectAsStateWithLifecycle()
     val favoritePodcasts by viewModel.favoritePodcasts.collectAsStateWithLifecycle()
@@ -195,7 +193,10 @@ fun LibraryScreen(
     LaunchedEffect(libraryTabRequest) {
         libraryTabRequest?.let {
             val target =
-                if (it == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST || it == LibraryChipType.YOUTUBE_MIX_FOR_YOU) {
+                if (it == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST ||
+                    it == LibraryChipType.YOUTUBE_MIX_FOR_YOU ||
+                    it == LibraryChipType.LOCAL_PLAYLIST
+                ) {
                     LibraryChipType.YOUR_LIBRARY
                 } else {
                     it
@@ -207,10 +208,12 @@ fun LibraryScreen(
 
     LaunchedEffect(currentFilter, loggedIn) {
         when (currentFilter) {
-            // Your YouTube Playlists now lives directly inside Your library, and Mix for you has
-            // its own nav tab. Redirect persisted or deep-linked selections back to YOUR_LIBRARY.
+            // Your YouTube Playlists now lives directly inside Your library, Mix for you has
+            // its own nav tab, and Local Playlists was removed as a standalone chip. Redirect
+            // persisted or deep-linked selections back to YOUR_LIBRARY.
             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST,
-            LibraryChipType.YOUTUBE_MIX_FOR_YOU -> {
+            LibraryChipType.YOUTUBE_MIX_FOR_YOU,
+            LibraryChipType.LOCAL_PLAYLIST -> {
                 viewModel.setCurrentScreen(LibraryChipType.YOUR_LIBRARY)
             }
 
@@ -220,10 +223,6 @@ fun LibraryScreen(
                 } else {
                     viewModel.clearYouTubePlaylist()
                 }
-            }
-
-            LibraryChipType.LOCAL_PLAYLIST -> {
-                viewModel.getLocalPlaylist()
             }
 
             LibraryChipType.FAVORITE_PLAYLIST -> {
@@ -537,24 +536,11 @@ fun LibraryScreen(
                 }
             }
 
-            // Nothing to draw: YouTube playlists live in YOUR_LIBRARY and MixForYouScreen owns Mix for you.
+            // Nothing to draw: YouTube playlists live in YOUR_LIBRARY, MixForYouScreen owns Mix
+            // for you, and the standalone Local Playlists tab was removed.
             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST,
-            LibraryChipType.YOUTUBE_MIX_FOR_YOU -> Unit
-
-            LibraryChipType.LOCAL_PLAYLIST -> {
-                GridLibraryPlaylist(
-                    navController,
-                    innerPadding.copy(top = topAppBarHeight),
-                    yourLocalPlaylist,
-                    onScrolling = onScrolling,
-                    emptyText = Res.string.no_playlists_added,
-                    createNewPlaylist = {
-                        showAddSheet = true
-                    },
-                ) {
-                    viewModel.getLocalPlaylist()
-                }
-            }
+            LibraryChipType.YOUTUBE_MIX_FOR_YOU,
+            LibraryChipType.LOCAL_PLAYLIST -> Unit
 
             LibraryChipType.FAVORITE_PLAYLIST -> {
                 GridLibraryPlaylist(
@@ -706,6 +692,7 @@ fun LibraryScreen(
                 LibraryChipType.entries.filter { type ->
                     type != LibraryChipType.YOUTUBE_MIX_FOR_YOU &&
                         type != LibraryChipType.YOUTUBE_MUSIC_PLAYLIST &&
+                        type != LibraryChipType.LOCAL_PLAYLIST &&
                         (type != LibraryChipType.WRAPPED || localTrackingEnabled)
                 }
             }

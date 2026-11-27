@@ -185,9 +185,16 @@ class LibraryViewModel(
             val currentScreenJob =
                 launch {
                     dataStoreManager.getString("library_current_screen").first()?.let { chipType ->
-                        LibraryChipType.fromStringValue(chipType)?.let {
+                        LibraryChipType.fromStringValue(chipType)?.let { saved ->
+                            val normalized =
+                                when (saved) {
+                                    LibraryChipType.YOUTUBE_MUSIC_PLAYLIST,
+                                    LibraryChipType.YOUTUBE_MIX_FOR_YOU,
+                                    LibraryChipType.LOCAL_PLAYLIST -> LibraryChipType.YOUR_LIBRARY
+                                    else -> saved
+                                }
                             // The chip picked meanwhile wins over the one saved last time.
-                            if (!screenChosen) _currentScreen.value = it
+                            if (!screenChosen) _currentScreen.value = normalized
                         }
                     }
                 }
