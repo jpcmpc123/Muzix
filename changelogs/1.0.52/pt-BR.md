@@ -1,0 +1,3 @@
+### Correção crítica de inicialização
+- **Corrigido crash imediato ao abrir o app (`NullPointerException` no `CrossfadeExoPlayerAdapter`)**: na v1.0.51, o mapa `playerNormGains` do ReplayGain por faixa era declarado após `initialPlayerWithFilter = createExoPlayerInstance()`, fazendo o construtor acessá-lo antes da inicialização; movida a declaração para o topo da classe com teste de regressão automatizado.
+- **Pipeline Audiófilo 32-bit Float completo ativo**: mantém todas as melhorias da v1.0.51 (Equalizador Martin Vicanek sem cramping nos agudos, Limiter True-Peak 4× `-0,3 dBFS`, ReplayGain linear puro 64-bit sem `LoudnessEnhancer`/DRC, Crossfeed BS2B e pausa automática do AutoEq no alto-falante).
