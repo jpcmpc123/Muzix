@@ -1291,6 +1291,11 @@
     <string name="equalizer_autoeq_import_invalid">Could not recognize valid EQ filters in that text</string>
     <string name="equalizer_autoeq_parametric_badge">Parametric</string>
     <string name="equalizer_autoeq_custom_badge">Custom</string>
+    <string name="equalizer_autoeq_paused_speaker">Paused on speaker</string>
+    <string name="equalizer_autoeq_speaker_bypass">Pause AutoEq on speaker</string>
+    <string name="equalizer_autoeq_speaker_bypass_desc">Automatically suspends headphone AutoEq correction when playing through the phone speaker</string>
+    <string name="equalizer_crossfeed">BS2B Headphone Crossfeed</string>
+    <string name="equalizer_crossfeed_desc">Natural stereo imaging (700 Hz / 4.5 dB) that reduces listening fatigue on headphones</string>
     <string name="downloading_update">Downloading update…</string>
     <string name="verifying_update">Verifying package integrity…</string>
     <string name="install_update">Install now</string>

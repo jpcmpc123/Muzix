@@ -97,11 +97,16 @@ import simpmusic.composeapp.generated.resources.equalizer_active_output
 import simpmusic.composeapp.generated.resources.equalizer_autoeq
 import simpmusic.composeapp.generated.resources.equalizer_autoeq_clear
 import simpmusic.composeapp.generated.resources.equalizer_autoeq_parametric_badge
+import simpmusic.composeapp.generated.resources.equalizer_autoeq_paused_speaker
+import simpmusic.composeapp.generated.resources.equalizer_autoeq_speaker_bypass
+import simpmusic.composeapp.generated.resources.equalizer_autoeq_speaker_bypass_desc
 import simpmusic.composeapp.generated.resources.equalizer_bass_boost
 import simpmusic.composeapp.generated.resources.equalizer_bass_mono
 import simpmusic.composeapp.generated.resources.equalizer_bind_output
 import simpmusic.composeapp.generated.resources.equalizer_bypass_active
 import simpmusic.composeapp.generated.resources.equalizer_bypass_off
+import simpmusic.composeapp.generated.resources.equalizer_crossfeed
+import simpmusic.composeapp.generated.resources.equalizer_crossfeed_desc
 import simpmusic.composeapp.generated.resources.equalizer_delete
 import simpmusic.composeapp.generated.resources.equalizer_delete_confirm
 import simpmusic.composeapp.generated.resources.equalizer_duplicate
@@ -634,6 +639,19 @@ fun EqualizerSection(
                             )
                         }
                     }
+                    if (layer.enabled && shownEnh.bypassAutoEqOnSpeaker && activeOutput?.kind == AudioOutputKind.DEVICE_SPEAKER) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                        ) {
+                            Text(
+                                text = stringResource(Res.string.equalizer_autoeq_paused_speaker),
+                                style = typo().labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.weight(1f))
                     TextButton(onClick = { viewModel.clearAutoEqLayer() }) {
                         Text(
@@ -749,6 +767,30 @@ fun EqualizerSection(
                 },
                 onCommit = { v -> viewModel.setEqualizerEnhancements(shownEnh.copy(loudnessAmount = v)) },
             )
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        text = stringResource(Res.string.equalizer_crossfeed),
+                        style = typo().bodySmall,
+                    )
+                    Text(
+                        text = stringResource(Res.string.equalizer_crossfeed_desc),
+                        style = typo().bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = shownEnh.crossfeedEnabled,
+                    onCheckedChange = { checked ->
+                        viewModel.setEqualizerEnhancements(shownEnh.copy(crossfeedEnabled = checked))
+                    },
+                )
+            }
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -961,6 +1003,27 @@ fun EqualizerSection(
                             checked = shownEnh.subsonicFilterEnabled,
                             onCheckedChange = { checked ->
                                 viewModel.setEqualizerEnhancements(shownEnh.copy(subsonicFilterEnabled = checked))
+                            },
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            Text(stringResource(Res.string.equalizer_autoeq_speaker_bypass), style = typo().bodySmall)
+                            Text(
+                                stringResource(Res.string.equalizer_autoeq_speaker_bypass_desc),
+                                style = typo().bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = shownEnh.bypassAutoEqOnSpeaker,
+                            onCheckedChange = { checked ->
+                                viewModel.setEqualizerEnhancements(shownEnh.copy(bypassAutoEqOnSpeaker = checked))
                             },
                         )
                     }

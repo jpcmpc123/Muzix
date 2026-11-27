@@ -1986,6 +1986,8 @@ class SettingsViewModel(
                     stereoWidth = enh.stereoWidth,
                     bassMonoEnabled = enh.bassMonoEnabled,
                     spatialStage = enh.spatialStage,
+                    crossfeedEnabled = enh.crossfeedEnabled,
+                    bypassAutoEqOnSpeaker = enh.bypassAutoEqOnSpeaker,
                     loudnessAmount = enh.loudnessAmount,
                     subsonicFilterEnabled = enh.subsonicFilterEnabled,
                     limiterEnabled = enh.limiterEnabled,

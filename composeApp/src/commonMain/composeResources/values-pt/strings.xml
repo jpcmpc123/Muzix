@@ -1269,6 +1269,11 @@
     <string name="equalizer_autoeq_import_invalid">Não foi possível reconhecer filtros de EQ válidos nesse texto</string>
     <string name="equalizer_autoeq_parametric_badge">Paramétrico</string>
     <string name="equalizer_autoeq_custom_badge">Importado</string>
+    <string name="equalizer_autoeq_paused_speaker">Pausado no alto-falante</string>
+    <string name="equalizer_autoeq_speaker_bypass">Pausar AutoEq no alto-falante</string>
+    <string name="equalizer_autoeq_speaker_bypass_desc">Suspende automaticamente a correção do fone quando o áudio toca no alto-falante do celular</string>
+    <string name="equalizer_crossfeed">Crossfeed BS2B (fones)</string>
+    <string name="equalizer_crossfeed_desc">Palco natural estilo caixas (700 Hz / 4,5 dB) que reduz a fadiga auditiva em fones</string>
     <string name="downloading_update">Baixando atualização…</string>
     <string name="verifying_update">Verificando integridade do pacote…</string>
     <string name="install_update">Instalar agora</string>
