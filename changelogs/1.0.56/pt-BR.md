@@ -1,0 +1,5 @@
+### Nova aba "No dispositivo" (estilo Lark Player)
+- **Biblioteca local de áudio no Android**: adicionada a aba **No dispositivo** logo ao lado de *Sua biblioteca* para ouvir MP3, FLAC, WAV, M4A, AAC, OGG e Opus salvos no aparelho usando o player offline e o equalizador Float32/Vicanek do Muzix.
+- **Organização em 4 sub-abas**: navegue por **Músicas**, **Pastas**, **Álbuns** e **Artistas**, com busca instantânea, ordenação (*Título A–Z*, *Adicionados recentemente*, *Artista*, *Álbum*, *Duração*), *Reproduzir tudo* e *Reproduzir aleatoriamente*.
+- **Filtros e escaneamento inteligente**: opção para ignorar áudios curtos (< 30s / < 60s), arquivos pequenos (< 100 KB / < 500 KB) e pastas do sistema, gravações, WhatsApp e Telegram, além de *Gerenciar pastas*, *Músicas ocultas* e reescaneamento manual.
+- **Ações por arquivo e isolamento 100% offline**: compartilhar arquivo de áudio, visualizar detalhes técnicos (codec, taxa de bits, amostragem, tamanho e caminho), ocultar música ou pasta e apagar do aparelho (`MediaStore`), sem tráfego de rede ou poluição do histórico/Room.

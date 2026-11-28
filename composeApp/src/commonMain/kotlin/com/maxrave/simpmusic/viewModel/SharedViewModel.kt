@@ -16,6 +16,7 @@ import com.maxrave.common.LibraryChipType
 import com.maxrave.common.MERGING_DATA_TYPE
 import com.maxrave.common.SELECTED_LANGUAGE
 import com.maxrave.common.STATUS_DONE
+import com.maxrave.common.isLocalDeviceAudioId
 import com.maxrave.domain.data.entities.AlbumEntity
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.entities.LocalPlaylistEntity
@@ -436,7 +437,9 @@ class SharedViewModel(
                                     Logger.w(tag, "Skipping canvas/lyrics: songEntity ${nowPlaying.songEntity?.videoId} != media $currentMediaId")
                                     return@collectLatest
                                 }
-                                if (nowPlaying.mediaItem.isSong() &&
+                                if (!isLocalDeviceAudioId(nowPlaying.mediaItem.mediaId) &&
+                                    nowPlaying.mediaItem.isSong() &&
+                                    !LiveStreamRegistry.isLive(nowPlaying.mediaItem.mediaId) &&
                                     nowPlayingScreenData.value.canvasData == null &&
                                     canvasRequestedFor != currentMediaId
                                 ) {
@@ -445,20 +448,22 @@ class SharedViewModel(
                                     Logger.w(tag, "MediaId is ${nowPlaying.mediaItem.mediaId}")
                                     getCanvas(nowPlaying.mediaItem.mediaId, (timeline.total / 1000).toInt())
                                 }
-                                nowPlaying.songEntity?.let { song ->
-                                    if (nowPlayingScreenData.value.lyricsData == null &&
-                                        lyricsRequestedFor != song.videoId &&
-                                        !LiveStreamRegistry.isLive(song.videoId)
-                                    ) {
-                                        lyricsRequestedFor = song.videoId
-                                        Logger.w(tag, "Get lyrics from format")
-                                        startLyricsResolution(
-                                            song = song,
-                                            artistHint = nowPlaying.mediaItem.metadata.artist,
-                                            durationSec = (timeline.total / 1000).toInt(),
-                                            preferCache = true,
-                                            forceRefresh = false,
-                                        )
+                                if (!isLocalDeviceAudioId(nowPlaying.mediaItem.mediaId)) {
+                                    nowPlaying.songEntity?.let { song ->
+                                        if (nowPlayingScreenData.value.lyricsData == null &&
+                                            lyricsRequestedFor != song.videoId &&
+                                            !LiveStreamRegistry.isLive(song.videoId)
+                                        ) {
+                                            lyricsRequestedFor = song.videoId
+                                            Logger.w(tag, "Get lyrics from format")
+                                            startLyricsResolution(
+                                                song = song,
+                                                artistHint = nowPlaying.mediaItem.metadata.artist,
+                                                durationSec = (timeline.total / 1000).toInt(),
+                                                preferCache = true,
+                                                forceRefresh = false,
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -616,12 +621,22 @@ class SharedViewModel(
                             songThumbnails = state.songEntity?.thumbnails,
                         )
                     val now = state.mediaItem
+                    val isLocalDeviceTrack = isLocalDeviceAudioId(now.mediaId)
                     _canvas.value = null
-                    getLikeStatus(now.mediaId)
-                    getSongInfo(now.mediaId)
-                    getFormat(now.mediaId)
-                    state.songEntity?.let { song ->
-                        _liked.value = song.liked == true
+                    if (isLocalDeviceTrack) {
+                        likeStatusJob?.cancel()
+                        songInfoJob?.cancel()
+                        getFormatFlowJob?.cancel()
+                        _likeStatus.value = YouTubeLikeStatus.INDIFFERENT
+                        _liked.value = false
+                        _dbFormat.value = null
+                    } else {
+                        getLikeStatus(now.mediaId)
+                        getSongInfo(now.mediaId)
+                        getFormat(now.mediaId)
+                        state.songEntity?.let { song ->
+                            _liked.value = song.liked == true
+                        }
                     }
                     _nowPlayingScreenData.update { prev ->
                         val track = state.songEntity
@@ -649,21 +664,23 @@ class SharedViewModel(
                             )
                         }
                     }
-                    state.songEntity?.let { song ->
-                        val currentMediaId = state.mediaItem.mediaId.removePrefix(MERGING_DATA_TYPE.VIDEO)
-                        val knownDurationSec = (seededTotal / 1000L).toInt()
-                        if (song.videoId == currentMediaId &&
-                            !LiveStreamRegistry.isLive(song.videoId) &&
-                            knownDurationSec > 0
-                        ) {
-                            lyricsRequestedFor = song.videoId
-                            startLyricsResolution(
-                                song = song,
-                                artistHint = state.mediaItem.metadata.artist,
-                                durationSec = knownDurationSec,
-                                preferCache = true,
-                                forceRefresh = false,
-                            )
+                    if (!isLocalDeviceTrack) {
+                        state.songEntity?.let { song ->
+                            val currentMediaId = state.mediaItem.mediaId.removePrefix(MERGING_DATA_TYPE.VIDEO)
+                            val knownDurationSec = (seededTotal / 1000L).toInt()
+                            if (song.videoId == currentMediaId &&
+                                !LiveStreamRegistry.isLive(song.videoId) &&
+                                knownDurationSec > 0
+                            ) {
+                                lyricsRequestedFor = song.videoId
+                                startLyricsResolution(
+                                    song = song,
+                                    artistHint = state.mediaItem.metadata.artist,
+                                    durationSec = knownDurationSec,
+                                    preferCache = true,
+                                    forceRefresh = false,
+                                )
+                            }
                         }
                     }
                 }
@@ -914,6 +931,10 @@ class SharedViewModel(
         // Only the latest track may write: a slower reply for the previous track would otherwise
         // land on this one.
         likeStatusJob?.cancel()
+        if (isLocalDeviceAudioId(videoId)) {
+            _likeStatus.value = YouTubeLikeStatus.INDIFFERENT
+            return
+        }
         likeStatusJob =
             viewModelScope.launch {
                 if (videoId != null) {
@@ -929,6 +950,7 @@ class SharedViewModel(
         videoId: String,
         duration: Int,
     ) {
+        if (isLocalDeviceAudioId(videoId)) return
         Logger.w(tag, "Start getCanvas: $videoId $duration")
         canvasJob?.cancel()
         canvasJob = viewModelScope.launch {
@@ -1349,8 +1371,11 @@ class SharedViewModel(
                 }
 
                 UIEvent.ToggleLike -> {
-                    Logger.w(tag, "ToggleLike")
-                    mediaPlayerHandler.onPlayerEvent(PlayerEvent.ToggleLike)
+                    val currentId = nowPlayingState.value?.mediaItem?.mediaId
+                    if (!isLocalDeviceAudioId(currentId)) {
+                        Logger.w(tag, "ToggleLike")
+                        mediaPlayerHandler.onPlayerEvent(PlayerEvent.ToggleLike)
+                    }
                 }
 
                 is UIEvent.UpdateVolume -> {
@@ -1448,6 +1473,11 @@ class SharedViewModel(
     }
 
     private fun getFormat(mediaId: String?) {
+        if (isLocalDeviceAudioId(mediaId)) {
+            getFormatFlowJob?.cancel()
+            _dbFormat.value = null
+            return
+        }
         if (mediaId != _dbFormat.value?.videoId && !mediaId.isNullOrEmpty()) {
             _dbFormat.value = null
             _extractSource.value = streamRepository.getExtractSource(mediaId)
@@ -1467,6 +1497,10 @@ class SharedViewModel(
 
     fun getSongInfo(mediaId: String?) {
         songInfoJob?.cancel()
+        if (isLocalDeviceAudioId(mediaId)) {
+            _nowPlayingScreenData.update { it.copy(songInfoData = null) }
+            return
+        }
         songInfoJob =
             viewModelScope.launch {
                 if (mediaId != null) {
@@ -1960,6 +1994,12 @@ class SharedViewModel(
         // A live broadcast has nothing to sync lyrics to — the "duration" mpv reports for it is only
         // its seek window — so no provider is asked. Every caller comes through here.
         if (LiveStreamRegistry.isLive(song.videoId)) return
+        if (isLocalDeviceAudioId(song.videoId)) {
+            lyricsJob?.cancel()
+            translationJob?.cancel()
+            _nowPlayingScreenData.update { it.copy(lyricsData = null, lyricsNotFound = false) }
+            return
+        }
 
         lyricsJob?.cancel()
         translationJob?.cancel()
@@ -2732,7 +2772,7 @@ class SharedViewModel(
     fun addToYouTubeLiked() {
         viewModelScope.launch {
             val videoId = mediaPlayerHandler.nowPlaying.first()?.mediaId
-            if (videoId != null) {
+            if (videoId != null && !isLocalDeviceAudioId(videoId)) {
                 val like = likeStatus.value == YouTubeLikeStatus.LIKE
                 if (!like) {
                     songRepository
@@ -2768,7 +2808,7 @@ class SharedViewModel(
      * reads "Disliking…" and cannot be pressed again; a failure puts it back as it was.
      */
     fun addToYouTubeDisliked(videoId: String) {
-        if (videoId.isEmpty() || _dislikingVideoId.value == videoId) return
+        if (videoId.isEmpty() || isLocalDeviceAudioId(videoId) || _dislikingVideoId.value == videoId) return
         _dislikingVideoId.value = videoId
         viewModelScope.launch {
             try {

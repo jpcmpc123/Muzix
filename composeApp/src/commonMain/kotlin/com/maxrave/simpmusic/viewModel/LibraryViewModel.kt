@@ -191,6 +191,8 @@ class LibraryViewModel(
                                     LibraryChipType.YOUTUBE_MUSIC_PLAYLIST,
                                     LibraryChipType.YOUTUBE_MIX_FOR_YOU,
                                     LibraryChipType.LOCAL_PLAYLIST -> LibraryChipType.YOUR_LIBRARY
+                                    LibraryChipType.DEVICE_AUDIO ->
+                                        if (com.maxrave.simpmusic.expect.isDeviceAudioSupported()) saved else LibraryChipType.YOUR_LIBRARY
                                     else -> saved
                                 }
                             // The chip picked meanwhile wins over the one saved last time.

@@ -9,6 +9,7 @@ import com.maxrave.simpmusic.viewModel.ArtistViewModel
 import com.maxrave.simpmusic.viewModel.BrowseViewModel
 import com.maxrave.simpmusic.viewModel.BrowserLoginViewModel
 import com.maxrave.simpmusic.viewModel.CommentsViewModel
+import com.maxrave.simpmusic.viewModel.DeviceAudioViewModel
 import com.maxrave.simpmusic.viewModel.SoundCloudPlayerViewModel
 import com.maxrave.simpmusic.viewModel.HomeViewModel
 import com.maxrave.simpmusic.viewModel.ImportViewModel
@@ -255,6 +256,11 @@ val viewModelModule =
                 songRepository = get(),
                 localPlaylistRepository = get(),
                 playlistRepository = get(),
+            )
+        }
+        viewModel {
+            DeviceAudioViewModel(
+                dataStoreManager = get(),
             )
         }
 

@@ -68,6 +68,7 @@ import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
 import com.maxrave.domain.data.model.taste.TasteProfile
 import com.maxrave.domain.utils.LocalResource
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.isDeviceAudioSupported
 import com.maxrave.simpmusic.expect.ui.DesktopMiniPlayerClearance
 import com.maxrave.simpmusic.expect.ui.VerticalScrollBar
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
@@ -134,6 +135,7 @@ import simpmusic.composeapp.generated.resources.no_charts_found
 import simpmusic.composeapp.generated.resources.no_favorite_playlists
 import simpmusic.composeapp.generated.resources.no_favorite_podcasts
 import simpmusic.composeapp.generated.resources.no_playlists_downloaded
+import simpmusic.composeapp.generated.resources.on_device
 import simpmusic.composeapp.generated.resources.playlist
 import simpmusic.composeapp.generated.resources.simpmusic_charts
 import simpmusic.composeapp.generated.resources.wrapped
@@ -195,7 +197,8 @@ fun LibraryScreen(
             val target =
                 if (it == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST ||
                     it == LibraryChipType.YOUTUBE_MIX_FOR_YOU ||
-                    it == LibraryChipType.LOCAL_PLAYLIST
+                    it == LibraryChipType.LOCAL_PLAYLIST ||
+                    (it == LibraryChipType.DEVICE_AUDIO && !isDeviceAudioSupported())
                 ) {
                     LibraryChipType.YOUR_LIBRARY
                 } else {
@@ -215,6 +218,12 @@ fun LibraryScreen(
             LibraryChipType.YOUTUBE_MIX_FOR_YOU,
             LibraryChipType.LOCAL_PLAYLIST -> {
                 viewModel.setCurrentScreen(LibraryChipType.YOUR_LIBRARY)
+            }
+
+            LibraryChipType.DEVICE_AUDIO -> {
+                if (!isDeviceAudioSupported()) {
+                    viewModel.setCurrentScreen(LibraryChipType.YOUR_LIBRARY)
+                }
             }
 
             LibraryChipType.YOUR_LIBRARY -> {
@@ -600,6 +609,15 @@ fun LibraryScreen(
                     viewModel.getMonthlyRecaps()
                 }
             }
+
+            LibraryChipType.DEVICE_AUDIO -> {
+                if (isDeviceAudioSupported()) {
+                    DeviceAudioLibraryTab(
+                        contentPadding = innerPadding.copy(top = topAppBarHeight),
+                        onScrolling = onScrolling,
+                    )
+                }
+            }
         }
     }
     sharingTaste?.let { profile ->
@@ -693,6 +711,7 @@ fun LibraryScreen(
                     type != LibraryChipType.YOUTUBE_MIX_FOR_YOU &&
                         type != LibraryChipType.YOUTUBE_MUSIC_PLAYLIST &&
                         type != LibraryChipType.LOCAL_PLAYLIST &&
+                        (type != LibraryChipType.DEVICE_AUDIO || isDeviceAudioSupported()) &&
                         (type != LibraryChipType.WRAPPED || localTrackingEnabled)
                 }
             }
@@ -715,6 +734,7 @@ fun LibraryScreen(
                     text =
                         when (type) {
                             LibraryChipType.YOUR_LIBRARY -> stringResource(Res.string.your_library)
+                            LibraryChipType.DEVICE_AUDIO -> stringResource(Res.string.on_device)
                             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> stringResource(Res.string.your_youtube_playlists)
                             LibraryChipType.YOUTUBE_MIX_FOR_YOU -> stringResource(Res.string.mix_for_you)
                             LibraryChipType.LOCAL_PLAYLIST -> stringResource(Res.string.your_playlists)
