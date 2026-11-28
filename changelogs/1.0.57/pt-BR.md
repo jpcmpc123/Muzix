@@ -1,0 +1,3 @@
+### Correção na reprodução de músicas locais ("No dispositivo")
+- **Suporte completo a formatos de áudio locais (corrige erro `3003: Source error`)**: o player offline da aba *No dispositivo* agora usa `ProgressiveMediaSource.Factory` com fábrica de extratores completa para **MP3**, **M4A/MP4**, **FLAC**, **OGG/Opus**, **WAV**, **Matroska/WebM**, **AAC (ADTS)**, **AMR**, **AC3** e **AC4** (incluindo seek CBR preciso), corrigindo a falha ao tocar arquivos locais no aparelho.
+- **Blindagem offline e diagnóstico aprimorado no player**: faixas `local_device_audio:` não acionam consultas de metadados/retentativas de stream do YouTube no `CrossfadeExoPlayerAdapter`, e os logs de erro agora incluem o código e a causa raiz da exceção.
